@@ -7,25 +7,21 @@ import {
   useMotionValue,
   useSpring,
 } from 'framer-motion';
-import { useBattleSessionStore } from '@/lib/stores/battleSessionStore';
 import { useUser, useCourse, useMilestone, useDetailPanel } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import dynamic from 'next/dynamic';
-import { useExpToast } from '@/components/common/ExpToast';
-import { calcBattleXp } from '@/lib/utils/tekkenDamage';
 
 import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
 import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmModal';
-import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
+import { useBattleSession } from '@/lib/contexts/BattleSessionContext';
 
 const BattleInviteSheet = dynamic(() => import('@/components/tekken/BattleInviteSheet'), { ssr: false });
 
 // 대형 컴포넌트 lazy load (조건부 렌더링 — 버튼 클릭/배틀 시작 시에만 로드)
 const RabbitDogam = dynamic(() => import('./RabbitDogam'), { ssr: false });
-const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'), { ssr: false });
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { SWIPE_THRESHOLD, BASE_ORBIT_RX, BASE_ORBIT_RY, BASE_CHAR_SIZE, BASE_ORBIT_Y_SHIFT } from './characterBoxConstants';
@@ -48,7 +44,6 @@ export default function CharacterBox() {
   // 마일스톤 Context (holdings 포함 — 중복 onSnapshot 방지)
   const milestone = useMilestone();
   const { holdings } = milestone;
-  const { showExpToast } = useExpToast();
 
   // 캐러셀
   const [activeIndex, setActiveIndex] = useState(0);
@@ -70,17 +65,15 @@ export default function CharacterBox() {
   // 철권퀴즈 — long press 진입
   const [showBattleConfirm, setShowBattleConfirm] = useState(false);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
-  const [showBattle, setShowBattle] = useState(false);
   // 실시간 배틀 신청 바텀시트
   const [showInviteSheet, setShowInviteSheet] = useState(false);
   const [inviteChapters, setInviteChapters] = useState<string[]>([]);
-  /** 현재 배틀 세션이 AI 전용 매칭인지 — overlay가 선(先) 카운트다운 활성화 판단용 */
-  const [battleAiOnly, setBattleAiOnly] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartPos = useRef({ x: 0, y: 0 });
   const longPressTriggered = useRef(false);
-  const tekken = useTekkenBattle(profile?.uid);
+  // 배틀 세션은 layout-level context 에서 공유 (BattleOverlayMount 가 렌더)
+  const { tekken, showBattle, openBattle, startBattle } = useBattleSession();
   const isStudent = profile?.role !== 'professor';
   const scale = useHomeScale();
 
@@ -186,14 +179,13 @@ export default function CharacterBox() {
   const handleConfirmBattle = useCallback((chapters: string[], aiOnly: boolean) => {
     if (!userCourseId) return;
     setShowBattleConfirm(false);
-    setBattleAiOnly(aiOnly);
     if (aiOnly) {
-      setShowBattle(true);
+      openBattle(true);
     } else {
       setShowMatchmaking(true);
     }
     tekken.startMatchmaking(userCourseId, chapters, aiOnly);
-  }, [userCourseId, tekken]);
+  }, [userCourseId, tekken, openBattle]);
 
   // "배틀 신청" — 접속자 바텀시트만 띄우고 확인 모달은 뒤에 유지
   const handleRequestInvite = useCallback((chapters: string[]) => {
@@ -202,27 +194,12 @@ export default function CharacterBox() {
     setShowInviteSheet(true);
   }, [userCourseId]);
 
-  // 신청이 수락됨 — 매칭 단계 스킵하고 바로 배틀 오버레이로 (countdown 즉시)
+  // 신청이 수락됨 — BattleSession context 로 위임 (overlay는 layout 레벨에서 렌더)
   const handleInviteAccepted = useCallback((battleId: string) => {
     setShowInviteSheet(false);
     setShowBattleConfirm(false);
-    setBattleAiOnly(false);
-    tekken.attachBattleId(battleId);
-    setShowBattle(true);
-  }, [tekken]);
-
-  // 배틀 신청 수락 → zustand store 로 전달된 pending 배틀 시작
-  // (Next.js searchParams 는 re-render 타이밍 이슈로 불안정)
-  const pendingBattle = useBattleSessionStore((s) => s.pending);
-  const consumePendingBattle = useBattleSessionStore((s) => s.consume);
-  useEffect(() => {
-    if (!pendingBattle) return;
-    tekken.attachBattleId(pendingBattle.battleId);
-    setBattleAiOnly(pendingBattle.aiOnly);
-    setShowBattle(true);
-    consumePendingBattle();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingBattle]);
+    startBattle(battleId, false);
+  }, [startBattle]);
 
   const onLongPressMove = useCallback((x: number, y: number) => {
     const dx = Math.abs(x - longPressStartPos.current.x);
@@ -299,11 +276,11 @@ export default function CharacterBox() {
     if (tekken.matchState === 'matched' && hasBattleData) {
       const timer = setTimeout(() => {
         setShowMatchmaking(false);
-        setShowBattle(true);
+        openBattle(false);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [tekken.matchState, hasBattleData]);
+  }, [tekken.matchState, hasBattleData, openBattle]);
 
   const containerW = ORBIT_RX * 2 + CHAR_SIZE;
   const containerH = ORBIT_RY * 2 + CHAR_SIZE;
@@ -587,25 +564,7 @@ export default function CharacterBox() {
         }}
       />
 
-      {/* 철권퀴즈 배틀 오버레이 */}
-      {showBattle && profile && (
-        <TekkenBattleOverlay
-          tekken={tekken}
-          userId={profile.uid}
-          aiOnly={battleAiOnly}
-          onClose={() => {
-            // 배틀 결과에서 XP 토스트 표시
-            if (tekken.result && profile) {
-              const isWinner = tekken.result.winnerId === profile.uid;
-              const xp = calcBattleXp(isWinner, 0);
-              showExpToast(xp, isWinner ? '배틀 승리' : '배틀 참여');
-            }
-            setShowBattle(false);
-            setBattleAiOnly(false);
-            tekken.leaveBattle();
-          }}
-        />
-      )}
+      {/* 철권퀴즈 배틀 오버레이는 layout-level BattleOverlayMount 가 렌더 */}
     </>
   );
 }

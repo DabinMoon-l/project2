@@ -11,6 +11,7 @@ import Navigation from '@/components/common/Navigation';
 import PdfViewerRoot from '@/components/pdf/PdfViewerRoot';
 import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel, DetailPositionProvider, BattleInviteProvider } from '@/lib/contexts';
+import { BattleSessionProvider } from '@/lib/contexts/BattleSessionContext';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 
@@ -23,6 +24,7 @@ const ProfessorHomeOverlay = dynamic(() => import('@/components/home/ProfessorHo
 const AIQuizContainer = dynamic(() => import('@/components/ai-quiz/AIQuizContainer'), { ssr: false });
 const LibraryJobToast = dynamic(() => import('@/components/professor/library/LibraryJobToast'), { ssr: false });
 const BattleInviteChallengeModal = dynamic(() => import('@/components/tekken/BattleInviteChallengeModal'), { ssr: false });
+const BattleOverlayMount = dynamic(() => import('@/components/tekken/BattleOverlayMount'), { ssr: false });
 
 // 라우트 사이드바 lazy load (가로모드 전용)
 const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), { ssr: false });
@@ -140,6 +142,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       [MilestoneWrapper, { isProfessor }],
       [HomeOverlayProvider],
       [DetailPanelProvider],
+      [BattleSessionProvider],
       [BattleInviteProvider],
     ]}>
       <MainLayoutGrid
@@ -455,6 +458,9 @@ function MainLayoutGrid({
 
       {/* 배틀 신청 도전장 — 전역 구독, 학습 중이면 숨김 */}
       <BattleInviteChallengeModal />
+
+      {/* 배틀 오버레이 — 어느 페이지든 세션이 활성화되면 표시 */}
+      <BattleOverlayMount />
 
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
