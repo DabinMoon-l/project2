@@ -103,6 +103,9 @@ export const sendBattleInvite = onCall(
   {
     region: "asia-northeast3",
     secrets: [GEMINI_API_KEY],
+    // 배틀 신청은 사용자 인터랙션 직후 응답 필수 — cold start 방지.
+    // joinMatchmaking 도 동일 설정 (매칭 flow 와 동급 UX).
+    minInstances: 1,
   },
   async (request) => {
     if (!request.auth) {
@@ -219,6 +222,8 @@ export const respondBattleInvite = onCall(
   {
     region: "asia-northeast3",
     secrets: [GEMINI_API_KEY],
+    // createBattle 호출로 양쪽 클라이언트가 countdown 대기 중 → 즉시 응답 필수.
+    minInstances: 1,
   },
   async (request) => {
     if (!request.auth) {
