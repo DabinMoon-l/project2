@@ -12,17 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePdfViewerStore } from '@/lib/stores/pdfViewerStore';
 import { savePdf } from '@/lib/repositories/indexedDb/pdfStore';
-
-// pdfjs-dist 동적 로드 — 페이지 수 파악용
-let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
-async function getPdfjs() {
-  if (!_pdfjsLib) {
-    _pdfjsLib = await import('pdfjs-dist');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  }
-  return _pdfjsLib;
-}
+import { getPdfjs } from '@/lib/utils/pdfjs';
 
 const MAX_SIZE_MB = 50;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;

@@ -10,15 +10,7 @@ import {
   type ParseResult,
   type ParsedQuestion,
 } from '@/lib/ocr';
-// pdfjs-dist 동적 import (번들 크기 최적화)
-let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
-async function getPdfjs() {
-  if (!_pdfjsLib) {
-    _pdfjsLib = await import('pdfjs-dist');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-  }
-  return _pdfjsLib;
-}
+import { getPdfjs } from '@/lib/utils/pdfjs';
 
 // ============================================================
 // 타입 정의
