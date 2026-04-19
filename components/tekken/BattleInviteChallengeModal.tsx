@@ -13,14 +13,18 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBattleInvite, type PendingInvite } from '@/lib/contexts/BattleInviteContext';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useTheme } from '@/styles/themes/useTheme';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { callFunction } from '@/lib/api';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { useBattleSessionStore } from '@/lib/stores/battleSessionStore';
+import { computeBattlePlacement } from '@/lib/hooks/useBattlePlacement';
 
 const TTL_MS = 3_000;
 
@@ -40,6 +44,10 @@ export default function BattleInviteChallengeModal() {
 function ChallengeCard({ invite }: { invite: PendingInvite }) {
   const { theme } = useTheme();
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
+  // 수락 클릭 시점의 placement 를 캡처하기 위한 훅들
+  const isWide = useWideMode();
+  const pathname = usePathname() || '';
+  const { isLocked } = useDetailPanel();
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -73,13 +81,15 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
 
   const handleAccept = async () => {
     if (busy) return;
+    // ⚠️ 수락 클릭 바로 이 시점의 isLocked/pathname/isWide 를 박제해 placement 계산.
+    // 이후 showBattle=true 로 CharacterBox 가 lockDetail 을 호출해 isLocked 이 바뀌어도
+    // placement 는 영향 받지 않음 (store 에 이미 고정됨).
+    const placement = computeBattlePlacement(isWide, isLocked, pathname);
     setBusy('accept');
     try {
       const res = await callFunction('respondBattleInvite', { inviteId: invite.id, action: 'accept' });
       if (res.status === 'accepted' && res.battleId) {
-        // 배틀 오버레이는 layout-level BattleOverlayMount 가 어느 페이지에서든 렌더.
-        // router.push 없이 현재 화면에 그대로 도전장 수락 즉시 321 카운트다운 시작.
-        useBattleSessionStore.getState().request(res.battleId, false);
+        useBattleSessionStore.getState().request(res.battleId, false, placement);
       }
     } catch (err) {
       console.error('[BattleInvite] 수락 실패:', err);

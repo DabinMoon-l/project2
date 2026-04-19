@@ -3,20 +3,18 @@
 /**
  * 배틀 오버레이 마운트 포인트 — layout.tsx 에 한 번만 렌더.
  *
- * - BattleSession context 의 showBattle 이 true 일 때만 오버레이 띄움
- * - zustand store(pending)에서 수락된 battleId 감지 → startBattle 호출
- * - useBattlePlacement 로 세로·가로·패널 잠금 상태 판단해 style 덮어쓰기
- *
- * TekkenBattleOverlay 는 기본 `--home-sheet-left` 기준 렌더.
- * 이 컴포넌트가 overrideStyle 을 전달해 경우에 따라 2쪽으로 옮김.
+ * - BattleSession context 의 showBattle 이 true 일 때 오버레이 표시
+ * - zustand store(pending) 에서 수락된 battleId + placement 소비 → startBattle 호출
+ * - entry='self' (신청자): override 없이 기본 스타일(--home-sheet-left 기반 3쪽)
+ * - entry='invite' (수신자): context 에 박제된 invitePlacement 로 style 덮어쓰기
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useBattleSession } from '@/lib/contexts/BattleSessionContext';
 import { useBattleSessionStore } from '@/lib/stores/battleSessionStore';
-import { useBattlePlacement } from '@/lib/hooks/useBattlePlacement';
+import { placementToStyle } from '@/lib/hooks/useBattlePlacement';
 import { useExpToast } from '@/components/common/ExpToast';
 import { calcBattleXp } from '@/lib/utils/tekkenDamage';
 
@@ -27,31 +25,26 @@ const TekkenBattleOverlay = dynamic(
 
 export default function BattleOverlayMount() {
   const { profile } = useUser();
-  const { tekken, showBattle, battleAiOnly, entry, startBattle, closeBattle } = useBattleSession();
-  const { style: livePlacementStyle } = useBattlePlacement();
+  const { tekken, showBattle, battleAiOnly, entry, invitePlacement, startBattle, closeBattle } = useBattleSession();
   const { showExpToast } = useExpToast();
 
-  // 수신자(invite) 만 동적 placement. 신청자 본인(self) 은 배틀 확인 모달이
-  // 있던 자리(3쪽, --home-sheet-left 기반)를 그대로 쓰도록 override 없이 전달.
-  // 배틀 시작 시점 값을 freeze — 이후 isLocked 변화로 flip 되지 않게.
-  const frozenStyleRef = useRef<React.CSSProperties | undefined>(undefined);
-  if (showBattle && frozenStyleRef.current === undefined) {
-    frozenStyleRef.current = entry === 'invite' ? livePlacementStyle : undefined;
-  } else if (!showBattle && frozenStyleRef.current !== undefined) {
-    frozenStyleRef.current = undefined;
-  }
-  const placementStyle = frozenStyleRef.current;
+  // entry='invite' 면 수신자가 클릭 시점에 박제한 placement 사용.
+  // entry='self' 면 override 없이 기본 스타일(3쪽) 유지.
+  const overrideStyle =
+    entry === 'invite' && invitePlacement
+      ? placementToStyle(invitePlacement)
+      : undefined;
 
-  // 배틀 신청 수락(수신자) → store.pending 에 전달됨 → fromInvite=true 로 시작
+  // 수신자 store.pending → fromInvite=true + placement 전달로 시작
   const pending = useBattleSessionStore((s) => s.pending);
   const consume = useBattleSessionStore((s) => s.consume);
   useEffect(() => {
     if (!pending) return;
-    startBattle(pending.battleId, pending.aiOnly, true);
+    startBattle(pending.battleId, pending.aiOnly, true, pending.placement);
     consume();
   }, [pending, startBattle, consume]);
 
-  // 배틀 결과 → EXP 토스트 후 close
+  // 배틀 결과 XP 토스트 후 close
   const handleClose = useCallback(() => {
     if (tekken.result && profile) {
       const isWinner = tekken.result.winnerId === profile.uid;
@@ -69,7 +62,7 @@ export default function BattleOverlayMount() {
       userId={profile.uid}
       aiOnly={battleAiOnly}
       onClose={handleClose}
-      overrideStyle={placementStyle}
+      overrideStyle={overrideStyle}
     />
   );
 }
