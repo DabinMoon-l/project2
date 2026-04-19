@@ -64,6 +64,7 @@ interface FlattenedQuestion {
   choices?: string[] | null;
   answer: string | number | number[];
   explanation?: string | null;
+  choiceExplanations?: string[] | null;
   imageUrl?: string | null;
   mixedExamples?: MixedExampleBlock[] | null;
   combinedGroupId?: string;
@@ -302,17 +303,64 @@ export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?:
 
   /**
    * 페이지 로드 시 저장된 초안 확인
+   * - 최근 30분 이내면 모달 없이 바로 복원 (앱 전환 복귀 대응)
+   * - 오래되면 기존 모달
    */
   useEffect(() => {
     const draft = loadDraft();
-    if (draft && (draft.questions?.length > 0 || draft.title)) {
-      setSavedDraftInfo({
-        questionCount: draft.questions?.length || 0,
-        title: draft.title || '',
-      });
-      setShowResumeModal(true);
+    if (!draft) return;
+    const hasContent = draft.questions?.length > 0 || draft.title;
+    if (!hasContent) return;
+
+    const savedAt = draft.savedAt ? new Date(draft.savedAt).getTime() : 0;
+    const isRecent = savedAt > 0 && Date.now() - savedAt < 30 * 60 * 1000;
+
+    if (isRecent) {
+      if (draft.step) setStep(draft.step);
+      if (draft.questions) setQuestions(draft.questions);
+      if (draft.quizType) setQuizType(draft.quizType);
+      if (draft.pastYear) setPastYear(draft.pastYear);
+      if (draft.pastExamType) setPastExamType(draft.pastExamType);
+      if (draft.selectedCourseId) setSelectedCourseId(draft.selectedCourseId);
+      if (draft.title) setTitle(draft.title);
+      if (draft.description) setDescription(draft.description);
+      if (draft.difficulty) setDifficulty(draft.difficulty);
+      if (draft.tags) setTags(draft.tags);
+      return;
     }
+
+    setSavedDraftInfo({
+      questionCount: draft.questions?.length || 0,
+      title: draft.title || '',
+    });
+    setShowResumeModal(true);
   }, [loadDraft]);
+
+  // 상태 변경 시 디바운스 자동 저장 + 앱 백그라운드 시 즉시 flush
+  useEffect(() => {
+    const hasContent = questions.length > 0 || !!title;
+    if (!hasContent) return;
+    const timer = setTimeout(() => saveDraft(), 500);
+    return () => clearTimeout(timer);
+  }, [questions, title, description, quizType, pastYear, pastExamType, selectedCourseId, difficulty, tags, step, saveDraft]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (questions.length > 0 || !!title) saveDraft();
+    };
+    const onHide = () => flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
+    };
+  }, [questions, title, saveDraft]);
 
   /**
    * 이전 초안 이어서 작성
@@ -857,6 +905,9 @@ export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?:
             choices: sq.type === 'multiple' ? sq.choices?.filter((c) => c.trim()) : undefined,
             answer: subAnswer,
             explanation: sq.explanation || undefined,
+            choiceExplanations: sq.type === 'multiple' && sq.choiceExplanations && sq.choiceExplanations.some((e) => e && e.trim())
+              ? sq.choiceExplanations.slice(0, (sq.choices || []).filter((c) => c.trim()).length)
+              : undefined,
             imageUrl: sq.image || undefined,
             mixedExamples: subMixedExamples,
             combinedGroupId,
@@ -923,6 +974,9 @@ export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?:
           choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : undefined,
           answer,
           explanation: q.explanation || undefined,
+          choiceExplanations: q.type === 'multiple' && q.choiceExplanations && q.choiceExplanations.some((e) => e && e.trim())
+            ? q.choiceExplanations.slice(0, q.choices.filter((c) => c.trim()).length)
+            : undefined,
           imageUrl: q.imageUrl || undefined,
           mixedExamples: questionMixedExamples,
           chapterId: q.chapterId || undefined,

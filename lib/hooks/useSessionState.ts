@@ -20,7 +20,14 @@
  * 3. initial이 함수면 lazy 호출 (useState 규약 동일)
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+/**
+ * SSR 안전한 layout effect — 서버에서는 useEffect, 클라이언트에서는 useLayoutEffect.
+ * 왜 필요하냐: 상태 복원을 paint 전에 끝내 "빈 상태 → 복원 상태" 깜빡임을 제거.
+ */
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 type Initial<T> = T | (() => T);
 type Updater<T> = T | ((prev: T) => T);
@@ -101,9 +108,9 @@ export function useSessionState<T>(
     return initial;
   });
 
-  // 최초 1회 복원 — mount 시 저장된 값이 있으면 덮어씀
+  // 최초 1회 복원 — paint 전에 실행되어 빈 상태 플래시 방지
   const restoredRef = useRef(false);
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
     const { ok, value } = readStored<T>(key, storage, clearOnParseError);
@@ -153,7 +160,7 @@ export function useSessionStateSet<T>(
   });
 
   const restoredRef = useRef(false);
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
     const { ok, value } = readStored<T[]>(key, storage, clearOnParseError);

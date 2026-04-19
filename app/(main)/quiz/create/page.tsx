@@ -264,17 +264,66 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
   /**
    * 페이지 로드 시 저장된 초안 확인
+   * - 최근 30분 이내 저장이면 모달 없이 바로 이어쓰기 (앱 전환 복귀 시나리오)
+   * - 그 이상 오래된 draft면 모달로 명시적 확인
    */
   useEffect(() => {
     const draft = loadDraft();
-    if (draft && (draft.questions?.length > 0 || draft.quizMeta?.title)) {
-      setSavedDraftInfo({
-        questionCount: draft.questions?.length || 0,
-        title: draft.quizMeta?.title || '',
-      });
-      setShowResumeModal(true);
+    if (!draft) return;
+    const hasContent = draft.questions?.length > 0 || draft.quizMeta?.title;
+    if (!hasContent) return;
+
+    const savedAt = draft.savedAt ? new Date(draft.savedAt).getTime() : 0;
+    const ageMs = Date.now() - savedAt;
+    const isRecent = savedAt > 0 && ageMs < 30 * 60 * 1000;
+
+    if (isRecent) {
+      // 최근 작업 — 바로 복원 (cold reload 복귀 경험 개선)
+      if (draft.step) setStep(draft.step);
+      if (draft.questions) setQuestions(draft.questions);
+      if (draft.quizMeta) setQuizMeta(draft.quizMeta);
+      return;
     }
+
+    // 오래된 draft — 기존 대로 모달
+    setSavedDraftInfo({
+      questionCount: draft.questions?.length || 0,
+      title: draft.quizMeta?.title || '',
+    });
+    setShowResumeModal(true);
   }, [loadDraft]);
+
+  /**
+   * 상태 변경 시 디바운스 자동 저장 + 앱 백그라운드/이탈 시 즉시 flush.
+   * questions/quizMeta/step 중 하나라도 바뀌면 500ms 후 localStorage 기록.
+   */
+  useEffect(() => {
+    const hasContent = questions.length > 0 || !!quizMeta.title;
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      saveDraft();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [questions, quizMeta, step, saveDraft]);
+
+  useEffect(() => {
+    const flush = () => {
+      const hasContent = questions.length > 0 || !!quizMeta.title;
+      if (hasContent) saveDraft();
+    };
+    const onHide = () => flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
+    };
+  }, [questions, quizMeta, saveDraft]);
 
   /**
    * 이전 초안 이어서 작성
