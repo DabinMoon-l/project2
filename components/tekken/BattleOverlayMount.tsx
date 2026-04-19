@@ -11,7 +11,7 @@
  * 이 컴포넌트가 overrideStyle 을 전달해 경우에 따라 2쪽으로 옮김.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useBattleSession } from '@/lib/contexts/BattleSessionContext';
@@ -28,8 +28,18 @@ const TekkenBattleOverlay = dynamic(
 export default function BattleOverlayMount() {
   const { profile } = useUser();
   const { tekken, showBattle, battleAiOnly, startBattle, closeBattle } = useBattleSession();
-  const { style: placementStyle } = useBattlePlacement();
+  const { style: livePlacementStyle } = useBattlePlacement();
   const { showExpToast } = useExpToast();
+
+  // 배틀 시작 시점의 placement 를 freeze — 이후 isLocked 변화(CharacterBox 의
+  // lockDetail)로 실시간 재평가되면 3쪽→2쪽 flip 버그가 생김.
+  const frozenStyleRef = useRef<React.CSSProperties | null>(null);
+  if (showBattle && frozenStyleRef.current === null) {
+    frozenStyleRef.current = livePlacementStyle;
+  } else if (!showBattle && frozenStyleRef.current !== null) {
+    frozenStyleRef.current = null;
+  }
+  const placementStyle = frozenStyleRef.current ?? livePlacementStyle;
 
   // 배틀 신청 수락 시 store.request(battleId) 로 전달된 pending 소비
   const pending = useBattleSessionStore((s) => s.pending);
