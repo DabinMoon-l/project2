@@ -1668,7 +1668,7 @@ export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?:
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowExitModal(false)}
-              className={isPanelMode ? 'absolute inset-0 bg-black/30' : 'absolute inset-0 bg-black/50'}
+              className={isPanelMode ? 'absolute inset-0 bg-transparent' : 'absolute inset-0 bg-black/50'}
             />
             <motion.div
               initial={isPanelMode ? { y: '100%' } : { scale: 0.95, opacity: 0 }}
