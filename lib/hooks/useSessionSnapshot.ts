@@ -29,12 +29,13 @@ const COLD_RESTORED_PATH_KEY = 'rabbitory-cold-restored-path';
 // "내가 cold start로 열린건가?"를 판별할 때 사용.
 // 예: iOS PWA가 저장된 URL로 직접 재시작해도 이 플래그는 true.
 const COLD_START_CONSUMABLE_KEY = 'rabbitory-cold-start-consumable';
-// "앱을 껐다 켬" vs "잠깐 다른 앱" 구분 — 2분 내 복귀면 백그라운드 복귀로 보고
+// "앱을 껐다 켬" vs "잠깐 다른 앱" 구분 — 5분 내 복귀면 백그라운드 복귀로 보고
 // 저장된 경로 복원. 그 이상 지났으면 사용자가 의도적으로 닫은 것으로 간주하고
 // 홈화면(PWA manifest start_url=/)에 그대로 진입 (복원 스킵).
 // iOS PWA가 저장된 URL 자체로 relaunch하는 경우에도 cold-start-consumable을
 // set하지 않아 퀴즈 등 페이지의 '이전 진행' 모달이 정상 표시됨.
-const MAX_AGE_MS = 2 * 60 * 1000;
+// 측정 기준: 앱이 hidden 상태로 있었던 총 시간 (pagehide/visibilitychange:hidden 시점).
+const MAX_AGE_MS = 5 * 60 * 1000;
 
 /**
  * cold reload로 복원된 경로를 1회 소비.
