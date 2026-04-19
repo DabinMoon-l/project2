@@ -115,8 +115,8 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
           <motion.div
             className="fixed bottom-0 z-[116] bg-[#1A1A1A] rounded-t-2xl overflow-hidden flex flex-col"
             style={{
-              left: 'var(--modal-left, 0px)',
-              right: 'var(--modal-right, 0px)',
+              left: 'var(--home-sheet-left, 0px)',
+              right: '0px',
               maxHeight: '70dvh',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
