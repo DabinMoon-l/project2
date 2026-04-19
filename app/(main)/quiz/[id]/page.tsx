@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
 import { useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { useQuizDraft, useAutoSaveQuizDraft } from '@/lib/hooks/useQuizDraft';
+import { useSessionState } from '@/lib/hooks/useSessionState';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -129,8 +130,11 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
   // 바로 채점 상태
   const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
   const [gradeResults, setGradeResults] = useState<Record<string, { isCorrect: boolean; correctAnswer: string }>>({});
-  // 선지별 해설 아코디언 상태
-  const [expandedChoiceIdx, setExpandedChoiceIdx] = useState<number | null>(null);
+  // 선지별 해설 아코디언 상태 — cold reload에도 유지
+  const [expandedChoiceIdx, setExpandedChoiceIdx] = useSessionState<number | null>(
+    `quiz-play-expChoice:${quizId}`,
+    null,
+  );
 
   // 저장된 진행 상황 ID
   const [progressId, setProgressId] = useState<string | null>(null);

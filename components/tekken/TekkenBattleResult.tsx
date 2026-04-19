@@ -8,12 +8,15 @@
  * "문제 확인하기" → 라운드별 해설 바텀시트 (배틀 오버레이 영역 내부, 가로모드=3쪽)
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { BattleResult, RoundState } from '@/lib/types/tekken';
 import { calcBattleXp } from '@/lib/utils/tekkenDamage';
+import { useSessionState } from '@/lib/hooks/useSessionState';
 
 interface TekkenBattleResultProps {
+  /** 해설 시트·아코디언 상태를 배틀별로 분리하기 위한 키 */
+  battleId: string;
   result: BattleResult;
   userId: string;
   opponentNickname: string;
@@ -22,6 +25,7 @@ interface TekkenBattleResultProps {
 }
 
 export default function TekkenBattleResult({
+  battleId,
   result,
   userId,
   opponentNickname,
@@ -34,7 +38,10 @@ export default function TekkenBattleResult({
   const xpByPlayer = (result as unknown as { xpByPlayer?: Record<string, number> }).xpByPlayer;
   const xp = xpByPlayer?.[userId] ?? calcBattleXp(isWinner, 0);
 
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [showExplanation, setShowExplanation] = useSessionState<boolean>(
+    `tekken-result-sheet:${battleId}`,
+    false,
+  );
 
   // 라운드 데이터 정렬 (진행된 라운드만, questionData 보유 필수)
   const sortedRounds = useMemo(() => {
@@ -165,6 +172,7 @@ export default function TekkenBattleResult({
                 {sortedRounds.map(({ idx, state }) => (
                   <RoundExplanationCard
                     key={idx}
+                    battleId={battleId}
                     idx={idx}
                     state={state}
                     userId={userId}
@@ -181,10 +189,12 @@ export default function TekkenBattleResult({
 
 /** 라운드별 문제 카드 — 선지 아코디언으로 선지별 해설 표시 */
 function RoundExplanationCard({
+  battleId,
   idx,
   state,
   userId,
 }: {
+  battleId: string;
   idx: number;
   state: RoundState;
   userId: string;
@@ -224,6 +234,7 @@ function RoundExplanationCard({
         {state.questionData.choices.map((choice, i) => (
           <ChoiceAccordion
             key={i}
+            accordionKey={`tekken-result-acc:${battleId}:${idx}:${i}`}
             choice={choice}
             index={i}
             isUserAnswer={userAnswer === i}
@@ -238,19 +249,21 @@ function RoundExplanationCard({
 
 /** 선지 1개 — 탭하면 선지별 해설 아코디언 열림 */
 function ChoiceAccordion({
+  accordionKey,
   choice,
   index,
   isUserAnswer,
   isCorrectChoice,
   explanation,
 }: {
+  accordionKey: string;
   choice: string;
   index: number;
   isUserAnswer: boolean;
   isCorrectChoice: boolean;
   explanation?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useSessionState<boolean>(accordionKey, false);
   const hasExplanation = !!explanation && explanation.trim().length > 0;
 
   let cls = 'border-white/10 bg-white/5 text-white/70';

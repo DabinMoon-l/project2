@@ -294,6 +294,7 @@ export default function TekkenBattleOverlay({
         {/* 결과 */}
         {phase === 'result' && tekken.result && (
           <TekkenBattleResult
+            battleId={tekken.battle?.battleId || ''}
             result={tekken.result}
             userId={userId}
             opponentNickname={tekken.opponent?.nickname ?? '상대방'}
