@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useSessionState, useSessionStateSet, clearSessionPrefix } from '@/lib/hooks/useSessionState';
 import { collection, addDoc, serverTimestamp, doc, getDoc, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, usePanelStatePreservation } from '@/lib/contexts';
@@ -37,28 +38,46 @@ export default function ReviewPractice({
     return () => { unlockScroll(); };
   }, [isPanelMode]);
 
-  // 현재 화면 단계
-  const [phase, setPhase] = useState<Phase>('practice');
+  // 세션 키 — items 기반으로 안정적으로 파생 (같은 퀴즈 복귀 시 동일 키로 복원)
+  // items가 바뀌면 (다른 복습) 다른 키 → 독립적인 저장
+  const sessionKey = useMemo(() => {
+    const ids = items.map(i => i.id).sort().join('_');
+    // 너무 긴 키 방지를 위해 간단 해시
+    let h = 0;
+    for (let i = 0; i < ids.length; i++) {
+      h = (h * 31 + ids.charCodeAt(i)) | 0;
+    }
+    return `rp:${Math.abs(h).toString(36)}`;
+  }, [items]);
+
+  // 현재 화면 단계 — cold reload에도 복원
+  const [phase, setPhase] = useSessionState<Phase>(`${sessionKey}:phase`, 'practice');
   // 현재 문제 인덱스
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useSessionState<number>(`${sessionKey}:idx`, 0);
   // 모든 문제의 답안 저장 (인덱스별)
-  const [answers, setAnswers] = useState<Record<number, AnswerType>>({});
+  const [answers, setAnswers] = useSessionState<Record<number, AnswerType>>(`${sessionKey}:ans`, {});
   // 제출된 문제 인덱스 Set
-  const [submittedIndices, setSubmittedIndices] = useState<Set<number>>(new Set());
-  // 나가기 확인 모달
+  const [submittedIndices, setSubmittedIndices] = useSessionStateSet<number>(`${sessionKey}:sub`, new Set());
+  // 나가기 확인 모달 (임시 UI — 저장 불필요)
   const [showExitModal, setShowExitModal] = useState(false);
-  // 완료 처리 중 (중복 클릭 방지)
+  // 완료 처리 중 (중복 클릭 방지 — 임시)
   const [isFinishing, setIsFinishing] = useState(false);
   // 결과 저장 (인덱스별) - 단일 문제용
-  const [resultsMap, setResultsMap] = useState<Record<number, PracticeResult>>({});
+  const [resultsMap, setResultsMap] = useSessionState<Record<number, PracticeResult>>(`${sessionKey}:results`, {});
   // 결합형 문제 결과 저장 (그룹 인덱스 -> 하위 인덱스 -> 결과)
-  const [combinedResultsMap, setCombinedResultsMap] = useState<Record<number, Record<number, PracticeResult>>>({});
+  const [combinedResultsMap, setCombinedResultsMap] = useSessionState<Record<number, Record<number, PracticeResult>>>(
+    `${sessionKey}:cResults`,
+    {},
+  );
   // 결과 화면에서 펼쳐진 문제 ID Set
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useSessionStateSet<string>(`${sessionKey}:expQ`, new Set());
   // 결과 화면에서 펼쳐진 결합형 하위 문제 ID Set
-  const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
+  const [expandedSubIds, setExpandedSubIds] = useSessionStateSet<string>(`${sessionKey}:expSub`, new Set());
   // 선지별 해설 펼침 상태 (문제인덱스-선지인덱스 조합)
-  const [expandedChoiceExplanations, setExpandedChoiceExplanations] = useState<Set<string>>(new Set());
+  const [expandedChoiceExplanations, setExpandedChoiceExplanations] = useSessionStateSet<string>(
+    `${sessionKey}:expChoice`,
+    new Set(),
+  );
 
   // 결과 화면 진입 시 정답 선지 해설 기본 열림
   useEffect(() => {
@@ -173,7 +192,10 @@ export default function ReviewPractice({
   const isLastGroup = currentIndex === totalGroupCount - 1;
 
   // 결합형 문제의 하위 문제별 답안 저장 (groupIndex -> subIndex -> answer)
-  const [combinedAnswers, setCombinedAnswers] = useState<Record<number, Record<number, AnswerType>>>({});
+  const [combinedAnswers, setCombinedAnswers] = useSessionState<Record<number, Record<number, AnswerType>>>(
+    `${sessionKey}:cAns`,
+    {},
+  );
 
   // 현재 문제의 답안 (단일 문제용)
   const answer = answers[currentIndex] ?? null;
@@ -396,6 +418,8 @@ export default function ReviewPractice({
       if (fbExp > 0) parts.push(`피드백 ${fbExp}`);
       showExpToast(totalExp, parts.join(' + '));
     }
+    // 세션 저장 상태 일괄 정리 — 같은 복습에 다시 들어오더라도 처음부터 시작
+    clearSessionPrefix(`${sessionKey}:`);
     await onComplete(resultsArray);
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSessionState } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
@@ -94,9 +95,13 @@ export default function FeedbackPage({ panelQuizId, onPanelNavigate }: { panelQu
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [feedbacks, setFeedbacks] = useState<Record<string, string>>({});
-  const [feedbackTypes, setFeedbackTypes] = useState<Record<string, FeedbackType | null>>({});
+  // cold reload 대비 — 피드백 입력값/선택 유형/현재 인덱스는 로컬 유지
+  const [currentIndex, setCurrentIndex] = useSessionState<number>(`quiz-fb-idx:${quizId}`, 0);
+  const [feedbacks, setFeedbacks] = useSessionState<Record<string, string>>(`quiz-fb-text:${quizId}`, {});
+  const [feedbackTypes, setFeedbackTypes] = useSessionState<Record<string, FeedbackType | null>>(
+    `quiz-fb-types:${quizId}`,
+    {},
+  );
   const [direction, setDirection] = useState(0);
 
   // 터치 참조

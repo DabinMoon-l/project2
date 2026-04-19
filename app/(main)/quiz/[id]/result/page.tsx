@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSessionStateSet } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
@@ -52,11 +53,21 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const submitCalledRef = useRef(false);
-  const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
+  // 펼침 상태 — sessionStorage로 복원 (cold reload 대비)
+  const [expandedQuestionIds, setExpandedQuestionIds] = useSessionStateSet<string>(
+    `quiz-result-expQ:${quizId}`,
+    new Set(),
+  );
   // 결합형 그룹 펼침 상태 (그룹 ID -> 펼침 여부)
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+  const [expandedGroupIds, setExpandedGroupIds] = useSessionStateSet<string>(
+    `quiz-result-expG:${quizId}`,
+    new Set(),
+  );
   // 선지별 해설 펼침 상태 (문제ID-선지인덱스 조합)
-  const [expandedChoices, setExpandedChoices] = useState<Set<string>>(new Set());
+  const [expandedChoices, setExpandedChoices] = useSessionStateSet<string>(
+    `quiz-result-expC:${quizId}`,
+    new Set(),
+  );
 
   // 선지별 해설이 있으면 정답 선지 아코디언 기본 열림
   useEffect(() => {
