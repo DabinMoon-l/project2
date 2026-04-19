@@ -43,9 +43,12 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // outbox 구독 — 신청 중에만
+  // outbox 구독 — 시트 열려 있는 동안 유지 (sendingTo 타이머와 독립).
+  // ⚠️ 이전엔 sendingTo 에 묶여 있어 로컬 타이머가 sendingTo=null 로 초기화하면
+  //   구독이 해제 → 그 직후 도착한 accepted 이벤트를 신청자가 놓쳤음
+  //   (수락자는 배틀 시작되는데 신청자 화면엔 아무것도 안 뜸).
   useEffect(() => {
-    if (!isOpen || !myUid || !sendingTo) return;
+    if (!isOpen || !myUid) return;
     const outboxRef = rtdbRef(getRtdb(), `battleInviteOutbox/${myUid}/current`);
     const unsub = onValue(outboxRef, (snap) => {
       const data = snap.val() as {
@@ -53,7 +56,7 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
         status: 'pending' | 'accepted' | 'declined' | 'expired';
         battleId?: string;
       } | null;
-      if (!data || data.receiverUid !== sendingTo) return;
+      if (!data) return;
       if (data.status === 'accepted' && data.battleId) {
         setSendingTo(null);
         setExpiresAt(null);
@@ -72,24 +75,21 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
       }
     });
     return () => unsub();
-  }, [isOpen, myUid, sendingTo, onAccepted]);
+  }, [isOpen, myUid, onAccepted]);
 
-  // 클라이언트 타임아웃 — 서버 expiresAt 기준 (CF 응답 후에만 활성)
-  // 200ms 버퍼로 서버 시계 동기화 오차 흡수.
+  // 클라이언트 UI 타이머 — 서버 expiresAt + 서버 유예(3s) 초과 시 스피너만 해제.
+  // 토스트는 띄우지 않음: 늦게 도착한 'accepted' 이벤트(outbox)가 배틀을 시작할 수 있음.
+  // 최종 '응답이 없어요' 는 서버가 outbox.status='expired' 로 설정할 때 outbox
+  // 구독이 처리.
   useEffect(() => {
     if (!sendingTo || !expiresAt) return;
-    const remaining = expiresAt - Date.now();
+    const SERVER_GRACE_MS = 3_000;
+    const remaining = expiresAt + SERVER_GRACE_MS - Date.now();
     if (remaining <= 0) {
       setSendingTo(null);
-      setExpiresAt(null);
-      setToast('응답이 없어요');
       return;
     }
-    const t = setTimeout(() => {
-      setSendingTo(null);
-      setExpiresAt(null);
-      setToast('응답이 없어요');
-    }, remaining + 200);
+    const t = setTimeout(() => setSendingTo(null), remaining);
     return () => clearTimeout(t);
   }, [sendingTo, expiresAt]);
 
