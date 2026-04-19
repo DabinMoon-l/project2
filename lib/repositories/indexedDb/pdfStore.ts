@@ -24,17 +24,6 @@ export interface PdfGeom {
   h: number;
 }
 
-export interface PdfStroke {
-  /** 'black' | 'red' | 'blue' | 'eraser' */
-  color: string;
-  /** 획 굵기 (px 기준, 저장된 캔버스 크기에서의 값) */
-  width: number;
-  /** 정규화 좌표 [x, y], 0~1 (페이지 뷰포트 기준) */
-  points: Array<[number, number]>;
-}
-
-export type PdfAnnotations = Record<string, PdfStroke[]>;
-
 export interface PdfRecord {
   id: string;
   name: string;
@@ -47,8 +36,6 @@ export interface PdfRecord {
   lastPage?: number;
   /** 사용자가 북마크한 페이지 번호 배열 (1-indexed). 하단 슬라이더에 표시 */
   bookmarks?: number[];
-  /** 페이지별 필기 stroke (키는 페이지번호 문자열) */
-  annotations?: PdfAnnotations;
 }
 
 interface PdfStoredRecord extends PdfRecord {
@@ -107,7 +94,6 @@ export async function listPdfMeta(): Promise<PdfRecord[]> {
       lastGeom: r.lastGeom,
       lastPage: r.lastPage,
       bookmarks: r.bookmarks ?? [],
-      annotations: r.annotations ?? {},
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
 }
