@@ -1,22 +1,15 @@
 'use client';
 
 /**
- * 배틀 신청 도전장 — 상단 컴팩트 카드 (수신자 측)
+ * 배틀 신청 도전장 — 빈티지 신문(ExpToast) 스타일 상단 카드 (수신자 측)
  *
- * 설계 원칙:
+ * 설계:
  *  - 화면 전체를 가리지 않음 (학습 방해 방지)
- *  - 상단에 작게 떠서 현재 작업을 계속할 수 있음
- *  - 배경 오버레이 없음 (모달 카드 바깥 클릭은 그대로 통과)
+ *  - 상단 중앙에 작게 떠 있음
+ *  - 배경 오버레이 없음 (카드 바깥 클릭은 통과)
  *  - 효과음·진동 없음
- *  - 가로모드: 2쪽(메인 페이지) 영역 기준으로 중앙
- *
- * 레이아웃:
- *  - 상단: "⚔️ 도전장" 제목 + 3초 진행 바
- *  - 중단: 토끼 이미지 · 옆에 닉네임 · 반 · 챕터
- *  - 하단: [거절] [수락]
- *
- * 수락 시: respondBattleInvite('accept') → battleId → `/?battleId=` 로 라우팅.
- *   CharacterBox의 effect가 battleId를 잡아 attachBattleId + 배틀 오버레이 표시.
+ *  - 빈티지 신문 스타일: 크림 배경 + 검정 테두리 + 모서리 장식 + Playfair/Cormorant 세리프
+ *  - 가로모드: 2쪽(메인 페이지) 영역 기준
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -24,9 +17,11 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useBattleInvite, type PendingInvite } from '@/lib/contexts/BattleInviteContext';
+import { useTheme } from '@/styles/themes/useTheme';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { callFunction } from '@/lib/api';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
+import { useBattleSessionStore } from '@/lib/stores/battleSessionStore';
 
 const TTL_MS = 3_000;
 
@@ -45,6 +40,7 @@ export default function BattleInviteChallengeModal() {
 
 function ChallengeCard({ invite }: { invite: PendingInvite }) {
   const router = useRouter();
+  const { theme } = useTheme();
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
 
   const [now, setNow] = useState(() => Date.now());
@@ -83,7 +79,10 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
     try {
       const res = await callFunction('respondBattleInvite', { inviteId: invite.id, action: 'accept' });
       if (res.status === 'accepted' && res.battleId) {
-        router.push(`/?battleId=${encodeURIComponent(res.battleId)}`);
+        // searchParams 기반은 re-render 타이밍 이슈로 불안정 → zustand store로 전달.
+        // home에서 CharacterBox 가 pending 을 잡아 배틀 시작.
+        useBattleSessionStore.getState().request(res.battleId, false);
+        router.push('/');
       }
     } catch (err) {
       console.error('[BattleInvite] 수락 실패:', err);
@@ -92,30 +91,46 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
   };
 
   return (
-    // 전체 레이어 — pointer-events-none 으로 카드 바깥은 클릭 통과시켜 학습 방해 없음
     <motion.div
       className="fixed top-0 z-[120] flex justify-center pointer-events-none"
       style={{
         left: 'var(--modal-left, 0px)',
         right: 'var(--modal-right, 0px)',
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)',
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)',
       }}
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      initial={{ opacity: 0, y: -20, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.95 }}
       transition={{ type: 'spring', damping: 24, stiffness: 320 }}
     >
-      <div className="pointer-events-auto w-[min(92%,340px)] bg-[#1A1A1A] rounded-2xl shadow-2xl overflow-hidden border border-white/10">
-        {/* 3초 진행 바 */}
+      {/* 빈티지 신문 카드 — ExpToast 스타일 */}
+      <div
+        className="pointer-events-auto relative w-[min(92%,340px)] shadow-lg overflow-hidden"
+        style={{
+          backgroundColor: theme.colors.background,
+          border: '2px solid #1A1A1A',
+          borderRadius: '8px',
+        }}
+      >
+        {/* 3초 진행 바 — 상단 */}
         <div
-          className="h-0.5 bg-red-500 transition-[width] ease-linear"
-          style={{ width: `${progress * 100}%` }}
+          className="h-0.5 transition-[width] ease-linear"
+          style={{ width: `${progress * 100}%`, backgroundColor: theme.colors.accent }}
         />
 
-        <div className="px-4 py-3">
-          {/* 제목 */}
-          <p className="text-center text-white/90 text-[11px] font-black tracking-[0.3em] mb-2">
-            ⚔️ 도전장
+        {/* 모서리 장식 (ExpToast와 동일) */}
+        <div className="absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#1A1A1A]" />
+        <div className="absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#1A1A1A]" />
+        <div className="absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#1A1A1A]" />
+        <div className="absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#1A1A1A]" />
+
+        <div className="px-5 py-3.5">
+          {/* 제목 — 크게, 세리프 */}
+          <p
+            className="text-center font-serif-display font-black mb-3"
+            style={{ color: theme.colors.accent, fontSize: '1.5rem', letterSpacing: '0.05em' }}
+          >
+            도전장
           </p>
 
           {/* 토끼 + 신청자 정보 */}
@@ -130,13 +145,17 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-bold truncate">
+              <p className="text-sm font-bold truncate" style={{ color: '#1A1A1A' }}>
                 {invite.senderNickname}
                 {invite.senderClass && (
-                  <span className="text-white/50 font-medium"> · {invite.senderClass}반</span>
+                  <span style={{ color: theme.colors.textSecondary, fontWeight: 500 }}> · {invite.senderClass}반</span>
                 )}
               </p>
-              <p className="text-white/50 text-xs truncate" title={chapterLabels.join(', ')}>
+              <p
+                className="text-xs truncate italic"
+                style={{ color: theme.colors.textSecondary }}
+                title={chapterLabels.join(', ')}
+              >
                 {chapterLabels.join(', ')}
               </p>
             </div>
@@ -148,7 +167,13 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
               type="button"
               onClick={handleDecline}
               disabled={!!busy}
-              className="flex-1 py-2 rounded-full bg-white/10 border border-white/20 text-white text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+              className="flex-1 py-2 text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+              style={{
+                color: '#1A1A1A',
+                border: '1.5px solid #1A1A1A',
+                borderRadius: '999px',
+                backgroundColor: 'transparent',
+              }}
             >
               {busy === 'decline' ? '거절 중…' : '거절'}
             </button>
@@ -156,7 +181,13 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
               type="button"
               onClick={handleAccept}
               disabled={!!busy}
-              className="flex-1 py-2 rounded-full bg-red-500 text-white text-xs font-black disabled:opacity-50 active:scale-95 transition-transform"
+              className="flex-1 py-2 text-xs font-black disabled:opacity-50 active:scale-95 transition-transform"
+              style={{
+                color: '#FDFBF7',
+                backgroundColor: theme.colors.accent,
+                border: `1.5px solid ${theme.colors.accent}`,
+                borderRadius: '999px',
+              }}
             >
               {busy === 'accept' ? '수락 중…' : '수락'}
             </button>

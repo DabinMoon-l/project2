@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
   motion,
   AnimatePresence,
   useMotionValue,
   useSpring,
 } from 'framer-motion';
+import { useBattleSessionStore } from '@/lib/stores/battleSessionStore';
 import { useUser, useCourse, useMilestone, useDetailPanel } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
@@ -211,20 +211,18 @@ export default function CharacterBox() {
     setShowBattle(true);
   }, [tekken]);
 
-  // URL `?battleId=...` 감지 — 도전장 모달에서 수락 후 라우팅된 수신자용
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  // 배틀 신청 수락 → zustand store 로 전달된 pending 배틀 시작
+  // (Next.js searchParams 는 re-render 타이밍 이슈로 불안정)
+  const pendingBattle = useBattleSessionStore((s) => s.pending);
+  const consumePendingBattle = useBattleSessionStore((s) => s.consume);
   useEffect(() => {
-    const battleId = searchParams?.get('battleId');
-    if (!battleId) return;
-    tekken.attachBattleId(battleId);
-    setBattleAiOnly(false);
+    if (!pendingBattle) return;
+    tekken.attachBattleId(pendingBattle.battleId);
+    setBattleAiOnly(pendingBattle.aiOnly);
     setShowBattle(true);
-    // 쿼리 제거 — 새로고침/뒤로가기 시 재트리거 방지
-    router.replace(pathname || '/');
+    consumePendingBattle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [pendingBattle]);
 
   const onLongPressMove = useCallback((x: number, y: number) => {
     const dx = Math.abs(x - longPressStartPos.current.x);
