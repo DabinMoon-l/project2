@@ -209,12 +209,12 @@ export default function TekkenBattleOverlay({
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">
-        {/* 카운트다운 — AI 전용은 마운트 시점부터 5초 자체 카운트 (서버 시각 무시) */}
+        {/* 카운트다운 — AI 전용은 마운트 시점부터 3초 자체 카운트 (서버 시각 무시).
+            3초 내에 CF matchWithBot이 보통 끝나며, 안 끝났으면 handleCountdownComplete가 폴링 */}
         {phase === 'countdown' && (
           <TekkenCountdown
             onComplete={handleCountdownComplete}
             countdownStartedAt={aiOnly ? undefined : tekken.battle?.countdownStartedAt}
-            durationMs={aiOnly ? 5000 : 3000}
           />
         )}
 
