@@ -1798,7 +1798,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
       </main>
 
       {/* 하단 버튼 - 고정 (업로드 단계에서는 숨김) */}
-      {step !== 'upload' && <div className="sticky bottom-0 border-t-2 border-[#1A1A1A] px-3 py-3" style={{ backgroundColor: '#F5F0E8' }}>
+      {step !== 'upload' && <div className="sticky bottom-0 z-0 border-t-2 border-[#1A1A1A] px-3 py-3" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="max-w-lg mx-auto flex gap-2">
           {/* 이전 버튼 */}
           <button
@@ -1862,8 +1862,8 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className={isPanelMode
-              ? 'absolute inset-0 z-50 flex items-end'
-              : 'fixed inset-0 z-50 flex items-center justify-center p-4'
+              ? 'absolute inset-0 z-[70] flex items-end'
+              : 'fixed inset-0 z-[70] flex items-center justify-center p-4'
             }
           >
             {/* 백드롭 */}
@@ -1872,7 +1872,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowExitModal(false)}
-              className={isPanelMode ? 'absolute inset-0 bg-transparent' : 'absolute inset-0 bg-black/50'}
+              className={isPanelMode ? 'absolute inset-0 bg-black/30' : 'absolute inset-0 bg-black/50'}
             />
 
             {/* 패널 모드: 바텀시트, 세로모드: 센터 모달 */}
