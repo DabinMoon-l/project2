@@ -328,8 +328,10 @@ ${questionsText.slice(0, 8000)}
   "examTopics": [{"topic": "대주제", "subtopics": ["세부1"]}]
 }`;
 
+  // Flash-Lite로 전환 — 키워드 추출은 단순 NLP 작업이라 Flash 품질 불필요.
+  // thinking도 제거 (용어 뽑기엔 과함). 비용 약 60% 절감.
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -337,8 +339,7 @@ ${questionsText.slice(0, 8000)}
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 8192 + 8192,
-          thinkingConfig: { thinkingBudget: 8192 },
+          maxOutputTokens: 8192,
         },
       }),
     }
