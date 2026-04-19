@@ -45,6 +45,12 @@ export interface BattleQuestion {
   text: string;
   type: 'multiple';
   choices: string[];
+  /** 정답 해설 (결과 화면 표시용) */
+  explanation?: string;
+  /** 선지별 해설 (결과 화면 아코디언용, choices와 같은 순서·길이) */
+  choiceExplanations?: string[];
+  /** 챕터 ID (복습 문서 생성용) */
+  chapterId?: string;
 }
 
 /** 라운드 답변 */

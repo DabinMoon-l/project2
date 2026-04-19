@@ -5,7 +5,7 @@
  *
  * 승/패/무승부 + XP 표시
  * 부모 컨테이너 내부에서 전체 영역 차지
- * "오답 확인하기" → 라운드별 해설 바텀시트 (배틀 오버레이 영역 내부, 가로모드=3쪽)
+ * "문제 확인하기" → 라운드별 해설 바텀시트 (배틀 오버레이 영역 내부, 가로모드=3쪽)
  */
 
 import { useState, useMemo } from 'react';
@@ -118,7 +118,7 @@ export default function TekkenBattleResult({
           animate={{ opacity: 1 }}
           transition={{ delay: 1.4 }}
         >
-          오답 확인하기
+          문제 확인하기
         </motion.button>
       )}
 
@@ -162,79 +162,152 @@ export default function TekkenBattleResult({
               </div>
               {/* 라운드 리스트 */}
               <div className="overflow-y-auto px-4 py-4 space-y-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                {sortedRounds.map(({ idx, state }) => {
-                  const userAnswer = state.answers?.[userId]?.answer;
-                  const resultData = state.result?.[userId];
-                  const isCorrect = resultData?.isCorrect ?? false;
-                  const correctText = resultData?.correctChoiceText;
-                  const correctIdx = correctText
-                    ? state.questionData.choices.findIndex((c) => c === correctText)
-                    : -1;
-                  const noAnswer = userAnswer === undefined || userAnswer === null;
-                  const statusLabel = isCorrect ? '정답' : noAnswer ? '시간초과' : '오답';
-                  const statusColor = isCorrect ? 'bg-green-500' : 'bg-red-500';
-                  const statusTextColor = isCorrect ? 'text-green-400' : 'text-red-400';
-
-                  return (
-                    <div
-                      key={idx}
-                      className="bg-black/40 border border-white/10 rounded-xl p-4"
-                    >
-                      {/* 라운드 헤더 */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <span
-                          className={`inline-flex items-center justify-center px-2 h-6 rounded-full text-[11px] font-black text-white ${statusColor}`}
-                        >
-                          R{idx + 1}
-                        </span>
-                        <span className={`text-xs font-bold ${statusTextColor}`}>
-                          {statusLabel}
-                        </span>
-                      </div>
-                      {/* 문제 */}
-                      <p className="text-white text-sm font-semibold leading-relaxed mb-3 whitespace-pre-wrap">
-                        {state.questionData.text}
-                      </p>
-                      {/* 선지 */}
-                      <div className="space-y-1.5">
-                        {state.questionData.choices.map((choice, i) => {
-                          const isUserAnswer = userAnswer === i;
-                          const isCorrectChoice = i === correctIdx;
-                          let cls = 'border-white/10 bg-white/5 text-white/70';
-                          let marker: string = String.fromCharCode(65 + i); // A, B, C, ...
-                          if (isCorrectChoice) {
-                            cls = 'border-green-500/60 bg-green-500/15 text-green-100';
-                            marker = '✓';
-                          } else if (isUserAnswer && !isCorrectChoice) {
-                            cls = 'border-red-500/60 bg-red-500/15 text-red-100';
-                            marker = '✗';
-                          }
-                          return (
-                            <div
-                              key={i}
-                              className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-sm ${cls}`}
-                            >
-                              <span className="font-black text-xs mt-0.5 w-3 text-center shrink-0">
-                                {marker}
-                              </span>
-                              <span className="flex-1 leading-snug whitespace-pre-wrap">
-                                {choice}
-                              </span>
-                              {isUserAnswer && (
-                                <span className="text-[10px] font-bold text-white/60 mt-0.5 shrink-0">
-                                  내 선택
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                {sortedRounds.map(({ idx, state }) => (
+                  <RoundExplanationCard
+                    key={idx}
+                    idx={idx}
+                    state={state}
+                    userId={userId}
+                  />
+                ))}
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** 라운드별 문제 카드 — 선지 아코디언으로 선지별 해설 표시 */
+function RoundExplanationCard({
+  idx,
+  state,
+  userId,
+}: {
+  idx: number;
+  state: RoundState;
+  userId: string;
+}) {
+  const userAnswer = state.answers?.[userId]?.answer;
+  const resultData = state.result?.[userId];
+  const isCorrect = resultData?.isCorrect ?? false;
+  const correctText = resultData?.correctChoiceText;
+  const correctIdx = correctText
+    ? state.questionData.choices.findIndex((c) => c === correctText)
+    : -1;
+  const noAnswer = userAnswer === undefined || userAnswer === null;
+  const statusLabel = isCorrect ? '정답' : noAnswer ? '시간초과' : '오답';
+  const statusColor = isCorrect ? 'bg-green-500' : 'bg-red-500';
+  const statusTextColor = isCorrect ? 'text-green-400' : 'text-red-400';
+  const choiceExplanations = state.questionData.choiceExplanations;
+
+  return (
+    <div className="bg-black/40 border border-white/10 rounded-xl p-4">
+      {/* 라운드 헤더 */}
+      <div className="flex items-center gap-2 mb-3">
+        <span
+          className={`inline-flex items-center justify-center px-2 h-6 rounded-full text-[11px] font-black text-white ${statusColor}`}
+        >
+          R{idx + 1}
+        </span>
+        <span className={`text-xs font-bold ${statusTextColor}`}>
+          {statusLabel}
+        </span>
+      </div>
+      {/* 문제 */}
+      <p className="text-white text-sm font-semibold leading-relaxed mb-3 whitespace-pre-wrap">
+        {state.questionData.text}
+      </p>
+      {/* 선지 */}
+      <div className="space-y-1.5">
+        {state.questionData.choices.map((choice, i) => (
+          <ChoiceAccordion
+            key={i}
+            choice={choice}
+            index={i}
+            isUserAnswer={userAnswer === i}
+            isCorrectChoice={i === correctIdx}
+            explanation={choiceExplanations?.[i]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 선지 1개 — 탭하면 선지별 해설 아코디언 열림 */
+function ChoiceAccordion({
+  choice,
+  index,
+  isUserAnswer,
+  isCorrectChoice,
+  explanation,
+}: {
+  choice: string;
+  index: number;
+  isUserAnswer: boolean;
+  isCorrectChoice: boolean;
+  explanation?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasExplanation = !!explanation && explanation.trim().length > 0;
+
+  let cls = 'border-white/10 bg-white/5 text-white/70';
+  let marker: string = String.fromCharCode(65 + index); // A, B, C, ...
+  if (isCorrectChoice) {
+    cls = 'border-green-500/60 bg-green-500/15 text-green-100';
+    marker = '✓';
+  } else if (isUserAnswer && !isCorrectChoice) {
+    cls = 'border-red-500/60 bg-red-500/15 text-red-100';
+    marker = '✗';
+  }
+
+  return (
+    <div className={`rounded-lg border text-sm ${cls}`}>
+      <button
+        type="button"
+        onClick={hasExplanation ? () => setOpen((o) => !o) : undefined}
+        className="w-full flex items-start gap-2 px-3 py-2 text-left"
+        disabled={!hasExplanation}
+      >
+        <span className="font-black text-xs mt-0.5 w-3 text-center shrink-0">
+          {marker}
+        </span>
+        <span className="flex-1 leading-snug whitespace-pre-wrap">{choice}</span>
+        {isUserAnswer && (
+          <span className="text-[10px] font-bold text-white/60 mt-0.5 shrink-0">
+            내 선택
+          </span>
+        )}
+        {hasExplanation && (
+          <motion.svg
+            className="w-3.5 h-3.5 mt-0.5 shrink-0 opacity-70"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </motion.svg>
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && hasExplanation && (
+          <motion.div
+            key="exp"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 pt-1 text-[12px] leading-relaxed text-white/75 whitespace-pre-wrap border-t border-white/10">
+              {explanation}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
