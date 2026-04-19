@@ -122,16 +122,42 @@ export async function savePdf(record: {
   );
 }
 
-/** 메타데이터만 업데이트 (위치·크기 기억 등) — blob 재저장 없이 효율적 */
+/**
+ * 메타데이터 업데이트 — 반드시 **단일 트랜잭션**에서 get→put.
+ * Safari/WebKit은 Blob이 포함된 레코드를 별도 트랜잭션에서 read 후 다른 tx
+ * 에서 다시 put하면 Blob 참조가 무효화되는 known 이슈가 있음
+ * ("the object can not be found here"). get+put을 같은 tx에 묶으면
+ * Blob이 tx 동안 살아있어 안전.
+ */
 export async function updatePdfMeta(
   id: string,
   patch: Partial<Omit<PdfRecord, 'id'>>,
 ): Promise<void> {
-  const existing = await txRequest<PdfStoredRecord | undefined>('readonly', (s) => s.get(id));
-  if (!existing) return;
-  await txRequest<IDBValidKey>('readwrite', (s) =>
-    s.put({ ...existing, ...patch }),
-  );
+  const db = await openDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const existing = getReq.result as PdfStoredRecord | undefined;
+      if (!existing) return; // 없으면 아무것도 안 함, 에러 아님
+      const putReq = store.put({ ...existing, ...patch });
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      reject(tx.error);
+      db.close();
+    };
+    tx.onabort = () => {
+      reject(tx.error ?? new Error('transaction aborted'));
+      db.close();
+    };
+  });
 }
 
 /** 삭제 */
