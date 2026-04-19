@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * sessionStorage 기반 영구 상태 훅 (useState 대체)
+ * localStorage 기반 영구 상태 훅 (useState 대체)
  *
  * 용도: iOS PWA eviction으로 cold reload 시에도 UI 임시 상태(아코디언 펼침,
  * 탭 선택, 토글 등)를 유지. React useState와 동일한 인터페이스.
  *
- * 기본 저장소: **sessionStorage** — 탭 단위로 유지되고 탭 닫으면 정리.
- *              iOS PWA는 탭 개념이 애매한데, 앱 재시작 시에는 sessionStorage도
- *              살아남는 경우가 많아 실용적으로 cold reload 복원 가능.
- * localStorage 옵션: 장기 보존이 필요하면 `{ storage: 'local' }`.
+ * 기본 저장소: **localStorage** — iOS standalone PWA가 WebView를 죽였다가
+ *              재실행하면 sessionStorage는 "새 세션"으로 간주돼 날아감.
+ *              localStorage는 앱 데이터 초기화하지 않는 한 영속.
+ * sessionStorage 옵션: 탭 닫으면 지우고 싶은 경우 `{ storage: 'session' }`.
  *
  * 키 규칙: 앱 전역 unique — 예) `review-practice-currentIdx:{quizId}`
  * 값 타입: JSON 직렬화 가능한 것만 (Date·Map·Set 등은 직접 인코딩)
@@ -26,7 +26,7 @@ type Initial<T> = T | (() => T);
 type Updater<T> = T | ((prev: T) => T);
 
 interface UseSessionStateOptions {
-  /** 기본 'session'. 장기 보존이 필요하면 'local' */
+  /** 기본 'local' — iOS PWA가 WebView를 죽여도 유지됨. 'session'은 탭 종료/PWA 재기동 시 날아감 */
   storage?: 'session' | 'local';
   /** 직렬화 실패 시 값 폐기 여부 (기본 true) */
   clearOnParseError?: boolean;
@@ -91,7 +91,7 @@ export function useSessionState<T>(
   initial: Initial<T>,
   options: UseSessionStateOptions = {},
 ): [T, (updater: Updater<T>) => void, () => void] {
-  const { storage = 'session', clearOnParseError = true } = options;
+  const { storage = 'local', clearOnParseError = true } = options;
 
   // SSR에서는 무조건 initial. 복원은 클라이언트 mount 시 별도 effect에서 처리.
   const [state, setState] = useState<T>(() => {
@@ -145,7 +145,7 @@ export function useSessionStateSet<T>(
   initial: Initial<Set<T>>,
   options: UseSessionStateOptions = {},
 ): [Set<T>, (updater: Set<T> | ((prev: Set<T>) => Set<T>)) => void, () => void] {
-  const { storage = 'session', clearOnParseError = true } = options;
+  const { storage = 'local', clearOnParseError = true } = options;
 
   const [arr, setArr] = useState<T[]>(() => {
     const init = typeof initial === 'function' ? (initial as () => Set<T>)() : initial;
@@ -206,7 +206,7 @@ function useMemoSet<T>(arr: T[]): Set<T> {
  * 주어진 prefix로 시작하는 모든 세션 저장 키 제거.
  * 예: 복습 세션 종료 시 `clearSessionPrefix('rp:abc123')`로 해당 세션 상태 일괄 정리.
  */
-export function clearSessionPrefix(prefix: string, kind: 'session' | 'local' = 'session'): void {
+export function clearSessionPrefix(prefix: string, kind: 'session' | 'local' = 'local'): void {
   const storage = getStorage(kind);
   if (!storage) return;
   try {
