@@ -37,15 +37,21 @@ const MAX_W_RATIO = 0.95;
 const MAX_H_RATIO = 0.95;
 const SWIPE_THRESHOLD_PX = 50;
 
+// 모듈 스코프 상수 — 북마크가 없는 PDF에 대해 매번 새 [] 리터럴을 반환하면
+// React 19의 useSyncExternalStore가 snapshot 불일치로 판단해
+// "Maximum update depth exceeded" (#185) 에러를 던짐. 동일 참조로 고정.
+const EMPTY_BOOKMARKS: number[] = [];
+
 export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, initialPage }: Props) {
   const closePdf = usePdfViewerStore((s) => s.closePdf);
   const updateWindowGeom = usePdfViewerStore((s) => s.updateWindowGeom);
   const focusWindow = usePdfViewerStore((s) => s.focusWindow);
   const updateLastPage = usePdfViewerStore((s) => s.updateLastPage);
   const toggleBookmark = usePdfViewerStore((s) => s.toggleBookmark);
-  // 이 PDF의 북마크를 store에서 직접 구독 (다른 창/사이드바와 동기화)
+  // 이 PDF의 북마크를 store에서 직접 구독 (다른 창/사이드바와 동기화).
+  // fallback은 고정된 EMPTY_BOOKMARKS 상수 — 매번 새 [] 리터럴이면 무한 루프.
   const bookmarks = usePdfViewerStore(
-    (s) => s.savedPdfs.find((p) => p.id === pdfId)?.bookmarks ?? [],
+    (s) => s.savedPdfs.find((p) => p.id === pdfId)?.bookmarks ?? EMPTY_BOOKMARKS,
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -513,19 +519,29 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
             </div>
           </div>
 
-          {/* 4 모서리 리사이즈 핸들 (PC — 터치는 핀치로 충분, aspect 고정) */}
+          {/* 4 모서리 리사이즈 핸들 (PC — 터치는 핀치로 충분, aspect 고정).
+              24px 히트 영역 + hover 시 흰 L자 힌트로 위치 안내. */}
           {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
             <div
               key={c}
               onPointerDown={handleResizeDown(c)}
-              className={`absolute w-4 h-4 ${
+              className={`group absolute w-6 h-6 ${
                 c === 'tl' ? 'top-0 left-0 cursor-nwse-resize' :
                 c === 'tr' ? 'top-0 right-0 cursor-nesw-resize' :
                 c === 'bl' ? 'bottom-0 left-0 cursor-nesw-resize' :
                             'bottom-0 right-0 cursor-nwse-resize'
               }`}
               style={{ touchAction: 'none' }}
-            />
+            >
+              <div
+                className={`absolute w-3 h-3 border-white/70 opacity-0 group-hover:opacity-100 transition-opacity ${
+                  c === 'tl' ? 'top-1 left-1 border-l-2 border-t-2' :
+                  c === 'tr' ? 'top-1 right-1 border-r-2 border-t-2' :
+                  c === 'bl' ? 'bottom-1 left-1 border-l-2 border-b-2' :
+                              'bottom-1 right-1 border-r-2 border-b-2'
+                }`}
+              />
+            </div>
           ))}
         </>
       )}

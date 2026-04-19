@@ -101,8 +101,29 @@ export default function PdfSidebarSection() {
       const id = `pdf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await savePdf({ id, name: file.name, blob, pageCount, aspect });
       addPdfToList({ id, name: file.name, pageCount, aspect, addedAt: Date.now() });
-      // state 반영 이후 handleOpen (다음 render 콜백은 savedPdfs에 방금 추가된 meta를 볼 수 있음)
-      setTimeout(() => handleOpen(id), 0);
+
+      // 방금 계산한 aspect로 defaultGeom을 직접 만들어 openPdf 호출.
+      // handleOpen은 useCallback closure 내 savedPdfs를 참조하는데, addPdfToList
+      // 직후에는 아직 리렌더 전이라 closure가 새 meta를 못 봄 → 사이드바는 뜨는데
+      // PiP 창만 안 뜨는 증상이 생김. setTimeout 우회도 closure는 여전히 stale.
+      const maxW = window.innerWidth * 0.45;
+      const maxH = window.innerHeight * 0.7;
+      let w = 420;
+      let h = w / aspect;
+      if (h > maxH) {
+        h = maxH;
+        w = h * aspect;
+      }
+      if (w > maxW) {
+        w = maxW;
+        h = w / aspect;
+      }
+      openPdf(id, {
+        x: Math.max(0, (window.innerWidth - w) / 2),
+        y: Math.max(0, (window.innerHeight - h) / 2),
+        w,
+        h,
+      });
     } catch (err) {
       console.error('[PdfSidebarSection] 추가 실패:', err);
       alert('PDF를 불러오지 못했습니다. 파일이 손상되었거나 지원되지 않을 수 있습니다.');
