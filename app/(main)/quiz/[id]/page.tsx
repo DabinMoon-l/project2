@@ -588,49 +588,33 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
 
       // 저장된 진행 상황 확인 (Firestore quizProgress — 명시적 "저장하고 나가기"로 생성)
       const loadedProgress = await loadSavedProgress();
-
-      // 로컬 draft가 있으면 (선택 즉시 저장됨) Firestore 모달 우회하고 바로 복원.
-      // Why: Firestore는 사용자가 "저장하고 나가기" 눌러야만 갱신되는데,
-      // 일반적으로 선택만 하다 앱을 전환하는 경우가 대부분이라 draft가 훨씬 최신임.
-      // How: draft.answers에 하나라도 값이 있으면 draft로 복원하고 모달 스킵.
-      //      Firestore 문서가 있다면 id만 가져와 이후 명시적 저장 시 덮어쓰기 대상으로 유지.
+      // 로컬 draft 확인 (선택 즉시 저장되는 최신 상태)
       const draft = quizDraft.load();
       const draftHasData = !!draft && Object.values(draft.answers).some(
         (a) => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0)
       );
 
-      if (draftHasData) {
-        // 초기 답안 프리필(questions 순서 보장) + draft 덮어쓰기
-        const initialAnswers: Record<string, Answer> = {};
-        questions.forEach((q) => { initialAnswers[q.id] = null; });
-        setAnswers({ ...initialAnswers, ...(draft!.answers as Record<string, Answer>) });
-        setCurrentQuestionIndex(draft!.currentQuestionIndex || 0);
-        if (Array.isArray(draft!.submittedQuestions) && draft!.submittedQuestions.length > 0) {
-          setSubmittedQuestions(new Set(draft!.submittedQuestions));
-        }
-        if (draft!.gradeResults && Object.keys(draft!.gradeResults).length > 0) {
-          setGradeResults(draft!.gradeResults);
-        }
-        if (loadedProgress) {
-          // Firestore 문서 id는 남겨 명시적 저장 시 업데이트 대상으로 사용
-          setProgressId(loadedProgress.id);
-        }
-        setLocalDraftChecked(true);
-      } else if (loadedProgress) {
-        // draft가 비어있을 때만 Firestore resume 모달 표시
-        const answeredCount = Object.values(loadedProgress.answers).filter(
+      // 모달 표시 조건: Firestore or draft 어느 쪽이든 이전 진행 상황이 있으면.
+      // 클릭 시 복원되는 값은 handleResume에서 "둘 중 최신" 선택.
+      // 초기 answers는 항상 빈값 — 모달에서 사용자 선택 후 적용.
+      if (loadedProgress || draftHasData) {
+        const progressSource = loadedProgress ?? {
+          id: '',
+          answers: draft!.answers as Record<string, Answer>,
+          currentQuestionIndex: draft!.currentQuestionIndex || 0,
+          submittedQuestions: draft!.submittedQuestions || [],
+          gradeResults: draft!.gradeResults || {},
+        };
+        const answeredCount = Object.values(progressSource.answers).filter(
           (answer) => answer !== null && answer !== ''
         ).length;
-        setSavedProgress({ ...loadedProgress, answeredCount });
+        setSavedProgress({ ...progressSource, answeredCount });
         setShowResumeModal(true);
-        const initialAnswers: Record<string, Answer> = {};
-        questions.forEach((q) => { initialAnswers[q.id] = null; });
-        setAnswers(initialAnswers);
-      } else {
-        const initialAnswers: Record<string, Answer> = {};
-        questions.forEach((q) => { initialAnswers[q.id] = null; });
-        setAnswers(initialAnswers);
       }
+
+      const initialAnswers: Record<string, Answer> = {};
+      questions.forEach((q) => { initialAnswers[q.id] = null; });
+      setAnswers(initialAnswers);
     } catch (err: unknown) {
       console.error('퀴즈 로드 실패:', err);
       console.error('에러 코드:', (err as { code?: string })?.code);
@@ -877,13 +861,29 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
 
   /**
    * 이전 진행상황 이어서 하기
+   * draft(localStorage, 선택 즉시 저장)와 Firestore(명시적 저장) 중 최신을 로드.
+   * 보통 draft가 항상 더 최신이라 존재하면 우선.
    */
   const handleResume = useCallback(() => {
-    if (savedProgress) {
+    const draft = quizDraft.load();
+    const draftHasData = !!draft && Object.values(draft.answers).some(
+      (a) => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0)
+    );
+
+    if (draftHasData) {
+      setAnswers(draft!.answers as Record<string, Answer>);
+      setCurrentQuestionIndex(draft!.currentQuestionIndex || 0);
+      if (Array.isArray(draft!.submittedQuestions) && draft!.submittedQuestions.length > 0) {
+        setSubmittedQuestions(new Set(draft!.submittedQuestions));
+      }
+      if (draft!.gradeResults && Object.keys(draft!.gradeResults).length > 0) {
+        setGradeResults(draft!.gradeResults);
+      }
+      if (savedProgress?.id) setProgressId(savedProgress.id);
+    } else if (savedProgress) {
       setProgressId(savedProgress.id);
       setAnswers(savedProgress.answers);
       setCurrentQuestionIndex(savedProgress.currentQuestionIndex);
-      // 채점 결과 복원 (바로 채점 모드)
       if (savedProgress.submittedQuestions.length > 0) {
         setSubmittedQuestions(new Set(savedProgress.submittedQuestions));
       }
@@ -893,7 +893,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     }
     setShowResumeModal(false);
     setSavedProgress(null);
-  }, [savedProgress]);
+  }, [savedProgress, quizDraft]);
 
   /**
    * 처음부터 다시 하기
