@@ -417,6 +417,8 @@ export {
   swapRabbit,
   submitMashResult,
   startBattleRound,
+  sendBattleInvite,
+  respondBattleInvite,
 } from "./tekkenBattle";
 export { tekkenCleanup } from "./tekkenCleanup";
 export { tekkenPoolRefillScheduled, tekkenPoolRefill, tekkenPoolWorker } from "./tekkenQuestionPool";

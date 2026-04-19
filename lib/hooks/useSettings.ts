@@ -62,6 +62,8 @@ export interface PrivacySettings {
   showInRanking: boolean;
   // 활동 내역 공개
   activityPublic: boolean;
+  // 배틀 신청 받기 (실시간 1:1 다이렉트 초대)
+  allowBattleInvites: boolean;
 }
 
 /**
@@ -117,6 +119,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     profilePublic: true,
     showInRanking: true,
     activityPublic: false,
+    allowBattleInvites: true,
   },
 };
 

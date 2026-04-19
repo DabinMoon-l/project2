@@ -23,3 +23,6 @@ export { startBattleRound } from "./tekken/tekkenRound";
 
 // 액션
 export { swapRabbit, submitMashResult } from "./tekken/tekkenActions";
+
+// 실시간 배틀 신청 (1:1 다이렉트 초대, 매칭 스킵)
+export { sendBattleInvite, respondBattleInvite } from "./tekken/battleInvite";

@@ -10,7 +10,7 @@ import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import PdfViewerRoot from '@/components/pdf/PdfViewerRoot';
 import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
-import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel, DetailPositionProvider } from '@/lib/contexts';
+import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel, DetailPositionProvider, BattleInviteProvider } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 
@@ -22,6 +22,7 @@ const HomeOverlay = dynamic(() => import('@/components/home/HomeOverlay'), { ssr
 const ProfessorHomeOverlay = dynamic(() => import('@/components/home/ProfessorHomeOverlay'), { ssr: false });
 const AIQuizContainer = dynamic(() => import('@/components/ai-quiz/AIQuizContainer'), { ssr: false });
 const LibraryJobToast = dynamic(() => import('@/components/professor/library/LibraryJobToast'), { ssr: false });
+const BattleInviteChallengeModal = dynamic(() => import('@/components/tekken/BattleInviteChallengeModal'), { ssr: false });
 
 // 라우트 사이드바 lazy load (가로모드 전용)
 const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), { ssr: false });
@@ -139,6 +140,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       [MilestoneWrapper, { isProfessor }],
       [HomeOverlayProvider],
       [DetailPanelProvider],
+      [BattleInviteProvider],
     ]}>
       <MainLayoutGrid
         isWide={isWide}
@@ -450,6 +452,9 @@ function MainLayoutGrid({
 
       {/* 가로모드 PDF PiP 뷰어 — body portal, 화면 위에 둥둥 떠 어디서든 보임 */}
       <PdfViewerRoot />
+
+      {/* 배틀 신청 도전장 — 전역 구독, 학습 중이면 숨김 */}
+      <BattleInviteChallengeModal />
 
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
