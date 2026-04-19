@@ -38,6 +38,9 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
   const { users, loading } = useOnlineClassmates(courseId, myUid, isOpen);
 
   const [sendingTo, setSendingTo] = useState<string | null>(null);
+  // CF 응답 후 서버 expiresAt으로 세팅. null일 동안은 스피너만 표시, 타이머는 미작동.
+  // CF cold start로 신청자 3초 타이머가 수신자 도전장 수신 전에 터지던 버그 fix.
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   // outbox 구독 — 신청 중에만
@@ -53,14 +56,17 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
       if (!data || data.receiverUid !== sendingTo) return;
       if (data.status === 'accepted' && data.battleId) {
         setSendingTo(null);
+        setExpiresAt(null);
         onAccepted(data.battleId);
         remove(outboxRef).catch(() => {});
       } else if (data.status === 'declined') {
         setSendingTo(null);
+        setExpiresAt(null);
         setToast('상대가 거절했어요');
         remove(outboxRef).catch(() => {});
       } else if (data.status === 'expired') {
         setSendingTo(null);
+        setExpiresAt(null);
         setToast('응답이 없어요');
         remove(outboxRef).catch(() => {});
       }
@@ -68,15 +74,24 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
     return () => unsub();
   }, [isOpen, myUid, sendingTo, onAccepted]);
 
-  // 3초 클라이언트 타임아웃
+  // 클라이언트 타임아웃 — 서버 expiresAt 기준 (CF 응답 후에만 활성)
+  // 200ms 버퍼로 서버 시계 동기화 오차 흡수.
   useEffect(() => {
-    if (!sendingTo) return;
+    if (!sendingTo || !expiresAt) return;
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      setSendingTo(null);
+      setExpiresAt(null);
+      setToast('응답이 없어요');
+      return;
+    }
     const t = setTimeout(() => {
       setSendingTo(null);
+      setExpiresAt(null);
       setToast('응답이 없어요');
-    }, 3_200);
+    }, remaining + 200);
     return () => clearTimeout(t);
-  }, [sendingTo]);
+  }, [sendingTo, expiresAt]);
 
   // 토스트 자동 닫힘
   useEffect(() => {
@@ -88,10 +103,13 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
   const handleInvite = async (targetUid: string) => {
     if (sendingTo) return;
     setSendingTo(targetUid);
+    setExpiresAt(null); // CF 응답 전까진 타이머 작동 X
     try {
-      await callFunction('sendBattleInvite', { receiverUid: targetUid, chapters });
+      const res = await callFunction('sendBattleInvite', { receiverUid: targetUid, chapters });
+      setExpiresAt(res.expiresAt); // 서버 기준 만료 시각으로 타이머 시작
     } catch (err: unknown) {
       setSendingTo(null);
+      setExpiresAt(null);
       setToast((err as { message?: string })?.message || '신청에 실패했어요');
     }
   };
