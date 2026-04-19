@@ -26,8 +26,16 @@ import type { PlayerSetup } from "./tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
-/** 배틀 신청 유효 시간 (ms) — 3초 */
+/** 배틀 신청 유효 시간 (ms) — 클라이언트에 보여주는 공식 수치 3초 */
 const INVITE_TTL_MS = 3_000;
+
+/**
+ * 서버 측 유예 시간 — 실제 만료 판정은 expiresAt + SERVER_GRACE_MS 기준.
+ * CF cold start + 네트워크 RTT + 사용자 반응 시간을 흡수해 '방금 수락한
+ * 신청이 서버 시각으로는 만료됨' 으로 잘못 판정되는 것을 방지.
+ * 클라이언트 타이머는 여전히 3초로 표시되어 UX 긴박감은 유지.
+ */
+const SERVER_GRACE_MS = 3_000;
 
 /** 수신자가 "바쁨"으로 판정되는 활동 */
 const BUSY_ACTIVITIES = new Set([
@@ -255,8 +263,8 @@ export const respondBattleInvite = onCall(
     const now = Date.now();
     const outboxRef = rtdb.ref(`battleInviteOutbox/${invite.senderUid}/current`);
 
-    // 서버 시간 기준 만료 검증
-    if (now > invite.expiresAt) {
+    // 서버 시간 기준 만료 검증 (cold start + latency 유예 포함)
+    if (now > invite.expiresAt + SERVER_GRACE_MS) {
       const expiredPatch = { status: "expired" as const };
       await Promise.all([
         inviteRef.update(expiredPatch),
