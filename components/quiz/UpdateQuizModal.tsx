@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   doc,
@@ -545,24 +546,22 @@ export default function UpdateQuizModal({
   }, [resultData, onComplete, onClose]);
 
   if (!isOpen) return null;
+  if (typeof window === 'undefined') return null;
 
-  // 결과 화면
+  // 결과 화면 — 공통 BottomSheet 스타일로 통일 (body portal + 모바일도 바텀시트)
   if (showResult && resultData) {
     const correctCount = resultData.questionResults.filter((r) => r.isCorrect).length;
-    return (
+    return createPortal(
       <div
-        className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+        className="fixed inset-0 z-[60] flex items-end"
         style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
       >
-        {isWide && <div className="absolute inset-0" onClick={handleComplete} />}
+        <div className={`absolute inset-0 ${isWide ? 'bg-transparent' : 'bg-black/50'}`} onClick={handleComplete} />
         <motion.div
-          initial={isWide ? { y: '100%' } : { opacity: 0, scale: 0.9 }}
-          animate={isWide ? { y: 0 } : { opacity: 1, scale: 1 }}
-          transition={isWide ? { type: 'spring', stiffness: 260, damping: 28 } : undefined}
-          className={isWide
-            ? 'relative w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[85vh] overflow-auto overscroll-contain'
-            : 'w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain'
-          }
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+          className="relative w-full bg-[#F5F0E8] rounded-t-3xl shadow-xl max-h-[90vh] overflow-auto overscroll-contain"
         >
           {/* 헤더 */}
           <div className="px-4 py-3 border-b border-[#1A1A1A]">
@@ -671,26 +670,24 @@ export default function UpdateQuizModal({
             </button>
           </div>
         </motion.div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
-  // 문제 풀이 화면
-  return (
+  // 문제 풀이 화면 — 공통 BottomSheet 스타일로 통일
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+      className="fixed inset-0 z-[60] flex items-end"
       style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
     >
-      {isWide && <div className="absolute inset-0" onClick={handleRequestClose} />}
+      <div className={`absolute inset-0 ${isWide ? 'bg-transparent' : 'bg-black/50'}`} onClick={handleRequestClose} />
       <motion.div
-        initial={isWide ? { y: '100%' } : { opacity: 0, scale: 0.9 }}
-        animate={isWide ? { y: 0 } : { opacity: 1, scale: 1 }}
-        transition={isWide ? { type: 'spring', stiffness: 260, damping: 28 } : undefined}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
         onClick={(e) => e.stopPropagation()}
-        className={isWide
-          ? 'relative w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[85vh] overflow-auto overscroll-contain'
-          : 'w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain'
-        }
+        className="relative w-full bg-[#F5F0E8] rounded-t-3xl shadow-xl max-h-[90vh] overflow-auto overscroll-contain"
       >
         {/* 헤더 */}
         <div className="px-4 py-3 border-b border-[#1A1A1A] flex items-center justify-between">
@@ -715,7 +712,7 @@ export default function UpdateQuizModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className={`fixed inset-0 z-[60] ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-4'}`}
+              className={`fixed inset-0 z-[80] ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-4'}`}
               style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
             >
               {isWide && <div className="absolute inset-0" onClick={() => setShowCloseConfirm(false)} />}
@@ -857,7 +854,8 @@ export default function UpdateQuizModal({
           )}
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
