@@ -1495,6 +1495,9 @@ function ReviewPageContent() {
                       const quizData = quizDoc.data();
                       setTotalQuestionCount(quizData.questions?.length || 0);
                     }
+                    // 설명 바텀시트를 먼저 닫음 — 공통 BottomSheet가 body portal이라
+                    // 닫지 않으면 UpdateQuizModal이 그 아래에 덮여 보이지 않음.
+                    setUpdateModalInfo(null);
                     setDetailedUpdateInfo(info);
                   } else {
                     alert('이미 최신 상태입니다.');
