@@ -79,14 +79,16 @@ export function BattleInviteProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [raw]);
 
-  // 수신자 본인이 만료된 invite 삭제 (RTDB 룰: 본인 삭제만 허용)
+  // 수신자 본인이 invite 정리 — CF 가 status 를 non-pending 으로 바꾼 뒤에만.
+  // ⚠️ pending 상태를 client 시계 기준으로 미리 지우면, 유저가 마지막 1초에
+  //   수락 버튼 눌렀을 때 remove() 가 CF 의 respondBattleInvite 보다 먼저 도달해
+  //   CF 가 '신청을 찾을 수 없습니다' 로 실패하는 race 가 발생. CF 가 만료까지
+  //   서버 시간 기준으로 검증하므로 client 는 UI 숨김만 담당하고 삭제는 하지 않음.
   useEffect(() => {
     if (!user?.uid || !raw) return;
-    if (raw.status === 'pending' && Date.now() <= raw.expiresAt) return;
-    // pending이 아니거나 만료되었으면 정리
+    if (raw.status === 'pending') return; // pending 이면 client 가 지우지 않음
     remove(ref(getRtdb(), `battleInvites/${user.uid}/current`)).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, raw, tick]);
+  }, [user?.uid, raw]);
 
   // 노출할 pendingInvite 판정
   let pendingInvite: PendingInvite | null = null;
