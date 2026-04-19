@@ -37,6 +37,11 @@ const SWIPE_THRESHOLD_PX = 50;
 export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
   // closePdf는 오버레이 X 제거 후 미사용 — 사이드바의 ✕로만 닫음
   const updateWindowGeom = usePdfViewerStore((s) => s.updateWindowGeom);
+  const toggleBookmark = usePdfViewerStore((s) => s.toggleBookmark);
+  // 이 PDF의 북마크 목록을 store에서 직접 구독 (다른 창/사이드바와 동기화)
+  const bookmarks = usePdfViewerStore(
+    (s) => s.savedPdfs.find((p) => p.id === pdfId)?.bookmarks ?? [],
+  );
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -392,8 +397,8 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
 
       {/* 오버레이 — 탭 토글, 재탭까지 유지.
           독립 뉴스 캐러셀 헤더 스타일(검정+세리프+대시) + 창 이동 드래그 영역 겸용.
-          X/좌우 화살표/하단바 없음(사이드바에서 닫기, 스와이프·키보드로 페이지 이동).
-          모서리 4개 리사이즈 핸들은 유지(PC 전용 편의). */}
+          상단 헤더 + 좌상단 북마크 토글 + 하단 페이지 슬라이더(북마크 표식) + 모서리 리사이즈.
+          페이지 이동: 스와이프/키보드/슬라이더. 창 닫기: 사이드바 ✕. */}
       {overlayOn && !isLoading && !loadError && (
         <>
           {/* 뉴스 헤더 = 파일명 + 드래그 영역 */}
@@ -405,6 +410,69 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
             <div className="text-center w-full">
               <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
               <h1 className="font-serif text-base font-black tracking-tight truncate">{pdfName}</h1>
+            </div>
+          </div>
+
+          {/* 좌상단 북마크 토글 — 테두리(비활성)/빨강 채움(활성) */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleBookmark(pdfId, currentPage);
+            }}
+            className="absolute top-1 left-1 w-7 h-7 flex items-center justify-center"
+            aria-label={bookmarks.includes(currentPage) ? '북마크 해제' : '북마크 추가'}
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
+              {bookmarks.includes(currentPage) ? (
+                // 채워진 빨간 북마크
+                <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="#E53935" stroke="#F5F0E8" strokeWidth={1} />
+              ) : (
+                // 테두리만
+                <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="none" stroke="#F5F0E8" strokeWidth={1.8} />
+              )}
+            </svg>
+          </button>
+
+          {/* 하단 페이지 슬라이더 — 북마크 표식 포함 */}
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute bottom-0 left-0 right-0 px-3 py-2 bg-[#1A1A1A]/80 backdrop-blur-sm"
+          >
+            <div className="relative h-5 flex items-center">
+              {/* 슬라이더 */}
+              <input
+                type="range"
+                min={1}
+                max={pageCount}
+                value={currentPage}
+                onChange={(e) => setCurrentPage(Number(e.target.value))}
+                className="w-full h-1 rounded-full appearance-none bg-white/20 cursor-pointer"
+                style={{
+                  accentColor: '#F5F0E8',
+                }}
+              />
+              {/* 북마크 마커 — 트랙 위에 빨간 점 */}
+              {pageCount > 1 && bookmarks.map((bp) => {
+                const pct = ((bp - 1) / (pageCount - 1)) * 100;
+                return (
+                  <div
+                    key={bp}
+                    className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{
+                      left: `calc(${pct}% )`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                  >
+                    <div className="w-1.5 h-3 bg-[#E53935] rounded-sm shadow" />
+                  </div>
+                );
+              })}
+            </div>
+            {/* 현재/총 페이지 */}
+            <div className="mt-0.5 text-center text-[10px] text-white/70 font-mono">
+              {currentPage} / {pageCount}
             </div>
           </div>
 
