@@ -132,7 +132,7 @@ function ChoiceAccordions({
                       onChange={(e) => onChangeChoiceExplanation(i, e.target.value)}
                       placeholder={`선지 ${label} 해설을 입력하세요`}
                       rows={3}
-                      className="w-full px-2 py-1.5 text-[12px] leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
+                      className="w-full px-2 py-1.5 text-sm leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
                     />
                   </div>
                 </motion.div>
@@ -203,7 +203,7 @@ export default function QuizPreviewCard({ question, index, onChange }: Props) {
             onChange={(e) => onChange({ explanation: e.target.value })}
             placeholder="전체 해설을 입력하세요"
             rows={3}
-            className="w-full px-2 py-1.5 text-[12px] leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
+            className="w-full px-2 py-1.5 text-sm leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
           />
         </div>
       )}
@@ -228,7 +228,7 @@ export default function QuizPreviewCard({ question, index, onChange }: Props) {
               onChange={(e) => onChange({ explanation: e.target.value })}
               placeholder="전체 해설을 입력하세요"
               rows={3}
-              className="w-full px-2 py-1.5 text-[12px] leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
+              className="w-full px-2 py-1.5 text-sm leading-relaxed text-[#1A1A1A] bg-[#F5F0E8] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
             />
           </div>
         </div>
@@ -288,7 +288,7 @@ function SubQuestionPreview({
           onChange={(e) => onChange({ explanation: e.target.value })}
           placeholder="해설을 입력하세요"
           rows={2}
-          className="w-full px-2 py-1.5 text-[12px] leading-relaxed text-[#1A1A1A] bg-[#FDFBF7] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
+          className="w-full px-2 py-1.5 text-sm leading-relaxed text-[#1A1A1A] bg-[#FDFBF7] border border-[#D4CFC4] rounded resize-y focus:outline-none focus:border-[#1A1A1A]"
         />
       </div>
     </div>
