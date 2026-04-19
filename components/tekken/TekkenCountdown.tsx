@@ -13,10 +13,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface TekkenCountdownProps {
   onComplete: () => void;
   countdownStartedAt?: number;
+  /** 카운트다운 총 길이 (기본 3000ms). AI 전용 매칭에서는 5000ms로 CF 대기 겸용 */
+  durationMs?: number;
 }
 
-export default function TekkenCountdown({ onComplete, countdownStartedAt }: TekkenCountdownProps) {
-  const [count, setCount] = useState(3);
+export default function TekkenCountdown({ onComplete, countdownStartedAt, durationMs = 3000 }: TekkenCountdownProps) {
+  const [count, setCount] = useState(Math.ceil(durationMs / 1000));
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
   const completedRef = useRef(false);
@@ -33,7 +35,7 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
 
     const tick = () => {
       const elapsed = Math.max(0, Date.now() - effectiveStart);
-      const remaining = Math.max(0, 3000 - elapsed);
+      const remaining = Math.max(0, durationMs - elapsed);
       const newCount = Math.ceil(remaining / 1000);
 
       setCount(newCount);
@@ -50,7 +52,7 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
       clearInterval(timer);
       if (completeTimer) clearTimeout(completeTimer);
     };
-  }, [countdownStartedAt]);
+  }, [countdownStartedAt, durationMs]);
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center">

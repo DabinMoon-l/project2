@@ -68,6 +68,8 @@ export default function CharacterBox() {
   const [showBattleConfirm, setShowBattleConfirm] = useState(false);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
   const [showBattle, setShowBattle] = useState(false);
+  /** 현재 배틀 세션이 AI 전용 매칭인지 — overlay가 선(先) 카운트다운 활성화 판단용 */
+  const [battleAiOnly, setBattleAiOnly] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartPos = useRef({ x: 0, y: 0 });
@@ -173,11 +175,12 @@ export default function CharacterBox() {
   }, [isStudent, userCourseId, slotCount, clearLongPress]);
 
   // 배틀 확인 → 매칭 시작
-  // aiOnly=true면 "상대 찾는 중" 모달 건너뛰고 바로 배틀 오버레이로 전환
-  // (overlay 자체에 로딩 상태 — 배틀 데이터 수신 시 countdown으로 진입)
+  // aiOnly=true면 "상대 찾는 중" 모달 건너뛰고 바로 배틀 오버레이로 전환 후
+  // 5초 자체 카운트다운이 CF matchWithBot의 배틀 데이터 생성 대기를 겸함
   const handleConfirmBattle = useCallback((chapters: string[], aiOnly: boolean) => {
     if (!userCourseId) return;
     setShowBattleConfirm(false);
+    setBattleAiOnly(aiOnly);
     if (aiOnly) {
       setShowBattle(true);
     } else {
@@ -542,6 +545,7 @@ export default function CharacterBox() {
         <TekkenBattleOverlay
           tekken={tekken}
           userId={profile.uid}
+          aiOnly={battleAiOnly}
           onClose={() => {
             // 배틀 결과에서 XP 토스트 표시
             if (tekken.result && profile) {
@@ -550,6 +554,7 @@ export default function CharacterBox() {
               showExpToast(xp, isWinner ? '배틀 승리' : '배틀 참여');
             }
             setShowBattle(false);
+            setBattleAiOnly(false);
             tekken.leaveBattle();
           }}
         />
