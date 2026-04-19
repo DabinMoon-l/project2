@@ -38,17 +38,32 @@ export default function PdfSidebarSection() {
 
   const handleOpen = useCallback(
     (id: string) => {
-      const defaultW = Math.min(360, window.innerWidth * 0.4);
-      const defaultH = Math.min(520, window.innerHeight * 0.7);
+      // 저장된 aspect(w/h)에 맞춰 기본 크기 결정 — 검정 여백 방지.
+      const meta = savedPdfs.find((p) => p.id === id);
+      const aspect = meta?.aspect ?? 1;
+      // 대각선 기준 ~450px 목표 (화면의 절반 정도), 비율 유지해서 w/h 산출.
+      // 가로 PDF면 폭이 넓고, 세로 PDF면 높이가 크게 됨.
+      const maxW = window.innerWidth * 0.45;
+      const maxH = window.innerHeight * 0.7;
+      let w = 420;
+      let h = w / aspect;
+      if (h > maxH) {
+        h = maxH;
+        w = h * aspect;
+      }
+      if (w > maxW) {
+        w = maxW;
+        h = w / aspect;
+      }
       const defaultGeom = {
-        x: Math.max(0, (window.innerWidth - defaultW) / 2),
-        y: Math.max(0, (window.innerHeight - defaultH) / 2),
-        w: defaultW,
-        h: defaultH,
+        x: Math.max(0, (window.innerWidth - w) / 2),
+        y: Math.max(0, (window.innerHeight - h) / 2),
+        w,
+        h,
       };
       openPdf(id, defaultGeom);
     },
-    [openPdf],
+    [openPdf, savedPdfs],
   );
 
   const handleAddClick = () => fileInputRef.current?.click();
@@ -69,17 +84,20 @@ export default function PdfSidebarSection() {
 
     try {
       setIsProcessing(true);
-      // 페이지 수 파악
+      // 페이지 수 + 첫 페이지 aspect ratio 파악
       const buffer = await file.arrayBuffer();
       const pdfjs = await getPdfjs();
       const doc = await pdfjs.getDocument({ data: buffer.slice(0) }).promise;
       const pageCount = doc.numPages;
+      const page1 = await doc.getPage(1);
+      const vp1 = page1.getViewport({ scale: 1 });
+      const aspect = vp1.width / vp1.height;
       doc.destroy();
 
       const id = `pdf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const blob = new Blob([buffer], { type: 'application/pdf' });
-      await savePdf({ id, name: file.name, blob, pageCount });
-      addPdfToList({ id, name: file.name, pageCount, addedAt: Date.now() });
+      await savePdf({ id, name: file.name, blob, pageCount, aspect });
+      addPdfToList({ id, name: file.name, pageCount, aspect, addedAt: Date.now() });
       // 바로 열어주기
       handleOpen(id);
     } catch (err) {

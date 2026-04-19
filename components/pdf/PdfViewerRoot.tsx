@@ -31,7 +31,15 @@ export default function PdfViewerRoot() {
       {openWindows.map((w) => {
         const meta = savedPdfs.find((p) => p.id === w.pdfId);
         if (!meta) return null;
-        return <PdfPipWindow key={w.pdfId} pdfId={w.pdfId} pdfName={meta.name} geom={w.geom} />;
+        return (
+          <PdfPipWindow
+            key={w.pdfId}
+            pdfId={w.pdfId}
+            pdfName={meta.name}
+            aspect={meta.aspect}
+            geom={w.geom}
+          />
+        );
       })}
     </>,
     document.body,

@@ -22,6 +22,8 @@ import { getPdfjs } from '@/lib/utils/pdfjs';
 interface Props {
   pdfId: string;
   pdfName: string;
+  /** PDF 첫 페이지 aspect (w/h) — 창 크기 조절 시 비율 고정용. 검정 여백 방지 */
+  aspect: number;
   geom: PdfGeom;
 }
 
@@ -32,8 +34,8 @@ const MAX_H_RATIO = 0.95;
 const TAP_THRESHOLD_PX = 8;
 const SWIPE_THRESHOLD_PX = 50;
 
-export default function PdfPipWindow({ pdfId, pdfName, geom }: Props) {
-  const closePdf = usePdfViewerStore((s) => s.closePdf);
+export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
+  // closePdf는 오버레이 X 제거 후 미사용 — 사이드바의 ✕로만 닫음
   const updateWindowGeom = usePdfViewerStore((s) => s.updateWindowGeom);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -200,14 +202,21 @@ export default function PdfPipWindow({ pdfId, pdfName, geom }: Props) {
       const dist = Math.hypot(dx, dy);
       if (pinchStartRef.current.dist <= 0) return;
       const scale = dist / pinchStartRef.current.dist;
-      const newW = Math.max(
+      // PDF aspect(w/h) 고정 — 두 손가락 거리만 크기 스케일에 사용, 항상 비율 유지
+      let newW = Math.max(
         MIN_W,
         Math.min(window.innerWidth * MAX_W_RATIO, pinchStartRef.current.w * scale),
       );
-      const newH = Math.max(
-        MIN_H,
-        Math.min(window.innerHeight * MAX_H_RATIO, pinchStartRef.current.h * scale),
-      );
+      let newH = newW / aspect;
+      // 세로 초과 시 거꾸로 보정
+      if (newH > window.innerHeight * MAX_H_RATIO) {
+        newH = window.innerHeight * MAX_H_RATIO;
+        newW = newH * aspect;
+      }
+      if (newH < MIN_H) {
+        newH = MIN_H;
+        newW = newH * aspect;
+      }
       updateWindowGeom(pdfId, { w: newW, h: newH });
     }
   };
@@ -311,27 +320,26 @@ export default function PdfPipWindow({ pdfId, pdfName, geom }: Props) {
     if (!r) return;
     const dx = e.clientX - r.startX;
     const dy = e.clientY - r.startY;
+    // aspect lock — 대각선 거리로 스케일 결정 후 h = w / aspect
+    // 각 코너별 w의 증감 방향을 부호로 반영
+    const signW = r.corner === 'tr' || r.corner === 'br' ? 1 : -1;
+    const signH = r.corner === 'bl' || r.corner === 'br' ? 1 : -1;
+    // 사용자가 더 크게 움직인 축을 주 드라이버로 채택
+    const wCand = Math.max(MIN_W, r.w + signW * dx);
+    const hCand = Math.max(MIN_H, r.h + signH * dy);
+    // 둘 중 실제 비율에 맞게 조정 — w 기준 우선
+    let w = wCand;
+    let h = w / aspect;
+    if (Math.abs(h - r.h) < Math.abs(hCand - r.h)) {
+      // h 기준 움직임이 더 큼 → h 기준으로 w 재계산
+      h = hCand;
+      w = h * aspect;
+    }
     let x = r.x;
     let y = r.y;
-    let w = r.w;
-    let h = r.h;
-    if (r.corner === 'br') {
-      w = Math.max(MIN_W, r.w + dx);
-      h = Math.max(MIN_H, r.h + dy);
-    } else if (r.corner === 'bl') {
-      w = Math.max(MIN_W, r.w - dx);
-      h = Math.max(MIN_H, r.h + dy);
-      x = r.x + (r.w - w);
-    } else if (r.corner === 'tr') {
-      w = Math.max(MIN_W, r.w + dx);
-      h = Math.max(MIN_H, r.h - dy);
-      y = r.y + (r.h - h);
-    } else if (r.corner === 'tl') {
-      w = Math.max(MIN_W, r.w - dx);
-      h = Math.max(MIN_H, r.h - dy);
-      x = r.x + (r.w - w);
-      y = r.y + (r.h - h);
-    }
+    // 좌측 코너면 x 보정, 상단 코너면 y 보정 (대각선 반대 지점 고정)
+    if (r.corner === 'bl' || r.corner === 'tl') x = r.x + (r.w - w);
+    if (r.corner === 'tr' || r.corner === 'tl') y = r.y + (r.h - h);
     // 화면 경계 제한
     w = Math.min(w, window.innerWidth * MAX_W_RATIO);
     h = Math.min(h, window.innerHeight * MAX_H_RATIO);
@@ -382,60 +390,25 @@ export default function PdfPipWindow({ pdfId, pdfName, geom }: Props) {
         {!isLoading && !loadError && <canvas ref={canvasRef} />}
       </div>
 
-      {/* 오버레이 — 탭 토글, 계속 유지 (필기 확장 자리) */}
+      {/* 오버레이 — 탭 토글, 재탭까지 유지.
+          독립 뉴스 캐러셀 헤더 스타일(검정+세리프+대시) + 창 이동 드래그 영역 겸용.
+          X/좌우 화살표/하단바 없음(사이드바에서 닫기, 스와이프·키보드로 페이지 이동).
+          모서리 4개 리사이즈 핸들은 유지(PC 전용 편의). */}
       {overlayOn && !isLoading && !loadError && (
         <>
-          {/* 상단 드래그바 (창 이동) */}
+          {/* 뉴스 헤더 = 파일명 + 드래그 영역 */}
           <div
             onPointerDown={handleMoveBarDown}
-            className="absolute top-0 left-1/2 -translate-x-1/2 mt-1 w-12 h-1.5 bg-white/70 rounded-full cursor-grab active:cursor-grabbing"
+            className="absolute top-0 left-0 right-0 bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
             style={{ touchAction: 'none' }}
-          />
-
-          {/* 닫기 X */}
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              closePdf(pdfId);
-            }}
-            className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/70 text-white rounded-full text-xs"
           >
-            ✕
-          </button>
-
-          {/* 파일명 (하단) */}
-          <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 text-white/90 text-[10px] truncate">
-            {pdfName} · {currentPage}/{pageCount}
+            <div className="text-center w-full">
+              <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+              <h1 className="font-serif text-base font-black tracking-tight truncate">{pdfName}</h1>
+            </div>
           </div>
 
-          {/* 페이지 버튼 (하단 양옆) — 마우스 편의 */}
-          {currentPage > 1 && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                prevPage();
-              }}
-              className="absolute left-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-black/60 text-white rounded-full"
-            >
-              ‹
-            </button>
-          )}
-          {currentPage < pageCount && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                nextPage();
-              }}
-              className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-black/60 text-white rounded-full"
-            >
-              ›
-            </button>
-          )}
-
-          {/* 4 모서리 리사이즈 핸들 (PC/마우스용 — 터치는 핀치로 충분) */}
+          {/* 4 모서리 리사이즈 핸들 (PC — 터치는 핀치로 충분, aspect 고정) */}
           {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
             <div
               key={c}
