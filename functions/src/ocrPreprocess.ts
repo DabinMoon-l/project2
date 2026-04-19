@@ -337,7 +337,9 @@ export async function preprocessOcrText(
 
   try {
     console.log("[Preprocess] Gemini API 호출 시작...");
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // Flash-Lite 사용 — OCR 결과 정리는 단순 텍스트 변환이라 Flash 품질 불필요
+    // (비용 약 60% 절감, 품질 영향 무시 가능)
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
     console.log("[Preprocess] URL:", geminiUrl.substring(0, 80) + "...");
 
     const response = await fetch(
