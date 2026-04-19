@@ -54,16 +54,23 @@ interface TekkenBattleOverlayProps {
   };
   userId: string;
   onClose: () => void;
+  /** AI 전용 매칭 진입 — 배틀 데이터 수신 전 5초 카운트다운으로 로더 대체 */
+  aiOnly?: boolean;
 }
 
 export default function TekkenBattleOverlay({
   tekken,
   userId,
   onClose,
+  aiOnly = false,
 }: TekkenBattleOverlayProps) {
   const isWide = useWideMode();
 
-  const [phase, setPhase] = useState<'loading' | 'countdown' | 'battle' | 'result'>('loading');
+  // AI 전용 매칭: 마운트 즉시 카운트다운 시작(5초), 그동안 matchWithBot CF가 배틀 데이터 준비.
+  // 일반 매칭: battleStatus='countdown'이 올 때까지 loading.
+  const [phase, setPhase] = useState<'loading' | 'countdown' | 'battle' | 'result'>(
+    aiOnly ? 'countdown' : 'loading',
+  );
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showRoundResult, setShowRoundResult] = useState(false);
   const prevRoundRef = useRef(0);
@@ -129,9 +136,21 @@ export default function TekkenBattleOverlay({
   }, [tekken.questionTimeLeft, tekken.battleStatus]);
 
   // 카운트다운 완료 → 첫 라운드 시작 (RTDB status 변경이 phase 전환을 트리거)
+  // AI 전용 매칭에서 선(先) 카운트다운 시 CF가 아직 안 끝나 battle이 없을 수 있어
+  // 200ms 간격으로 최대 5초까지 배틀 데이터 도착 대기 후 startRound 호출
+  const tekkenRef = useRef(tekken);
+  tekkenRef.current = tekken;
   const handleCountdownComplete = useCallback(() => {
-    tekken.startRound(0);
-  }, [tekken]);
+    const attempt = (tries: number) => {
+      if (tekkenRef.current.battle) {
+        tekkenRef.current.startRound(0);
+        return;
+      }
+      if (tries >= 25) return; // 5초 초과 시 포기 (CF 장애 대비)
+      setTimeout(() => attempt(tries + 1), 200);
+    };
+    attempt(0);
+  }, []);
 
   // 답변 제출 — CF 실패 시 hasAnswered 복구 (재시도 가능)
   const handleAnswer = useCallback(async (answer: number) => {
@@ -190,26 +209,12 @@ export default function TekkenBattleOverlay({
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">
-        {/* 로딩 — 배틀 데이터 도착 전 잠깐 표시 (주로 AI 전용 매칭 시) */}
-        {phase === 'loading' && (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="mb-4 animate-pulse">
-              <svg className="w-14 h-14 text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
-              </svg>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span className="text-white/80 text-sm font-bold">배틀 준비 중...</span>
-            </div>
-          </div>
-        )}
-
-        {/* 카운트다운 */}
+        {/* 카운트다운 — AI 전용은 마운트 시점부터 5초 자체 카운트 (서버 시각 무시) */}
         {phase === 'countdown' && (
           <TekkenCountdown
             onComplete={handleCountdownComplete}
-            countdownStartedAt={tekken.battle?.countdownStartedAt}
+            countdownStartedAt={aiOnly ? undefined : tekken.battle?.countdownStartedAt}
+            durationMs={aiOnly ? 5000 : 3000}
           />
         )}
 
