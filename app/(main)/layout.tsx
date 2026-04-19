@@ -8,6 +8,7 @@ import { LazyMotion, domAnimation } from 'framer-motion';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
+import PdfViewerRoot from '@/components/pdf/PdfViewerRoot';
 import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel, DetailPositionProvider } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
@@ -446,6 +447,9 @@ function MainLayoutGrid({
         </div>
       </SwipeBack>
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
+
+      {/* 가로모드 PDF PiP 뷰어 — body portal, 화면 위에 둥둥 떠 어디서든 보임 */}
+      <PdfViewerRoot />
 
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
