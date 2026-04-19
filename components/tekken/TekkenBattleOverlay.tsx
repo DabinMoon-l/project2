@@ -56,6 +56,8 @@ interface TekkenBattleOverlayProps {
   onClose: () => void;
   /** AI 전용 매칭 진입 — 배틀 데이터 수신 전 5초 카운트다운으로 로더 대체 */
   aiOnly?: boolean;
+  /** 배치 위치 덮어쓰기 — useBattlePlacement 가 계산해서 넘김 (left/right) */
+  overrideStyle?: React.CSSProperties;
 }
 
 export default function TekkenBattleOverlay({
@@ -63,6 +65,7 @@ export default function TekkenBattleOverlay({
   userId,
   onClose,
   aiOnly = false,
+  overrideStyle,
 }: TekkenBattleOverlayProps) {
   const isWide = useWideMode();
 
@@ -196,6 +199,7 @@ export default function TekkenBattleOverlay({
       style={{
         left: 'var(--home-sheet-left, 0px)',
         right: '0px',
+        ...overrideStyle,
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

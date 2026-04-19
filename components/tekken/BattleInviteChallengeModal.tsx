@@ -15,7 +15,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import { useBattleInvite, type PendingInvite } from '@/lib/contexts/BattleInviteContext';
 import { useTheme } from '@/styles/themes/useTheme';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -39,7 +38,6 @@ export default function BattleInviteChallengeModal() {
 }
 
 function ChallengeCard({ invite }: { invite: PendingInvite }) {
-  const router = useRouter();
   const { theme } = useTheme();
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
 
@@ -79,10 +77,9 @@ function ChallengeCard({ invite }: { invite: PendingInvite }) {
     try {
       const res = await callFunction('respondBattleInvite', { inviteId: invite.id, action: 'accept' });
       if (res.status === 'accepted' && res.battleId) {
-        // searchParams 기반은 re-render 타이밍 이슈로 불안정 → zustand store로 전달.
-        // home에서 CharacterBox 가 pending 을 잡아 배틀 시작.
+        // 배틀 오버레이는 layout-level BattleOverlayMount 가 어느 페이지에서든 렌더.
+        // router.push 없이 현재 화면에 그대로 도전장 수락 즉시 321 카운트다운 시작.
         useBattleSessionStore.getState().request(res.battleId, false);
-        router.push('/');
       }
     } catch (err) {
       console.error('[BattleInvite] 수락 실패:', err);
