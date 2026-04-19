@@ -35,7 +35,6 @@ const MIN_W = 200;
 const MIN_H = 200;
 const MAX_W_RATIO = 0.95;
 const MAX_H_RATIO = 0.95;
-const TAP_THRESHOLD_PX = 8;
 const SWIPE_THRESHOLD_PX = 50;
 
 export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, initialPage }: Props) {
@@ -56,8 +55,6 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
 
   const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
   const [pageCount, setPageCount] = useState(1);
-  // 오버레이(헤더+하단바)는 기본 노출. 탭으로 토글 가능 (거슬리면 숨길 수 있게)
-  const [overlayOn, setOverlayOn] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -272,17 +269,13 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
       return;
     }
 
-    // 단일 포인터 종료: 탭 or 스와이프 판정
+    // 단일 포인터 종료: 스와이프 판정 (탭은 아무 동작 안 함 — 헤더/하단바 상시 표시)
     if (start && pointersRef.current.size === 0) {
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
-      if (absDx < TAP_THRESHOLD_PX && absDy < TAP_THRESHOLD_PX) {
-        // 탭 → 오버레이 토글
-        setOverlayOn((v) => !v);
-      } else if (absDx > SWIPE_THRESHOLD_PX && absDx > absDy) {
-        // 좌우 스와이프 → 페이지 이동
+      if (absDx > SWIPE_THRESHOLD_PX && absDx > absDy) {
         if (dx < 0) nextPage();
         else prevPage();
       }
@@ -436,16 +429,17 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
           독립 뉴스 캐러셀 헤더 스타일(검정+세리프+대시) + 창 이동 드래그 영역 겸용.
           상단 헤더 + 좌상단 북마크 토글 + 하단 페이지 슬라이더(북마크 표식) + 모서리 리사이즈.
           페이지 이동: 스와이프/키보드/슬라이더. 창 닫기: 사이드바 ✕. */}
-      {overlayOn && !isLoading && !loadError && (
+      {!isLoading && !loadError && (
         <>
-          {/* 상단 헤더 — PDF 영역 "바로 위"에 flush. (창 root의 top에서 위로 벗어남) */}
+          {/* 상단 헤더 — PDF 영역 "바로 위"에 flush. 뉴스 캐러셀 스타일(세리프 + 대시) */}
           <div
             onPointerDown={handleMoveBarDown}
-            className="absolute left-0 right-0 bg-[#1A1A1A] text-[#F5F0E8] px-9 py-1 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
+            className="absolute left-0 right-0 bg-[#1A1A1A] text-[#F5F0E8] px-9 py-1.5 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
             style={{ bottom: '100%', touchAction: 'none', borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
           >
             <div className="text-center w-full min-w-0">
-              <h1 className="font-serif text-sm font-black tracking-tight truncate">{pdfName}</h1>
+              <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+              <h1 className="font-serif text-base font-black tracking-tight truncate">{pdfName}</h1>
             </div>
 
             {/* 좌측 북마크 */}
