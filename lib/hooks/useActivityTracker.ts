@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { ref as rtdbRef, set, onDisconnect, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
+import { ref as rtdbRef, set, update, onDisconnect, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { doc, setDoc, arrayUnion, db } from '@/lib/repositories';
 import { getRtdb } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -26,18 +26,19 @@ function getCurrentActivity(pathname: string): string {
 /**
  * 학생 접속 상태 추적 훅 — RTDB presence 기반.
  *
- * **이유**: 이전엔 120초마다 Firestore `users/{uid}.lastActiveAt`을 업데이트했는데,
- * 교수의 `users` 컬렉션 onSnapshot이 모든 학생 heartbeat마다 트리거돼 읽기 폭증 유발.
- * → RTDB `presence/{courseId}/{uid}`로 분리하면 Firestore users 문서는 건드리지 않음.
- *
  * 경로: `presence/{courseId}/{uid}` = `{ online, lastActiveAt, currentActivity }`
- * - 120초마다 heartbeat로 `online: true` + lastActiveAt 갱신
- * - 탭 닫힘/네트워크 끊김 시 `onDisconnect().update({ online: false })` —
- *   lastActiveAt은 건드리지 않아 마지막 활동 시각 보존 + 교수 화면 즉시 offline 반영
- *   (2026-04-19: 기존 `.remove()`가 presence를 통째 지워 스테일 Firestore 값으로
- *   회귀하던 버그를 해결)
- * - 교수 측은 `useProfessorStudents`에서 RTDB onValue로 병합해 렌더
  *
+ * **offline 감지 3중 레이어**:
+ * 1. `pagehide` 이벤트 — 탭 닫기/새로고침/네비게이션 즉시 online=false 쓰기 (가장 빠름)
+ * 2. `visibilitychange` hidden — 모바일 앱 백그라운드 전환 즉시 online=false
+ * 3. `onDisconnect().update({ online: false })` — 강제종료/네트워크 끊김 최후 안전장치
+ *    (RTDB 서버 TCP 감지는 최대 60~90초 걸려 1,2를 먼저 시도)
+ *
+ * lastActiveAt은 offline 전환 시에도 건드리지 않아 "마지막 활동 시각" 보존.
+ * 예전 `.remove()`가 presence를 통째 지워 스테일 Firestore 값으로 회귀하던 버그
+ * 해결(2026-04-19).
+ *
+ * 교수 측은 `useProfessorStudents`에서 RTDB onValue로 병합해 렌더.
  * 일일 접속 기록(`dailyAttendance`)은 영구 통계용이라 Firestore 유지 (하루 1회 쓰기).
  */
 export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
@@ -54,7 +55,7 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
     const presenceRef = rtdbRef(getRtdb(), `presence/${courseId}/${user.uid}`);
     const activity = isHomeOverlayOpen ? '홈' : getCurrentActivity(pathname);
 
-    const write = () => {
+    const writeOnline = () => {
       set(presenceRef, {
         online: true,
         lastActiveAt: rtdbServerTimestamp(),
@@ -62,19 +63,40 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
       }).catch(() => {});
     };
 
-    // 탭 닫힘/연결 끊김 시 online=false만 세팅 (lastActiveAt 보존)
-    // → 교수 화면에서 즉시 offline 반영 + 마지막 활동 시각 유지
+    const writeOffline = () => {
+      // online 플래그만 내리고 lastActiveAt은 유지 (마지막 활동 시각 보존)
+      update(presenceRef, { online: false }).catch(() => {});
+    };
+
+    // onDisconnect: RTDB 서버가 TCP 끊김 감지 시 fire (최후 안전장치)
     const disconnectHandle = onDisconnect(presenceRef);
     disconnectHandle.update({ online: false }).catch(() => {});
     onDisconnectCancelRef.current = () => disconnectHandle.cancel().catch(() => {});
 
+    // pagehide: 탭 닫기/새로고침/외부 네비게이션 — 가장 신뢰할 수 있는 이탈 신호
+    const handlePageHide = () => writeOffline();
+    window.addEventListener('pagehide', handlePageHide);
+
+    // visibilitychange: 모바일 PWA 백그라운드 전환/데스크톱 탭 전환
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        writeOffline();
+      } else if (document.visibilityState === 'visible') {
+        // 복귀 시 online 재설정
+        writeOnline();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     // 즉시 1회 쓰기 + 인터벌
-    write();
+    writeOnline();
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(write, UPDATE_INTERVAL);
+    intervalRef.current = setInterval(writeOnline, UPDATE_INTERVAL);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibility);
       onDisconnectCancelRef.current?.();
       onDisconnectCancelRef.current = null;
     };
