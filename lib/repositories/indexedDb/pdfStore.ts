@@ -28,6 +28,8 @@ export interface PdfRecord {
   id: string;
   name: string;
   pageCount: number;
+  /** 첫 페이지 가로/세로 비율 (w/h). 창 크기를 이 비율에 맞춰 검정 여백 방지 */
+  aspect: number;
   addedAt: number;
   lastGeom?: PdfGeom;
 }
@@ -83,6 +85,7 @@ export async function listPdfMeta(): Promise<PdfRecord[]> {
       id: r.id,
       name: r.name,
       pageCount: r.pageCount,
+      aspect: r.aspect ?? 1, // 구버전 레코드 호환 (1:1 fallback)
       addedAt: r.addedAt,
       lastGeom: r.lastGeom,
     }))
@@ -101,6 +104,7 @@ export async function savePdf(record: {
   name: string;
   blob: Blob;
   pageCount: number;
+  aspect: number;
   addedAt?: number;
   lastGeom?: PdfGeom;
 }): Promise<void> {
