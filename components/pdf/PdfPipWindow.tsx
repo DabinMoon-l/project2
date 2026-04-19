@@ -14,10 +14,52 @@
  * 크기 변경 시: 창 크기에 맞춰 재렌더 (디바운스로 리사이즈 중 과다 렌더 방지).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getPdfBlob, type PdfGeom } from '@/lib/repositories/indexedDb/pdfStore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getPdfBlob, type PdfGeom, type PdfStroke } from '@/lib/repositories/indexedDb/pdfStore';
 import { usePdfViewerStore } from '@/lib/stores/pdfViewerStore';
 import { getPdfjs } from '@/lib/utils/pdfjs';
+
+type PenColor = 'black' | 'red' | 'blue' | 'eraser';
+const COLOR_HEX: Record<Exclude<PenColor, 'eraser'>, string> = {
+  black: '#1A1A1A',
+  red: '#E53935',
+  blue: '#2962FF',
+};
+const SIZE_MIN = 1;
+const SIZE_MAX = 14;
+const SIZE_DEFAULT = 4;
+
+/** stroke를 주어진 컨텍스트에 렌더. w/h는 현재 viewport 크기(논리 px) */
+function drawStrokeOnCtx(
+  ctx: CanvasRenderingContext2D,
+  stroke: PdfStroke,
+  w: number,
+  h: number,
+) {
+  if (stroke.points.length === 0) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (stroke.color === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = COLOR_HEX[stroke.color as Exclude<PenColor, 'eraser'>] || '#1A1A1A';
+  }
+  // 저장 시의 크기는 viewport 기준이므로 현재 viewport에 맞게 선 굵기 스케일.
+  // 단순화: 저장된 width를 그대로 사용 (캔버스 크기 비례로 이미 적절).
+  ctx.lineWidth = stroke.width;
+  ctx.beginPath();
+  const [fx, fy] = stroke.points[0];
+  ctx.moveTo(fx * w, fy * h);
+  for (let i = 1; i < stroke.points.length; i++) {
+    const [px, py] = stroke.points[i];
+    ctx.lineTo(px * w, py * h);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
 
 interface Props {
   pdfId: string;
@@ -35,16 +77,22 @@ const TAP_THRESHOLD_PX = 8;
 const SWIPE_THRESHOLD_PX = 50;
 
 export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
-  // closePdf는 오버레이 X 제거 후 미사용 — 사이드바의 ✕로만 닫음
+  const closePdf = usePdfViewerStore((s) => s.closePdf);
   const updateWindowGeom = usePdfViewerStore((s) => s.updateWindowGeom);
   const toggleBookmark = usePdfViewerStore((s) => s.toggleBookmark);
-  // 이 PDF의 북마크 목록을 store에서 직접 구독 (다른 창/사이드바와 동기화)
+  const addStroke = usePdfViewerStore((s) => s.addStroke);
+  const clearPageStrokes = usePdfViewerStore((s) => s.clearPageStrokes);
+  // 이 PDF의 북마크/annotations를 store에서 직접 구독 (다른 창/사이드바와 동기화)
   const bookmarks = usePdfViewerStore(
     (s) => s.savedPdfs.find((p) => p.id === pdfId)?.bookmarks ?? [],
+  );
+  const annotations = usePdfViewerStore(
+    (s) => s.savedPdfs.find((p) => p.id === pdfId)?.annotations ?? {},
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
   const pdfDocRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null);
   const renderTaskRef = useRef<import('pdfjs-dist').RenderTask | null>(null);
 
@@ -53,6 +101,17 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
   const [overlayOn, setOverlayOn] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 필기 UI 상태
+  const [palettesOpen, setPalettesOpen] = useState(false);
+  const [activeColor, setActiveColor] = useState<PenColor | null>(null);
+  const [activeSize, setActiveSize] = useState(SIZE_DEFAULT);
+  const drawingActive = activeColor != null;
+
+  // 스타일러스 더블탭 감지용 — 마지막 pen pointerup 시각
+  const lastPenTapRef = useRef(0);
+  // 현재 그리는 중인 stroke 포인트 (정규화 0~1)
+  const currentStrokeRef = useRef<Array<[number, number]> | null>(null);
 
   // 최신 geom을 제스처 핸들러에서 읽기 위해 ref로 미러
   const geomRef = useRef(geom);
@@ -133,6 +192,26 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
       renderTaskRef.current = task;
       await task.promise;
       renderTaskRef.current = null;
+
+      // 저장된 stroke를 오버레이 캔버스에 렌더 (PDF 캔버스와 같은 치수로 크기 맞춤)
+      const drawCanvas = drawCanvasRef.current;
+      if (drawCanvas) {
+        drawCanvas.width = canvas.width;
+        drawCanvas.height = canvas.height;
+        drawCanvas.style.width = canvas.style.width;
+        drawCanvas.style.height = canvas.style.height;
+        const dctx = drawCanvas.getContext('2d');
+        if (dctx) {
+          dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          dctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+          const strokes = (annotations[String(currentPage)] ?? []) as PdfStroke[];
+          const w = viewport.width;
+          const h = viewport.height;
+          for (const stroke of strokes) {
+            drawStrokeOnCtx(dctx, stroke, w, h);
+          }
+        }
+      }
     } catch (err) {
       // cancel 에러는 정상
       const name = (err as { name?: string })?.name;
@@ -140,9 +219,9 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
         console.error('[PdfPipWindow] render 실패:', err);
       }
     }
-  }, [currentPage]);
+  }, [currentPage, annotations]);
 
-  // 페이지 또는 창 크기 변경 시 재렌더 (크기 변경은 디바운스)
+  // 페이지 또는 창 크기 변경 시 재렌더 (크기 변경은 디바운스) + annotations 업데이트도 재렌더
   useEffect(() => {
     if (isLoading || !pdfDocRef.current) return;
     const t = setTimeout(() => renderPage(), 80);
@@ -367,10 +446,95 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── 필기 캔버스 포인터 핸들러 ──────────────────────────────
+  const getNormalizedPoint = useCallback((e: React.PointerEvent): [number, number] | null => {
+    const canvas = drawCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    return [nx, ny];
+  }, []);
+
+  const handleDrawPointerDown = (e: React.PointerEvent) => {
+    // 스타일러스 더블탭(300ms 내) → 펜/지우개 토글
+    if (e.pointerType === 'pen') {
+      const now = Date.now();
+      if (now - lastPenTapRef.current < 350) {
+        setActiveColor((c) => (c === 'eraser' ? 'black' : 'eraser'));
+        lastPenTapRef.current = 0;
+        return;
+      }
+      lastPenTapRef.current = now;
+    }
+    if (!drawingActive) return;
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    const p = getNormalizedPoint(e);
+    if (!p) return;
+    currentStrokeRef.current = [p];
+
+    // 라이브 스트로크 시작 — drawing 캔버스에 직접 그림 (저장은 up 시)
+    const canvas = drawCanvasRef.current;
+    const dctx = canvas?.getContext('2d');
+    if (!canvas || !dctx) return;
+    const rect = canvas.getBoundingClientRect();
+    dctx.save();
+    dctx.lineCap = 'round';
+    dctx.lineJoin = 'round';
+    dctx.lineWidth = activeSize;
+    if (activeColor === 'eraser') {
+      dctx.globalCompositeOperation = 'destination-out';
+      dctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else if (activeColor) {
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.strokeStyle = COLOR_HEX[activeColor];
+    }
+    dctx.beginPath();
+    dctx.moveTo(p[0] * rect.width, p[1] * rect.height);
+    // 상태 저장 (ctx는 restore 안 함 — move/up에서 계속 사용)
+  };
+
+  const handleDrawPointerMove = (e: React.PointerEvent) => {
+    if (!drawingActive || !currentStrokeRef.current) return;
+    e.stopPropagation();
+    const p = getNormalizedPoint(e);
+    if (!p) return;
+    currentStrokeRef.current.push(p);
+    const canvas = drawCanvasRef.current;
+    const dctx = canvas?.getContext('2d');
+    if (!canvas || !dctx) return;
+    const rect = canvas.getBoundingClientRect();
+    dctx.lineTo(p[0] * rect.width, p[1] * rect.height);
+    dctx.stroke();
+    // 이어서 그리기 위해 다시 moveTo — beginPath 없이 lineTo+stroke
+    dctx.beginPath();
+    dctx.moveTo(p[0] * rect.width, p[1] * rect.height);
+  };
+
+  const handleDrawPointerUp = (e: React.PointerEvent) => {
+    if (!drawingActive) return;
+    const pts = currentStrokeRef.current;
+    currentStrokeRef.current = null;
+    if (!pts || pts.length === 0) return;
+    const canvas = drawCanvasRef.current;
+    const dctx = canvas?.getContext('2d');
+    dctx?.restore();
+    if (!activeColor) return;
+    const stroke: PdfStroke = {
+      color: activeColor,
+      width: activeSize,
+      points: pts,
+    };
+    addStroke(pdfId, currentPage, stroke);
+    e.stopPropagation();
+  };
+
   return (
     <div
       ref={rootRef}
-      className="fixed bg-[#1A1A1A] shadow-2xl overflow-hidden select-none touch-none"
+      className="fixed bg-[#1A1A1A] shadow-2xl select-none touch-none"
       style={{
         left: geom.x,
         top: geom.y,
@@ -378,21 +542,46 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
         height: geom.h,
         zIndex: 200,
         borderRadius: 8,
+        // 필기 팔레트가 PiP 바깥으로 튀어나와야 해서 overflow visible
+        overflow: 'visible',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
+      onPointerDown={drawingActive ? undefined : handlePointerDown}
+      onPointerMove={drawingActive ? undefined : handlePointerMove}
+      onPointerUp={drawingActive ? undefined : handlePointerUp}
+      onPointerCancel={drawingActive ? undefined : handlePointerCancel}
     >
-      {/* PDF 캔버스 — 중앙 정렬 */}
-      <div className="w-full h-full flex items-center justify-center bg-[#1A1A1A]">
+      {/* PDF 캔버스 + 필기 캔버스 — 겹쳐 배치. 창 모서리 둥글리기용 내부 래퍼 */}
+      <div
+        className="relative w-full h-full flex items-center justify-center bg-[#1A1A1A]"
+        style={{ borderRadius: 8, overflow: 'hidden' }}
+      >
         {isLoading && (
           <div className="text-white/60 text-xs">로딩…</div>
         )}
         {loadError && (
           <div className="text-red-400 text-xs px-4 text-center">{loadError}</div>
         )}
-        {!isLoading && !loadError && <canvas ref={canvasRef} />}
+        {!isLoading && !loadError && (
+          <>
+            <canvas ref={canvasRef} />
+            {/* 필기 오버레이 캔버스 — 드로잉 모드일 때만 pointer events 받음 */}
+            <canvas
+              ref={drawCanvasRef}
+              className="absolute"
+              style={{
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: drawingActive ? 'auto' : 'none',
+                touchAction: 'none',
+              }}
+              onPointerDown={handleDrawPointerDown}
+              onPointerMove={handleDrawPointerMove}
+              onPointerUp={handleDrawPointerUp}
+              onPointerCancel={handleDrawPointerUp}
+            />
+          </>
+        )}
       </div>
 
       {/* 오버레이 — 탭 토글, 재탭까지 유지.
@@ -421,7 +610,7 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
               e.stopPropagation();
               toggleBookmark(pdfId, currentPage);
             }}
-            className="absolute top-1 left-1 w-7 h-7 flex items-center justify-center"
+            className="absolute top-1 left-1 w-7 h-7 flex items-center justify-center z-10"
             aria-label={bookmarks.includes(currentPage) ? '북마크 해제' : '북마크 추가'}
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
@@ -434,6 +623,133 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
               )}
             </svg>
           </button>
+
+          {/* 우상단: 연필(좌) + 닫기 X(우) */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              closePdf(pdfId);
+            }}
+            className="absolute top-1 right-1 w-7 h-7 flex items-center justify-center z-10"
+            aria-label="닫기"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
+              <path d="M6 6l12 12M18 6L6 18" stroke="#F5F0E8" strokeWidth={2} strokeLinecap="round" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (palettesOpen) {
+                setPalettesOpen(false);
+                setActiveColor(null);
+              } else {
+                setPalettesOpen(true);
+                setActiveColor((c) => c ?? 'black');
+              }
+            }}
+            className="absolute top-1 right-9 w-7 h-7 flex items-center justify-center z-10"
+            aria-label={palettesOpen ? '필기 종료' : '필기'}
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
+              {palettesOpen ? (
+                <path d="M3 17.25V21h3.75l11-11-3.75-3.75-11 11zM20.7 7.03a1 1 0 000-1.41l-2.32-2.32a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.81-1.85z" fill="#E53935" stroke="#F5F0E8" strokeWidth={0.8} />
+              ) : (
+                <path d="M3 17.25V21h3.75l11-11-3.75-3.75-11 11zM20.7 7.03a1 1 0 000-1.41l-2.32-2.32a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.81-1.85z" fill="none" stroke="#F5F0E8" strokeWidth={1.8} />
+              )}
+            </svg>
+          </button>
+
+          {/* 1차 팔레트: 4색 — PiP 바깥 우상단 호를 따라 배치 */}
+          {palettesOpen && (
+            <div
+              className="absolute"
+              style={{ top: 0, right: 0, width: 0, height: 0, zIndex: 20 }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {(['black', 'red', 'blue', 'eraser'] as PenColor[]).map((c, i) => {
+                const angle = -(i * 22 + 10) * (Math.PI / 180); // 위쪽으로 호 그리기 (위 = -90°)
+                const r = 58;
+                const cx = Math.cos(angle) * r;
+                const cy = Math.sin(angle) * r;
+                const isActive = activeColor === c;
+                const bg = c === 'black' ? '#1A1A1A' : c === 'red' ? '#E53935' : c === 'blue' ? '#2962FF' : 'transparent';
+                const isEraser = c === 'eraser';
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setActiveColor(c)}
+                    className={`absolute rounded-full flex items-center justify-center transition-transform ${
+                      isActive ? 'ring-2 ring-white scale-110' : 'ring-1 ring-white/60'
+                    }`}
+                    style={{
+                      left: cx - 14,
+                      top: cy - 14,
+                      width: 28,
+                      height: 28,
+                      backgroundColor: bg,
+                      backgroundImage: isEraser
+                        ? 'repeating-linear-gradient(45deg, #aaa 0 4px, #eee 4px 8px)'
+                        : undefined,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                    }}
+                    aria-label={c}
+                  >
+                    {isEraser && <span className="text-[10px] font-bold text-[#333]">E</span>}
+                  </button>
+                );
+              })}
+
+              {/* 2차 팔레트: 크기 슬라이더 — 색 선택됐을 때만. 1차보다 더 바깥 호 */}
+              {activeColor && (
+                <div
+                  className="absolute"
+                  style={{
+                    // 1차 중앙(~angle -55°)에서 더 바깥으로
+                    left: Math.cos(-(55 * Math.PI) / 180) * 112 - 70,
+                    top: Math.sin(-(55 * Math.PI) / 180) * 112 - 18,
+                    width: 140,
+                    height: 36,
+                    transform: 'rotate(-55deg)',
+                    transformOrigin: 'center',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur px-2 py-1.5 rounded-full shadow-lg">
+                    <input
+                      type="range"
+                      min={SIZE_MIN}
+                      max={SIZE_MAX}
+                      value={activeSize}
+                      onChange={(e) => setActiveSize(Number(e.target.value))}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="flex-1 h-1 appearance-none bg-white/30 rounded-full cursor-pointer"
+                      style={{ accentColor: '#F5F0E8' }}
+                    />
+                    {activeColor === 'eraser' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('현재 페이지의 필기를 모두 지울까요?')) {
+                            clearPageStrokes(pdfId, currentPage);
+                          }
+                        }}
+                        className="text-[10px] font-bold text-white px-1.5 py-0.5 bg-[#E53935] rounded"
+                      >
+                        ALL
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 하단 페이지 슬라이더 — 북마크 표식 포함 */}
           <div
