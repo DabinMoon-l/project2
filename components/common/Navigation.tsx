@@ -14,6 +14,7 @@ import { useLearningQuizzes } from '@/lib/hooks/useLearningQuizzes';
 import { useCompletedQuizzes } from '@/lib/hooks/useCompletedQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
+import PdfSidebarSection from '@/components/pdf/PdfSidebarSection';
 
 export type UserRole = 'student' | 'professor';
 
@@ -433,6 +434,9 @@ export default function Navigation({ role }: NavigationProps) {
               </Fragment>
             );
           })}
+
+          {/* PDF 뷰어 섹션 — 가로모드 전용, 게시판 탭 아래 */}
+          <PdfSidebarSection />
         </div>
 
         <div className="flex-shrink-0 px-6 py-2.5 pb-4">
