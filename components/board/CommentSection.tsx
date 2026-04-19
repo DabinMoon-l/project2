@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useSessionState } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, db } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -124,13 +125,18 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     });
   }, [professorAuthorIds]);
 
-  const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
+  // 입력 중 내용은 cold reload에도 유지 (게시글별로 구분, 제출 시 clear)
+  const [replyingTo, setReplyingTo] = useSessionState<{ id: string; nickname: string } | null>(
+    `cmt:${postId}:replyTo`,
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [content, setContent] = useState('');
+  const [editingId, setEditingId] = useSessionState<string | null>(`cmt:${postId}:editId`, null);
+  const [content, setContent] = useSessionState<string>(`cmt:${postId}:content`, '');
+  // File 객체는 직렬화 불가 → 기존 useState 유지 (이미지는 PWA cold reload 시 다시 첨부 필요)
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
+  const [linkedImageUrls, setLinkedImageUrls] = useSessionState<string[]>(`cmt:${postId}:linkedImgs`, []);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInputValue, setUrlInputValue] = useState('');
   const urlInputRef = useRef<HTMLInputElement>(null);

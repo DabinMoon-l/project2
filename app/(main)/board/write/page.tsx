@@ -79,11 +79,43 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
     }
   }, [draftRestored]);
 
-  // WriteForm에서 변경 콜백
+  // WriteForm에서 변경 콜백 — 500ms 디바운스 후 자동 저장, pagehide/hidden 시 즉시 flush
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writeDraft = useCallback(() => {
+    const { title, content, tag } = draftRef.current;
+    if (!title.trim() && !content.trim()) return;
+    const draft: Draft = { title, content, tag, savedAt: Date.now() };
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      /* quota */
+    }
+  }, []);
+
   const handleDraftChange = useCallback((title: string, content: string, tag?: BoardTag) => {
     draftRef.current = { title, content, tag };
     setHasContent(title.trim().length > 0 || content.trim().length > 0);
-  }, []);
+    // 자동 저장 디바운스 (cold reload 시 유실 방지)
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(writeDraft, 500);
+  }, [writeDraft]);
+
+  // 앱 백그라운드/이탈 시 즉시 flush
+  useEffect(() => {
+    const onHide = () => writeDraft();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') writeDraft();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [writeDraft]);
 
   const closePanel = useClosePanel();
   const goBack = useCallback(() => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useSessionState, useSessionStateSet } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
@@ -171,8 +172,11 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const [bookmarkFallbackLoading, setBookmarkFallbackLoading] = useState(false);
   const [bookmarkFallbackTitle, setBookmarkFallbackTitle] = useState('');
   const [libraryQuizTitle, setLibraryQuizTitle] = useState<string>('');
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // cold reload 복원 키 (folder 단위)
+  const reviewDetailKey = useMemo(() => `rd:${folderType}:${folderId}`, [folderType, folderId]);
+
+  const [isSelectMode, setIsSelectMode] = useSessionState<boolean>(`${reviewDetailKey}:selMode`, false);
+  const [selectedIds, setSelectedIds] = useSessionStateSet<string>(`${reviewDetailKey}:selIds`, new Set());
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
   const [practiceMode, setPracticeMode] = useState<'all' | 'wrongOnly' | null>(null); // 복습 모드 (첫복습점수 저장용)
@@ -216,7 +220,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   };
 
   // 결합형 그룹 펼침 상태
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+  const [expandedGroupIds, setExpandedGroupIds] = useSessionStateSet<string>(`${reviewDetailKey}:expGroups`, new Set());
 
   // 퀴즈별 생성자 ID 맵 (자기 문제 피드백 방지용)
   const [quizCreatorsMap, setQuizCreatorsMap] = useState<Map<string, string>>(new Map());
@@ -236,14 +240,15 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const [updatedQuestionIds, setUpdatedQuestionIds] = useState<Set<string>>(new Set());
 
   // 수정 모드 상태 (QuestionList + QuestionEditor 방식 — 교수 서재와 동일)
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
+  // 사용자가 입력·편집 중이던 내용은 cold reload 시 날아가면 안 되므로 세션 보존
+  const [isEditMode, setIsEditMode] = useSessionState<boolean>(`${reviewDetailKey}:editMode`, false);
+  const [editedTitle, setEditedTitle] = useSessionState<string>(`${reviewDetailKey}:editTitle`, '');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
+  const [editableQuestions, setEditableQuestions] = useSessionState<QuestionData[]>(`${reviewDetailKey}:editQs`, []);
   const [originalQuestions, setOriginalQuestions] = useState<Record<string, any>[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
-  const [editedTags, setEditedTags] = useState<string[]>([]);
+  const [editingIndex, setEditingIndex] = useSessionState<number | null>(`${reviewDetailKey}:editIdx`, null);
+  const [editDifficulty, setEditDifficulty] = useSessionState<'easy' | 'normal' | 'hard'>(`${reviewDetailKey}:editDiff`, 'normal');
+  const [editedTags, setEditedTags] = useSessionState<string[]>(`${reviewDetailKey}:editTags`, []);
   const [showEditTagPicker, setShowEditTagPicker] = useState(false);
 
   const loadedFolderRef = useRef<string | null>(null);
