@@ -23,6 +23,13 @@ function getCurrentActivity(pathname: string): string {
   return '탐색 중';
 }
 
+/** 가로모드 + 3쪽 잠금 상태 → '집중 학습' (바쁨으로 판정). 그 외엔 pathname 기반. */
+function resolveActivity(pathname: string, isLocked: boolean, isHomeOverlayOpen: boolean): string {
+  if (isLocked) return '집중 학습';
+  if (isHomeOverlayOpen) return '홈';
+  return getCurrentActivity(pathname);
+}
+
 /**
  * 학생 접속 상태 추적 훅 — RTDB presence 기반.
  *
@@ -41,7 +48,7 @@ function getCurrentActivity(pathname: string): string {
  * 교수 측은 `useProfessorStudents`에서 RTDB onValue로 병합해 렌더.
  * 일일 접속 기록(`dailyAttendance`)은 영구 통계용이라 Firestore 유지 (하루 1회 쓰기).
  */
-export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
+export function useActivityTracker(courseId?: string, isProfessor?: boolean, isLocked?: boolean) {
   const { user } = useAuth();
   const pathname = usePathname();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
@@ -53,7 +60,7 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
     if (!user?.uid || !courseId || isProfessor) return;
 
     const presenceRef = rtdbRef(getRtdb(), `presence/${courseId}/${user.uid}`);
-    const activity = isHomeOverlayOpen ? '홈' : getCurrentActivity(pathname);
+    const activity = resolveActivity(pathname, !!isLocked, isHomeOverlayOpen);
 
     const writeOnline = () => {
       set(presenceRef, {
@@ -100,7 +107,7 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
       onDisconnectCancelRef.current?.();
       onDisconnectCancelRef.current = null;
     };
-  }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen]);
+  }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen, isLocked]);
 
   // 일일 접속 기록 (학생만, 하루 1회)
   // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion

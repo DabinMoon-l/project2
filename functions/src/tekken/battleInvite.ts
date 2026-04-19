@@ -30,7 +30,13 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const INVITE_TTL_MS = 3_000;
 
 /** 수신자가 "바쁨"으로 판정되는 활동 */
-const BUSY_ACTIVITIES = new Set(["퀴즈 풀이", "배틀", "연타 미니게임"]);
+const BUSY_ACTIVITIES = new Set([
+  "퀴즈 풀이",
+  "배틀",
+  "연타 미니게임",
+  // 가로모드 3쪽 잠금 (퀴즈/복습/만들기 진행 중)을 useActivityTracker 가 반영
+  "집중 학습",
+]);
 
 interface InviteRecord {
   id: string;

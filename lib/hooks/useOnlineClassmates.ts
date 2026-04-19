@@ -20,7 +20,7 @@ import {
 import { getRtdb } from '@/lib/firebase';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
-const BUSY_ACTIVITIES = new Set(['퀴즈 풀이', '배틀', '연타 미니게임']);
+const BUSY_ACTIVITIES = new Set(['퀴즈 풀이', '배틀', '연타 미니게임', '집중 학습']);
 /** 5분 이내 활동 신호가 없으면 오프라인 간주. onDisconnect(60~90s)로 못 잡히는 잔존 정리 */
 const ONLINE_FRESHNESS_MS = 5 * 60 * 1000;
 

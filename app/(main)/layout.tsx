@@ -61,8 +61,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // PWA resume — 앱 전환/복귀 시 마지막 경로+스크롤 복원
   useSessionSnapshot();
 
-  // 접속 추적 (lastActiveAt + currentActivity + 일일 접속 기록)
-  useActivityTracker(userCourseId || undefined, isProfessor);
+  // 접속 추적은 providers 안쪽 PresenceSync 컴포넌트에서 호출 (isLocked 접근 필요)
 
 
   // 페이지뷰 로깅 (연구용)
@@ -462,6 +461,9 @@ function MainLayoutGrid({
       {/* 배틀 오버레이 — 어느 페이지든 세션이 활성화되면 표시 */}
       <BattleOverlayMount />
 
+      {/* 접속 추적 (isLocked 반영) */}
+      <PresenceSync />
+
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
         <div
@@ -514,6 +516,18 @@ function MainLayoutGrid({
 function MilestoneWrapper({ isProfessor, children }: { isProfessor: boolean; children: React.ReactNode }) {
   if (isProfessor) return <>{children}</>;
   return <MilestoneProvider>{children}</MilestoneProvider>;
+}
+
+/**
+ * 접속 추적 (presence) — providers 안쪽에서 호출해 isLocked(3쪽 잠금)까지
+ * presence.currentActivity 에 반영. 가로모드에서 3쪽 잠긴 상태면 '집중 학습'.
+ */
+function PresenceSync() {
+  const { userCourseId } = useCourse();
+  const { isProfessor } = useUser();
+  const { isLocked } = useDetailPanel();
+  useActivityTracker(userCourseId || undefined, isProfessor, isLocked);
+  return null;
 }
 
 /**
