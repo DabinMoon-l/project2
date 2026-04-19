@@ -46,6 +46,15 @@ function AutoVideoInner({ src, className }: { src: string; className?: string })
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [tryPlay]);
 
+  // 외부 원인(iOS Safari 메인 스레드 혼잡, 다른 canvas 작업 등)으로 일시 정지되면
+  // 다시 자동 재생 시도. muted autoplay 영상이라 사용자 의도 pause 케이스 없음.
+  const handlePause = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    // 다음 프레임에서 재시도 — 즉시 play() 호출이 같은 이벤트 루프에서 다시 pause될 수 있음
+    requestAnimationFrame(() => el.play().catch(() => {}));
+  }, []);
+
   return (
     <video
       ref={ref}
@@ -56,6 +65,7 @@ function AutoVideoInner({ src, className }: { src: string; className?: string })
       className={className}
       style={{ backgroundColor: '#000' }}
       onError={handleError}
+      onPause={handlePause}
     >
       <source src={src} type="video/mp4" />
     </video>

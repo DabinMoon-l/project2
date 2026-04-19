@@ -143,8 +143,8 @@ export default function PdfSidebarSection() {
             return (
               <div
                 key={p.id}
-                className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
-                  active ? 'bg-black/15' : 'hover:bg-black/5'
+                className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors ${
+                  active ? 'bg-black/15' : ''
                 }`}
                 style={{ color: '#1A1A1A' }}
               >
