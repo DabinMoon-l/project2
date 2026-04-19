@@ -190,6 +190,21 @@ export default function TekkenBattleOverlay({
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">
+        {/* 로딩 — 배틀 데이터 도착 전 잠깐 표시 (주로 AI 전용 매칭 시) */}
+        {phase === 'loading' && (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="mb-4 animate-pulse">
+              <svg className="w-14 h-14 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
+              </svg>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span className="text-white/80 text-sm font-bold">배틀 준비 중...</span>
+            </div>
+          </div>
+        )}
+
         {/* 카운트다운 */}
         {phase === 'countdown' && (
           <TekkenCountdown
