@@ -463,6 +463,12 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
     }
   }, [post, postId]);
 
+  // 가로모드 직접 진입 redirect 대기 중 — 전체화면(세로모드처럼 보이는) UI가
+  // 1프레임 번쩍이지 않도록 렌더 자체 생략. useEffect가 /board로 replace 예정.
+  if (isWide && !isPanelMode && !isLocked && postId) {
+    return null;
+  }
+
   // 로딩
   if (loading) {
     return (
