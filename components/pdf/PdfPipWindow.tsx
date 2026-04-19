@@ -56,7 +56,8 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
 
   const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
   const [pageCount, setPageCount] = useState(1);
-  const [overlayOn, setOverlayOn] = useState(false);
+  // 오버레이(헤더+하단바)는 기본 노출. 탭으로 토글 가능 (거슬리면 숨길 수 있게)
+  const [overlayOn, setOverlayOn] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -437,63 +438,60 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
           페이지 이동: 스와이프/키보드/슬라이더. 창 닫기: 사이드바 ✕. */}
       {overlayOn && !isLoading && !loadError && (
         <>
-          {/* 뉴스 헤더 = 파일명 + 드래그 영역 */}
+          {/* 상단 헤더 — PDF 영역 "바로 위"에 flush. (창 root의 top에서 위로 벗어남) */}
           <div
             onPointerDown={handleMoveBarDown}
-            className="absolute top-0 left-0 right-0 bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
-            style={{ touchAction: 'none' }}
+            className="absolute left-0 right-0 bg-[#1A1A1A] text-[#F5F0E8] px-9 py-1 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
+            style={{ bottom: '100%', touchAction: 'none', borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
           >
-            <div className="text-center w-full">
-              <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
-              <h1 className="font-serif text-base font-black tracking-tight truncate">{pdfName}</h1>
+            <div className="text-center w-full min-w-0">
+              <h1 className="font-serif text-sm font-black tracking-tight truncate">{pdfName}</h1>
             </div>
+
+            {/* 좌측 북마크 */}
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleBookmark(pdfId, currentPage);
+              }}
+              className="absolute top-1/2 -translate-y-1/2 left-1 w-7 h-7 flex items-center justify-center"
+              aria-label={bookmarks.includes(currentPage) ? '북마크 해제' : '북마크 추가'}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4">
+                {bookmarks.includes(currentPage) ? (
+                  <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="#E53935" stroke="#F5F0E8" strokeWidth={1} />
+                ) : (
+                  <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="none" stroke="#F5F0E8" strokeWidth={1.8} />
+                )}
+              </svg>
+            </button>
+
+            {/* 우측 닫기 */}
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                closePdf(pdfId);
+              }}
+              className="absolute top-1/2 -translate-y-1/2 right-1 w-7 h-7 flex items-center justify-center"
+              aria-label="닫기"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4">
+                <path d="M6 6l12 12M18 6L6 18" stroke="#F5F0E8" strokeWidth={2} strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
 
-          {/* 좌상단 북마크 토글 — 테두리(비활성)/빨강 채움(활성) */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleBookmark(pdfId, currentPage);
-            }}
-            className="absolute top-1 left-1 w-7 h-7 flex items-center justify-center z-10"
-            aria-label={bookmarks.includes(currentPage) ? '북마크 해제' : '북마크 추가'}
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
-              {bookmarks.includes(currentPage) ? (
-                // 채워진 빨간 북마크
-                <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="#E53935" stroke="#F5F0E8" strokeWidth={1} />
-              ) : (
-                // 테두리만
-                <path d="M6 3h12v18l-6-4.5L6 21V3z" fill="none" stroke="#F5F0E8" strokeWidth={1.8} />
-              )}
-            </svg>
-          </button>
-
-          {/* 우상단 닫기 X */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              closePdf(pdfId);
-            }}
-            className="absolute top-1 right-1 w-7 h-7 flex items-center justify-center z-10"
-            aria-label="닫기"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))' }}>
-              <path d="M6 6l12 12M18 6L6 18" stroke="#F5F0E8" strokeWidth={2} strokeLinecap="round" />
-            </svg>
-          </button>
-
-          {/* 하단 페이지 슬라이더 — 북마크 표식 포함 */}
+          {/* 하단 페이지 슬라이더 — PDF 영역 "바로 아래"에 flush */}
           <div
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute bottom-0 left-0 right-0 px-3 py-2 bg-[#1A1A1A]/80 backdrop-blur-sm"
+            className="absolute left-0 right-0 px-3 py-1.5 bg-[#1A1A1A]"
+            style={{ top: '100%', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}
           >
-            <div className="relative h-5 flex items-center">
-              {/* 슬라이더 */}
+            <div className="relative h-4 flex items-center">
               <input
                 type="range"
                 min={1}
@@ -501,29 +499,22 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
                 value={currentPage}
                 onChange={(e) => setCurrentPage(Number(e.target.value))}
                 className="w-full h-1 rounded-full appearance-none bg-white/20 cursor-pointer"
-                style={{
-                  accentColor: '#F5F0E8',
-                }}
+                style={{ accentColor: '#F5F0E8' }}
               />
-              {/* 북마크 마커 — 트랙 위에 빨간 점 */}
               {pageCount > 1 && bookmarks.map((bp) => {
                 const pct = ((bp - 1) / (pageCount - 1)) * 100;
                 return (
                   <div
                     key={bp}
                     className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{
-                      left: `calc(${pct}% )`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
+                    style={{ left: `${pct}%`, transform: 'translate(-50%, -50%)' }}
                   >
-                    <div className="w-1.5 h-3 bg-[#E53935] rounded-sm shadow" />
+                    <div className="w-1 h-3 bg-[#E53935] rounded-sm" />
                   </div>
                 );
               })}
             </div>
-            {/* 현재/총 페이지 */}
-            <div className="mt-0.5 text-center text-[10px] text-white/70 font-mono">
+            <div className="text-center text-[10px] text-white/60 font-mono leading-tight">
               {currentPage} / {pageCount}
             </div>
           </div>

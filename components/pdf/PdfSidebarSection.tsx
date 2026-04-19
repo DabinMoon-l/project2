@@ -85,25 +85,27 @@ export default function PdfSidebarSection() {
 
     try {
       setIsProcessing(true);
-      // 페이지 수 + 첫 페이지 aspect ratio 파악
-      const buffer = await file.arrayBuffer();
+      // Blob은 원본 file 그대로 (arrayBuffer 재사용하지 않아 detach 걱정 없음)
+      const blob = file.slice(0, file.size, 'application/pdf');
+
+      // pdfjs용으로는 별도 ArrayBuffer 생성 (getDocument가 소비/detach할 수 있음)
+      const bufferForPdfjs = await blob.arrayBuffer();
       const pdfjs = await getPdfjs();
-      const doc = await pdfjs.getDocument({ data: buffer.slice(0) }).promise;
+      const doc = await pdfjs.getDocument({ data: bufferForPdfjs }).promise;
       const pageCount = doc.numPages;
       const page1 = await doc.getPage(1);
       const vp1 = page1.getViewport({ scale: 1 });
-      const aspect = vp1.width / vp1.height;
+      const aspect = vp1.width > 0 && vp1.height > 0 ? vp1.width / vp1.height : 1;
       doc.destroy();
 
       const id = `pdf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const blob = new Blob([buffer], { type: 'application/pdf' });
       await savePdf({ id, name: file.name, blob, pageCount, aspect });
       addPdfToList({ id, name: file.name, pageCount, aspect, addedAt: Date.now() });
-      // 바로 열어주기
-      handleOpen(id);
+      // state 반영 이후 handleOpen (다음 render 콜백은 savedPdfs에 방금 추가된 meta를 볼 수 있음)
+      setTimeout(() => handleOpen(id), 0);
     } catch (err) {
       console.error('[PdfSidebarSection] 추가 실패:', err);
-      alert('PDF를 불러오지 못했습니다.');
+      alert('PDF를 불러오지 못했습니다. 파일이 손상되었거나 지원되지 않을 수 있습니다.');
     } finally {
       setIsProcessing(false);
     }
