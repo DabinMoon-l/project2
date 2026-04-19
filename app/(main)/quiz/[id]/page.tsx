@@ -22,7 +22,7 @@ import { useThemeColors } from '@/styles/themes/useTheme';
 import { useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { useQuizDraft, useAutoSaveQuizDraft } from '@/lib/hooks/useQuizDraft';
 import { useSessionState } from '@/lib/hooks/useSessionState';
-import { consumeColdRestoredPath } from '@/lib/hooks/useSessionSnapshot';
+import { consumeColdStart } from '@/lib/hooks/useSessionSnapshot';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -595,15 +595,15 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         (a) => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0)
       );
 
-      // 이 mount가 "cold reload 경로 복원" 결과인지 판별.
-      // useSessionSnapshot이 router.replace 전에 COLD_RESTORED_PATH에 경로를 적어두고,
-      // 해당 페이지가 읽어가는 1회성 플래그. in-app 직접 네비게이션에서는 null.
-      const coldRestoredPath = consumeColdRestoredPath();
-      const isColdRestore = !!coldRestoredPath && coldRestoredPath === (panelQuizId ? `/quiz/${panelQuizId}` : `/quiz/${quizId}`);
+      // 이 mount가 cold start(앱 재기동)인지 판별.
+      // app layout의 useSessionSnapshot이 boot 시점에 COLD_START_CONSUMABLE 플래그를 세팅하고,
+      // 이 페이지가 최초 mount될 때 1회 consume. useSessionSnapshot이 경로 redirect를
+      // 안 했어도(iOS가 직접 quiz URL로 relaunch한 케이스) cold start 자체는 감지 가능.
+      const isColdRestore = consumeColdStart();
 
       // 모달 표시 조건:
-      // - in-app 진입이거나 별도 경로에서의 진입이면 항상 모달 (유저가 선택)
-      // - cold reload로 퀴즈 페이지로 복귀한 경우만 draft 조용히 복원 (이미 풀던 중)
+      // - in-app 진입/직접 네비게이션: 항상 모달 표시 (유저 선택권)
+      // - cold start(앱 재기동)으로 퀴즈 페이지 첫 mount: 모달 스킵하고 draft 조용히 복원
       if ((loadedProgress || draftHasData) && !isColdRestore) {
         const progressSource = loadedProgress ?? {
           id: '',
