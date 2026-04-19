@@ -31,7 +31,13 @@ async function main() {
   // 2. 백필 호출
   const professorUid = "86OqdHFpGQQOMUNItwFlltYaThI3";
   const customToken = await getAuth().createCustomToken(professorUid);
-  const apiKey = "AIzaSyDEX9cGWj4x7MCEQznsBd4KmBkSHwzaxNs";
+  // Firebase Web API 키 — public 성격이지만 코드 하드코딩 지양.
+  // .env.local의 NEXT_PUBLIC_FIREBASE_API_KEY 사용.
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) {
+    console.error("❌ NEXT_PUBLIC_FIREBASE_API_KEY env가 필요합니다.");
+    process.exit(1);
+  }
 
   const tokenResponse = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
