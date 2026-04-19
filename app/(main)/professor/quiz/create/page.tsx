@@ -30,15 +30,7 @@ const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEd
 const ImageCropper = dynamic(() => import('@/components/quiz/create/ImageCropper'), { ssr: false });
 const PageSelectionModal = dynamic(() => import('@/components/ai-quiz/PageSelectionModal'), { ssr: false });
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
-// pdfjs-dist 동적 import (번들 크기 최적화)
-let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
-async function getPdfjs() {
-  if (!_pdfjsLib) {
-    _pdfjsLib = await import('pdfjs-dist');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  }
-  return _pdfjsLib;
-}
+import { getPdfjs } from '@/lib/utils/pdfjs';
 
 // PDF 페이지 타입
 interface DocumentPage {

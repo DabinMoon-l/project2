@@ -11,16 +11,7 @@ import ExpandModal from '@/components/common/ExpandModal';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import PageSelectionModal from './PageSelectionModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
-
-// pdfjs-dist 동적 import (번들 크기 최적화)
-let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
-async function getPdfjs() {
-  if (!_pdfjsLib) {
-    _pdfjsLib = await import('pdfjs-dist');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  }
-  return _pdfjsLib;
-}
+import { getPdfjs } from '@/lib/utils/pdfjs';
 
 interface AIQuizModalProps {
   isOpen: boolean;

@@ -17,17 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPdfBlob, type PdfGeom } from '@/lib/repositories/indexedDb/pdfStore';
 import { usePdfViewerStore } from '@/lib/stores/pdfViewerStore';
-
-// pdfjs-dist dynamic import (번들 크기 최적화)
-let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
-async function getPdfjs() {
-  if (!_pdfjsLib) {
-    _pdfjsLib = await import('pdfjs-dist');
-    _pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  }
-  return _pdfjsLib;
-}
+import { getPdfjs } from '@/lib/utils/pdfjs';
 
 interface Props {
   pdfId: string;
