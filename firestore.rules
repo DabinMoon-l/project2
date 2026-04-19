@@ -59,9 +59,11 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // 토끼 보유 서브컬렉션 (CF 전용 쓰기, 본인/교수 읽기)
+      // 토끼 보유 서브컬렉션 (CF 전용 쓰기)
+      // 읽기: 로그인 사용자 누구나 (배틀 신청 도전장/랭킹에서 상대 토끼 레벨·스탯 표시용).
+      // level/stats/discoveryOrder 등은 이미 랭킹·배틀 방에서 노출되는 준공개 정보.
       match /rabbitHoldings/{holdingId} {
-        allow read: if isOwner(uid) || isProfessor();
+        allow read: if isAuthenticated();
         allow write: if false;
       }
     }

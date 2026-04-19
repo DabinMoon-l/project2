@@ -102,9 +102,10 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
     <AnimatePresence>
       {isOpen && (
         <>
+          {/* 투명 오버레이 — 배경 클릭 감지만 (어둡게 안 함) */}
           <motion.div
-            className="fixed top-0 bottom-0 z-[115] bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+            className="fixed top-0 bottom-0 z-[115]"
+            style={{ left: 'var(--home-sheet-left, 0px)', right: '0px' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -166,7 +167,7 @@ export default function BattleInviteSheet({ isOpen, courseId, chapters, onClose,
             {toast && (
               <motion.div
                 className="fixed z-[117] bottom-[calc(70dvh+1rem)] text-center"
-                style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+                style={{ left: 'var(--home-sheet-left, 0px)', right: '0px' }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}

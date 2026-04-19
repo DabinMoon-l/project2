@@ -21,6 +21,8 @@ import { getRtdb } from '@/lib/firebase';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
 const BUSY_ACTIVITIES = new Set(['퀴즈 풀이', '배틀', '연타 미니게임']);
+/** 5분 이내 활동 신호가 없으면 오프라인 간주. onDisconnect(60~90s)로 못 잡히는 잔존 정리 */
+const ONLINE_FRESHNESS_MS = 5 * 60 * 1000;
 
 export interface OnlineClassmate {
   uid: string;
@@ -130,14 +132,24 @@ export function useOnlineClassmates(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseMap, enabled, courseId]);
 
-  // presence 실시간 구독
+  // presence 실시간 구독 — online 플래그 + lastActiveAt freshness 둘 다 봐야
+  // 비정상 종료로 stale된 유저 걸러짐
   useEffect(() => {
     if (!enabled || !courseId) return;
     const unsub = onValue(rtdbRef(getRtdb(), `presence/${courseId}`), (snap) => {
-      const raw = (snap.val() || {}) as Record<string, { online?: boolean; currentActivity?: string }>;
+      const raw = (snap.val() || {}) as Record<
+        string,
+        { online?: boolean; lastActiveAt?: number; currentActivity?: string }
+      >;
+      const now = Date.now();
       const map: Record<string, { online: boolean; currentActivity: string | null }> = {};
       Object.entries(raw).forEach(([uid, v]) => {
-        map[uid] = { online: !!v?.online, currentActivity: v?.currentActivity || null };
+        const fresh = typeof v?.lastActiveAt === 'number'
+          && now - v.lastActiveAt < ONLINE_FRESHNESS_MS;
+        map[uid] = {
+          online: !!v?.online && fresh,
+          currentActivity: v?.currentActivity || null,
+        };
       });
       setPresenceMap(map);
     });
