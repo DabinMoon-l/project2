@@ -70,11 +70,22 @@ function txRequest<T>(
         const tx = db.transaction(STORE_NAME, mode);
         const store = tx.objectStore(STORE_NAME);
         const req = fn(store);
-        req.onsuccess = () => resolve(req.result);
+        // 결과값은 req.onsuccess에서 받지만, Promise는 tx.oncomplete에서 resolve.
+        // 이유: req.onsuccess는 요청만 완료된 시점이고 트랜잭션은 아직 커밋 전.
+        // 이때 await 후 바로 다음 tx를 열면 커밋 전 상태를 읽어 NotFoundError 발생.
+        let result: T | undefined;
+        req.onsuccess = () => { result = req.result; };
         req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
+        tx.oncomplete = () => {
+          db.close();
+          resolve(result as T);
+        };
         tx.onerror = () => {
           reject(tx.error);
+          db.close();
+        };
+        tx.onabort = () => {
+          reject(tx.error ?? new Error('transaction aborted'));
           db.close();
         };
       }),
