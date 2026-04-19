@@ -44,6 +44,9 @@ interface PdfViewerStore {
   closePdf: (id: string) => void;
   updateWindowGeom: (id: string, geom: Partial<PdfGeom>) => void;
 
+  /** 북마크 토글 — 이미 북마크된 페이지면 해제, 아니면 추가. IDB에도 반영 */
+  toggleBookmark: (pdfId: string, page: number) => void;
+
   /** 현재 열려 있는지 */
   isOpen: (id: string) => boolean;
 }
@@ -120,6 +123,19 @@ export const usePdfViewerStore = create<PdfViewerStore>((set, get) => ({
         w.pdfId === id ? { ...w, geom: { ...w.geom, ...patch } } : w,
       ),
     })),
+
+  toggleBookmark: (pdfId, page) => {
+    const current = get().savedPdfs.find((p) => p.id === pdfId);
+    if (!current) return;
+    const existing = current.bookmarks ?? [];
+    const nextSet = existing.includes(page)
+      ? existing.filter((p) => p !== page)
+      : [...existing, page].sort((a, b) => a - b);
+    updatePdfMeta(pdfId, { bookmarks: nextSet }).catch(() => {});
+    set((s) => ({
+      savedPdfs: s.savedPdfs.map((p) => (p.id === pdfId ? { ...p, bookmarks: nextSet } : p)),
+    }));
+  },
 
   isOpen: (id) => get().openWindows.some((w) => w.pdfId === id),
 }));

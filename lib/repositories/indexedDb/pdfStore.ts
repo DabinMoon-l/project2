@@ -32,6 +32,8 @@ export interface PdfRecord {
   aspect: number;
   addedAt: number;
   lastGeom?: PdfGeom;
+  /** 사용자가 북마크한 페이지 번호 배열 (1-indexed). 하단 슬라이더에 표시 */
+  bookmarks?: number[];
 }
 
 interface PdfStoredRecord extends PdfRecord {
@@ -88,6 +90,7 @@ export async function listPdfMeta(): Promise<PdfRecord[]> {
       aspect: r.aspect ?? 1, // 구버전 레코드 호환 (1:1 fallback)
       addedAt: r.addedAt,
       lastGeom: r.lastGeom,
+      bookmarks: r.bookmarks ?? [],
     }))
     .sort((a, b) => b.addedAt - a.addedAt);
 }
