@@ -224,7 +224,7 @@ export default function AutoExplanationGenerator({ questions, courseId, onApply 
   }, [courseId, questions, onApply]);
 
   return (
-    <div className="p-4 border border-[#1A1A1A] rounded-xl" style={{ backgroundColor: '#FDFBF7' }}>
+    <div className="p-4 border border-[#1A1A1A] rounded-xl">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-bold text-[#1A1A1A] flex items-center gap-1.5">
@@ -234,7 +234,7 @@ export default function AutoExplanationGenerator({ questions, courseId, onApply 
             자동 해설 생성
           </h3>
           <p className="text-[11px] text-[#5C5C5C] mt-0.5 leading-snug">
-            Gemini AI가 문제·선지·제시문과 과목 SCOPE를 참고해 해설을 자동으로 작성합니다.
+            콩콩이가 해설을 자동으로 작성합니다.
           </p>
         </div>
         <button
