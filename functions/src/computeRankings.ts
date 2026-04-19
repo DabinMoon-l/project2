@@ -16,6 +16,7 @@ import {
   SUPABASE_URL_SECRET,
   SUPABASE_SERVICE_ROLE_SECRET,
   supabaseDualWriteUpsert,
+  supabaseReadDoc,
 } from "./utils/supabase";
 
 // ── 랭킹 계산 유틸 (클라이언트 ranking.ts와 동일 로직) ──
@@ -66,6 +67,19 @@ function getTodayStartUTC(): Date {
   return new Date(kstNow.getTime() - KST_OFFSET);
 }
 
+/**
+ * 오늘 날짜 KST YYYY-MM-DD (dailyAttendance 문서 키용)
+ */
+function getTodayDateStringKST(): string {
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + KST_OFFSET);
+  const y = kstNow.getUTCFullYear();
+  const m = String(kstNow.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(kstNow.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 // ── 랭킹 계산 핵심 로직 ──
 
 interface RankedUserDoc {
@@ -104,7 +118,6 @@ interface UserDoc {
   profileRabbitId?: number | null;
   equippedRabbits?: Array<{ rabbitId: number; courseId?: string }>;
   professorQuizzesCompleted?: number;
-  lastActiveAt?: { toDate?: () => Date };
 }
 
 async function computeRankingsForCourse(courseId: string) {
@@ -112,7 +125,7 @@ async function computeRankingsForCourse(courseId: string) {
 
   // ── 1단계: users 쿼리 (필요한 필드만 — 대역폭/메모리 절감) ──
   const usersSnap = await db.collection("users").where("courseId", "==", courseId)
-    .select("role", "nickname", "name", "classId", "totalExp", "profileRabbitId", "equippedRabbits", "professorQuizzesCompleted", "lastActiveAt").get();
+    .select("role", "nickname", "name", "classId", "totalExp", "profileRabbitId", "equippedRabbits", "professorQuizzesCompleted").get();
   const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
 
   // 테스트 계정 닉네임 (랭킹에서만 제외, 기능은 정상 사용)
@@ -157,6 +170,19 @@ async function computeRankingsForCourse(courseId: string) {
   // ── 2단계: quizzes + quizResults + rabbits + holdings + expHistory 병렬 조회 ──
   const todayStartUTC = getTodayStartUTC();
   const weekStartUTC = getWeekStartUTC();
+  const todayDateStr = getTodayDateStringKST();
+
+  // 오늘 접속자 집합 — dailyAttendance 기반
+  // 이유: users.lastActiveAt이 더 이상 갱신되지 않아(useActivityTracker가 RTDB로 전환됨)
+  // "오늘 접속했지만 EXP를 못 번 유저"를 fallback으로 찾을 때 쓸 수 있는 권위 소스가 사라짐.
+  // dailyAttendance 문서(클라이언트가 하루 1회 쓰기)를 읽어 오늘 접속자 집합을 만든다.
+  const attendanceDocSnap = await db.collection("dailyAttendance")
+    .doc(`${courseId}_${todayDateStr}`).get();
+  const attendedTodayUids = new Set<string>(
+    attendanceDocSnap.exists
+      ? ((attendanceDocSnap.data()?.attendedUids || []) as string[])
+      : [],
+  );
 
   const [quizResult, resultsResult, rabbitResult, holdingsResult, expHistoryResult] = await Promise.allSettled([
     professorUids.length > 0
@@ -314,7 +340,6 @@ async function computeRankingsForCourse(courseId: string) {
 
   const rankedUsers: RankedUserDoc[] = students.map((u) => {
     const exp = u.totalExp || 0;
-    const lastActive = u.lastActiveAt?.toDate?.() || null;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0, quizzesTaken: new Set<string>() };
     // 평균 정답률 (0~100)
     const correctRate = profStat.attempted > 0 ? (profStat.correct / profStat.attempted) * 100 : 0;
@@ -366,12 +391,14 @@ async function computeRankingsForCourse(courseId: string) {
       name: u.name || undefined,
       classType: u.classId || "A",
       totalExp: exp,
+      // Daily fallback: users.lastActiveAt은 더 이상 갱신 안 됨 → dailyAttendance 문서로 대체
+      // Weekly fallback: 주간 권위 소스 없음 → expHistory에 기록이 있는 유저만 집계
+      // (legacy lastActive는 스테일이라 의미 없어 제거)
       dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id]
-        : (lastActive && lastActive >= todayStartUTC ? 0 : null),
-      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id]
-        : (lastActive && lastActive >= weekStartUTC ? 0 : null),
-      dailyRankScore: dailyRankScore ?? (lastActive && lastActive >= todayStartUTC ? computeRankScore(0, 0, 0) : null),
-      weeklyRankScore: weeklyRankScore ?? (lastActive && lastActive >= weekStartUTC ? computeRankScore(0, 0, 0) : null),
+        : (attendedTodayUids.has(u.id) ? 0 : null),
+      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : null,
+      dailyRankScore: dailyRankScore ?? (attendedTodayUids.has(u.id) ? computeRankScore(0, 0, 0) : null),
+      weeklyRankScore: weeklyRankScore,
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
@@ -513,18 +540,14 @@ export const refreshRankings = onCall(
       throw new HttpsError("invalid-argument", "courseId가 필요합니다.");
     }
 
-    const db = getFirestore();
-
-    // 최근 1분 이내 갱신 됐으면 스킵 (과도한 호출 방지)
-    const existing = await db.collection("rankings").doc(courseId).get();
-    if (existing.exists) {
-      const updatedAt = existing.data()?.updatedAt?.toDate();
-      if (updatedAt && Date.now() - updatedAt.getTime() < 60_000) {
-        return { success: true, message: "최근 갱신됨, 스킵" };
-      }
+    // rankings는 Supabase 단독 쓰기 (2026-04-19~)라 기존 문서도 Supabase에서 읽음.
+    // 최근 1분 이내 갱신됐으면 스킵 (과도한 호출 방지)
+    const existing = await supabaseReadDoc("rankings", courseId);
+    if (existing && Date.now() - existing.updatedAt.getTime() < 60_000) {
+      return { success: true, message: "최근 갱신됨, 스킵" };
     }
 
-    const existingData = existing.exists ? existing.data() ?? null : null;
+    const existingData = existing?.data ?? null;
     const result = await computeRankingsForCourse(courseId);
     const prevDayRanks = resolvePrevRanks(existingData);
 
@@ -592,8 +615,9 @@ export const computeRankingsScheduled = onSchedule(
     for (const courseId of uniqueIds) {
       try {
         // 기존 문서에서 prevRanks 결정 (직전 갱신 대비 순위 변동)
-        const existingDoc = await db.collection("rankings").doc(courseId).get();
-        const existingData = existingDoc.exists ? existingDoc.data() ?? null : null;
+        // Supabase primary라 이전 Supabase row를 읽음 (Firestore rankings는 안 씀)
+        const existing = await supabaseReadDoc("rankings", courseId);
+        const existingData = existing?.data ?? null;
 
         const result = await computeRankingsForCourse(courseId);
         const prevDayRanks = resolvePrevRanks(existingData);

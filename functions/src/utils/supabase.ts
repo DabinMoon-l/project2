@@ -78,6 +78,49 @@ export function isSupabaseDualWriteEnabled(): boolean {
 }
 
 /**
+ * rankings/radar_norms 테이블에서 단일 row 읽기.
+ *
+ * Supabase가 primary 소스가 된 이후 (2026-04-19) prevDayRanks/updatedAt 계산에
+ * 기존 Firestore 문서 대신 Supabase row를 사용해야 순위 변동이 정확히 유지됨.
+ *
+ * 반환: { data, updatedAt } (row 없거나 설정 미비 시 null)
+ */
+export async function supabaseReadDoc(
+  table: "rankings" | "radar_norms",
+  courseId: string,
+): Promise<{ data: Record<string, unknown>; updatedAt: Date } | null> {
+  if (!isSupabaseDualWriteEnabled()) return null;
+  const client = getSupabaseAdmin();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from(table)
+      .select("data, updated_at")
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      console.error(
+        `[Supabase read] ${table}/${courseId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+      return null;
+    }
+    if (!data?.data) return null;
+    return {
+      data: data.data as Record<string, unknown>,
+      updatedAt: new Date(data.updated_at as string),
+    };
+  } catch (err) {
+    console.error(`[Supabase read] ${table}/${courseId} 예외:`, err);
+    return null;
+  }
+}
+
+/**
  * rankings/radar_norms 테이블에 { course_id, data, updated_at } upsert.
  *
  * - Firestore 쓰기 직후 호출
