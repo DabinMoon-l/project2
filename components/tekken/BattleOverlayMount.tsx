@@ -27,26 +27,27 @@ const TekkenBattleOverlay = dynamic(
 
 export default function BattleOverlayMount() {
   const { profile } = useUser();
-  const { tekken, showBattle, battleAiOnly, startBattle, closeBattle } = useBattleSession();
+  const { tekken, showBattle, battleAiOnly, entry, startBattle, closeBattle } = useBattleSession();
   const { style: livePlacementStyle } = useBattlePlacement();
   const { showExpToast } = useExpToast();
 
-  // 배틀 시작 시점의 placement 를 freeze — 이후 isLocked 변화(CharacterBox 의
-  // lockDetail)로 실시간 재평가되면 3쪽→2쪽 flip 버그가 생김.
-  const frozenStyleRef = useRef<React.CSSProperties | null>(null);
-  if (showBattle && frozenStyleRef.current === null) {
-    frozenStyleRef.current = livePlacementStyle;
-  } else if (!showBattle && frozenStyleRef.current !== null) {
-    frozenStyleRef.current = null;
+  // 수신자(invite) 만 동적 placement. 신청자 본인(self) 은 배틀 확인 모달이
+  // 있던 자리(3쪽, --home-sheet-left 기반)를 그대로 쓰도록 override 없이 전달.
+  // 배틀 시작 시점 값을 freeze — 이후 isLocked 변화로 flip 되지 않게.
+  const frozenStyleRef = useRef<React.CSSProperties | undefined>(undefined);
+  if (showBattle && frozenStyleRef.current === undefined) {
+    frozenStyleRef.current = entry === 'invite' ? livePlacementStyle : undefined;
+  } else if (!showBattle && frozenStyleRef.current !== undefined) {
+    frozenStyleRef.current = undefined;
   }
-  const placementStyle = frozenStyleRef.current ?? livePlacementStyle;
+  const placementStyle = frozenStyleRef.current;
 
-  // 배틀 신청 수락 시 store.request(battleId) 로 전달된 pending 소비
+  // 배틀 신청 수락(수신자) → store.pending 에 전달됨 → fromInvite=true 로 시작
   const pending = useBattleSessionStore((s) => s.pending);
   const consume = useBattleSessionStore((s) => s.consume);
   useEffect(() => {
     if (!pending) return;
-    startBattle(pending.battleId, pending.aiOnly);
+    startBattle(pending.battleId, pending.aiOnly, true);
     consume();
   }, [pending, startBattle, consume]);
 

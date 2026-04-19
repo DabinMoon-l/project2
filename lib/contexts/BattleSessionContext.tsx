@@ -17,14 +17,22 @@ import { useUser } from '@/lib/contexts/UserContext';
 
 type Tekken = ReturnType<typeof useTekkenBattle>;
 
+/**
+ * 배틀 진입 경로.
+ *  - 'self'  : 신청자(본인) 의 flow. 배틀 확인 모달이 있던 자리(3쪽) 를 그대로 사용.
+ *  - 'invite': 수신자 쪽. 현재 화면·패널 상태 보고 동적으로 2쪽/3쪽/fullscreen 결정.
+ */
+export type BattleEntry = 'self' | 'invite';
+
 interface BattleSessionContextType {
   tekken: Tekken;
   showBattle: boolean;
   battleAiOnly: boolean;
-  /** 오버레이만 열기 — AI 매칭처럼 battleId 아직 없을 때 사용 */
+  entry: BattleEntry;
+  /** 오버레이만 열기 — AI 매칭처럼 battleId 아직 없을 때 사용 (신청자 flow) */
   openBattle: (aiOnly: boolean) => void;
-  /** battleId 주입 + 오버레이 열기 — 신청 수락·매칭 완료 후 사용 */
-  startBattle: (battleId: string, aiOnly: boolean) => void;
+  /** battleId 주입 + 오버레이 열기. fromInvite=true 면 수신자 동적 placement */
+  startBattle: (battleId: string, aiOnly: boolean, fromInvite?: boolean) => void;
   closeBattle: () => void;
 }
 
@@ -35,13 +43,16 @@ export function BattleSessionProvider({ children }: { children: ReactNode }) {
   const tekken = useTekkenBattle(profile?.uid);
   const [showBattle, setShowBattle] = useState(false);
   const [battleAiOnly, setBattleAiOnly] = useState(false);
+  const [entry, setEntry] = useState<BattleEntry>('self');
 
   const openBattle = useCallback((aiOnly: boolean) => {
+    setEntry('self');
     setBattleAiOnly(aiOnly);
     setShowBattle(true);
   }, []);
 
-  const startBattle = useCallback((battleId: string, aiOnly: boolean) => {
+  const startBattle = useCallback((battleId: string, aiOnly: boolean, fromInvite = false) => {
+    setEntry(fromInvite ? 'invite' : 'self');
     tekken.attachBattleId(battleId);
     setBattleAiOnly(aiOnly);
     setShowBattle(true);
@@ -50,12 +61,13 @@ export function BattleSessionProvider({ children }: { children: ReactNode }) {
   const closeBattle = useCallback(() => {
     setShowBattle(false);
     setBattleAiOnly(false);
+    setEntry('self');
     tekken.leaveBattle();
   }, [tekken]);
 
   return (
     <BattleSessionContext.Provider
-      value={{ tekken, showBattle, battleAiOnly, openBattle, startBattle, closeBattle }}
+      value={{ tekken, showBattle, battleAiOnly, entry, openBattle, startBattle, closeBattle }}
     >
       {children}
     </BattleSessionContext.Provider>
