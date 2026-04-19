@@ -1,27 +1,20 @@
 'use client';
 
 /**
- * 배틀 세션 Context — useTekkenBattle 훅 결과를 layout 레벨에서 한 번만 호출해
- * 앱 어디서든 접근 가능하게 공유.
+ * 배틀 세션 Context — useTekkenBattle 훅을 layout 에서 한 번만 호출해 공유.
  *
- * 기존: CharacterBox(홈)만 useTekkenBattle 사용 → 홈 밖에선 배틀 불가.
- * 이제: layout이 Provider 마운트 → BattleOverlayMount·CharacterBox·도전장 모달 등
- *       모두 같은 인스턴스의 tekken 사용.
- *
- * 훅 인스턴스는 1개뿐이므로 RTDB 구독 중복도 없음.
+ * entry:
+ *  - 'self'  : 신청자 본인. 배틀 확인 모달이 있던 자리(3쪽, --home-sheet-left) 그대로.
+ *  - 'invite': 수신자. 수락 클릭 시점에 캡처된 invitePlacement 사용 (freeze).
  */
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
 import { useUser } from '@/lib/contexts/UserContext';
+import type { BattlePlacement } from '@/lib/hooks/useBattlePlacement';
 
 type Tekken = ReturnType<typeof useTekkenBattle>;
 
-/**
- * 배틀 진입 경로.
- *  - 'self'  : 신청자(본인) 의 flow. 배틀 확인 모달이 있던 자리(3쪽) 를 그대로 사용.
- *  - 'invite': 수신자 쪽. 현재 화면·패널 상태 보고 동적으로 2쪽/3쪽/fullscreen 결정.
- */
 export type BattleEntry = 'self' | 'invite';
 
 interface BattleSessionContextType {
@@ -29,10 +22,19 @@ interface BattleSessionContextType {
   showBattle: boolean;
   battleAiOnly: boolean;
   entry: BattleEntry;
-  /** 오버레이만 열기 — AI 매칭처럼 battleId 아직 없을 때 사용 (신청자 flow) */
+  /** 수신자(초대 수락) 만 사용. self 면 null. */
+  invitePlacement: BattlePlacement | null;
+  /** 오버레이만 열기 — AI 매칭처럼 battleId 아직 없을 때 (신청자 flow) */
   openBattle: (aiOnly: boolean) => void;
-  /** battleId 주입 + 오버레이 열기. fromInvite=true 면 수신자 동적 placement */
-  startBattle: (battleId: string, aiOnly: boolean, fromInvite?: boolean) => void;
+  /** battleId 주입 + 오버레이 열기.
+   *  fromInvite=true 면 invitePlacement 필수 — 클릭 시점의 placement 를 박제.
+   */
+  startBattle: (
+    battleId: string,
+    aiOnly: boolean,
+    fromInvite?: boolean,
+    invitePlacement?: BattlePlacement,
+  ) => void;
   closeBattle: () => void;
 }
 
@@ -44,15 +46,23 @@ export function BattleSessionProvider({ children }: { children: ReactNode }) {
   const [showBattle, setShowBattle] = useState(false);
   const [battleAiOnly, setBattleAiOnly] = useState(false);
   const [entry, setEntry] = useState<BattleEntry>('self');
+  const [invitePlacement, setInvitePlacement] = useState<BattlePlacement | null>(null);
 
   const openBattle = useCallback((aiOnly: boolean) => {
     setEntry('self');
+    setInvitePlacement(null);
     setBattleAiOnly(aiOnly);
     setShowBattle(true);
   }, []);
 
-  const startBattle = useCallback((battleId: string, aiOnly: boolean, fromInvite = false) => {
+  const startBattle = useCallback((
+    battleId: string,
+    aiOnly: boolean,
+    fromInvite = false,
+    placement: BattlePlacement | undefined = undefined,
+  ) => {
     setEntry(fromInvite ? 'invite' : 'self');
+    setInvitePlacement(fromInvite ? (placement ?? 'panel-right') : null);
     tekken.attachBattleId(battleId);
     setBattleAiOnly(aiOnly);
     setShowBattle(true);
@@ -62,12 +72,16 @@ export function BattleSessionProvider({ children }: { children: ReactNode }) {
     setShowBattle(false);
     setBattleAiOnly(false);
     setEntry('self');
+    setInvitePlacement(null);
     tekken.leaveBattle();
   }, [tekken]);
 
   return (
     <BattleSessionContext.Provider
-      value={{ tekken, showBattle, battleAiOnly, entry, openBattle, startBattle, closeBattle }}
+      value={{
+        tekken, showBattle, battleAiOnly, entry, invitePlacement,
+        openBattle, startBattle, closeBattle,
+      }}
     >
       {children}
     </BattleSessionContext.Provider>
