@@ -12,7 +12,7 @@
  * - 24시간 초과된 draft는 복원 시 무시
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -75,7 +75,10 @@ export function useQuizDraft<A, R>(
     }
   }, []);
 
-  return { load, save, clear };
+  // 안정된 참조 — useEffect 의존성 루프 방지. load/save/clear는 이미 useCallback이라
+  // 내부 참조 자체는 안 바뀌지만 이 객체 자체는 매 렌더 새로 만들면 소비자가
+  // deps에 넣었을 때 무한 트리거 발생.
+  return useMemo(() => ({ load, save, clear }), [load, save, clear]);
 }
 
 /**

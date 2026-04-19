@@ -1,6 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
+
+/** SSR 안전 layout effect — 클라이언트에서만 useLayoutEffect, 서버에서는 noop-useEffect */
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /**
  * CSS zoom 제거됨 — 항상 1 반환 (하위 호환용)
@@ -42,12 +46,14 @@ export function useWideMode(): boolean {
     }, 100);
   }, []);
 
-  useEffect(() => {
+  // 초기 동기화는 paint 전에 끝내야 세로→가로 깜빡임이 없음 (특히 cold reload).
+  // useLayoutEffect가 SSR에서 경고를 내므로 isomorphic wrapper 사용.
+  useIsomorphicLayoutEffect(() => {
     const mql = window.matchMedia(
       '(orientation: landscape) and (min-width: 1024px)'
     );
 
-    // 초기값은 디바운스 없이 즉시 설정
+    // 초기값은 디바운스 없이 즉시 설정 (paint 전)
     setIsWide(mql.matches);
 
     const listener = (e: MediaQueryListEvent) => handleChange(e);
