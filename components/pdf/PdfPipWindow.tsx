@@ -67,6 +67,10 @@ interface Props {
   /** PDF 첫 페이지 aspect (w/h) — 창 크기 조절 시 비율 고정용. 검정 여백 방지 */
   aspect: number;
   geom: PdfGeom;
+  /** 스택 z-index (뒤쪽 = 앞, openWindows 인덱스 기반) */
+  zIndex: number;
+  /** 마지막 페이지 — 재오픈 시 복원 */
+  initialPage?: number;
 }
 
 const MIN_W = 200;
@@ -76,9 +80,11 @@ const MAX_H_RATIO = 0.95;
 const TAP_THRESHOLD_PX = 8;
 const SWIPE_THRESHOLD_PX = 50;
 
-export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
+export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, initialPage }: Props) {
   const closePdf = usePdfViewerStore((s) => s.closePdf);
   const updateWindowGeom = usePdfViewerStore((s) => s.updateWindowGeom);
+  const focusWindow = usePdfViewerStore((s) => s.focusWindow);
+  const updateLastPage = usePdfViewerStore((s) => s.updateLastPage);
   const toggleBookmark = usePdfViewerStore((s) => s.toggleBookmark);
   const addStroke = usePdfViewerStore((s) => s.addStroke);
   const clearPageStrokes = usePdfViewerStore((s) => s.clearPageStrokes);
@@ -96,7 +102,7 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
   const pdfDocRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null);
   const renderTaskRef = useRef<import('pdfjs-dist').RenderTask | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
   const [pageCount, setPageCount] = useState(1);
   const [overlayOn, setOverlayOn] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -135,7 +141,8 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
         }
         pdfDocRef.current = doc;
         setPageCount(doc.numPages);
-        setCurrentPage(1);
+        // initialPage를 범위 내에서 복원 (lastPage가 있으면 그 페이지로)
+        setCurrentPage(Math.max(1, Math.min(doc.numPages, initialPage ?? 1)));
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -227,6 +234,13 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
     const t = setTimeout(() => renderPage(), 80);
     return () => clearTimeout(t);
   }, [renderPage, isLoading, geom.w, geom.h]);
+
+  // 현재 페이지를 IDB에 persist (디바운스) — 다음 재오픈 시 동일 페이지로
+  useEffect(() => {
+    if (isLoading) return;
+    const t = setTimeout(() => updateLastPage(pdfId, currentPage), 300);
+    return () => clearTimeout(t);
+  }, [pdfId, currentPage, isLoading, updateLastPage]);
 
   // 페이지 변경 핸들러
   const nextPage = useCallback(() => {
@@ -540,11 +554,13 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom }: Props) {
         top: geom.y,
         width: geom.w,
         height: geom.h,
-        zIndex: 200,
+        zIndex,
         borderRadius: 8,
         // 필기 팔레트가 PiP 바깥으로 튀어나와야 해서 overflow visible
         overflow: 'visible',
       }}
+      // 어디를 터치/클릭하든 먼저 포커스(캡처 단계) — 겹친 창 중 선택한 것이 최상단으로
+      onPointerDownCapture={() => focusWindow(pdfId)}
       onPointerDown={drawingActive ? undefined : handlePointerDown}
       onPointerMove={drawingActive ? undefined : handlePointerMove}
       onPointerUp={drawingActive ? undefined : handlePointerUp}

@@ -28,9 +28,11 @@ export default function PdfViewerRoot() {
 
   return createPortal(
     <>
-      {openWindows.map((w) => {
+      {openWindows.map((w, idx) => {
         const meta = savedPdfs.find((p) => p.id === w.pdfId);
         if (!meta) return null;
+        // openWindows 배열 뒤쪽 = 최상단. focusWindow가 배열 재배치.
+        const zIndex = 200 + idx;
         return (
           <PdfPipWindow
             key={w.pdfId}
@@ -38,6 +40,8 @@ export default function PdfViewerRoot() {
             pdfName={meta.name}
             aspect={meta.aspect}
             geom={w.geom}
+            zIndex={zIndex}
+            initialPage={meta.lastPage}
           />
         );
       })}
