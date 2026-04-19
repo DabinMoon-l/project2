@@ -185,6 +185,17 @@ export default function AutoExplanationGenerator({ questions, courseId, onApply 
       const byId = new Map<string, typeof result.explanations[number]>();
       for (const e of result.explanations) byId.set(e.id, e);
 
+      // choiceExplanations 검증: 선지 개수와 길이 일치 + 비어있지 않은 항목 존재 시에만 저장
+      const validChoiceExplanations = (
+        choices: string[] | undefined,
+        exps: string[] | undefined,
+      ): string[] | undefined => {
+        if (!Array.isArray(choices) || !Array.isArray(exps)) return undefined;
+        if (exps.length !== choices.length) return undefined;
+        if (!exps.some((e) => e && e.trim())) return undefined;
+        return exps;
+      };
+
       const updated: QuestionData[] = questions.map((q) => {
         const found = byId.get(q.id);
         if (!found) return q;
@@ -200,13 +211,20 @@ export default function AutoExplanationGenerator({ questions, courseId, onApply 
             subQuestions: q.subQuestions.map((sq) => {
               const se = subMap.get(sq.id);
               if (!se) return sq;
-              return { ...sq, explanation: se.explanation || sq.explanation };
+              const nextCE = validChoiceExplanations(sq.choices, se.choiceExplanations);
+              return {
+                ...sq,
+                explanation: se.explanation || sq.explanation,
+                ...(nextCE ? { choiceExplanations: nextCE } : {}),
+              };
             }),
           };
         }
+        const nextCE = validChoiceExplanations(q.choices, found.choiceExplanations);
         return {
           ...q,
           explanation: found.explanation || q.explanation,
+          ...(nextCE ? { choiceExplanations: nextCE } : {}),
         };
       });
 

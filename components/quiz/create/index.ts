@@ -33,3 +33,6 @@ export { default as AIQuizGenerator } from './AIQuizGenerator';
 
 // AutoExplanationGenerator: 자동 해설 생성 컴포넌트 (확인 단계)
 export { default as AutoExplanationGenerator } from './AutoExplanationGenerator';
+
+// QuizPreviewCard: 확인 단계 문제 미리보기 카드 (해설·선지별 해설 인라인 편집)
+export { default as QuizPreviewCard } from './QuizPreviewCard';

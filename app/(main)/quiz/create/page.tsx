@@ -23,6 +23,7 @@ import {
   useExtractedImages,
   ExtractedImagePicker,
   AutoExplanationGenerator,
+  QuizPreviewCard,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
@@ -181,7 +182,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // 미리보기 아코디언 상태 (결합형 문제 ID -> 펼침 여부)
-  const [previewExpanded, setPreviewExpanded] = useState<Set<string>>(new Set());
+  // (previewExpanded 제거 — QuizPreviewCard가 자체 세션 기반 상태 관리)
 
   // 유효성 검사 에러
   const [metaErrors, setMetaErrors] = useState<{ title?: string; tags?: string }>({});
@@ -1704,84 +1705,21 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
                 onApply={setQuestions}
               />
 
-              {/* 문제 미리보기 */}
+              {/* 문제 미리보기 — 해설/선지별 해설 인라인 수정 가능 */}
               <div className="p-3 border border-[#1A1A1A] rounded-xl" style={{ backgroundColor: '#F5F0E8' }}>
-                <h3 className="text-xs font-bold text-[#1A1A1A] mb-2">문제 미리보기</h3>
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                <h3 className="text-xs font-bold text-[#1A1A1A] mb-2">문제 미리보기 (해설 바로 수정 가능)</h3>
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
                   {questions.map((q, index) => (
-                    <div key={q.id}>
-                      {/* 일반 문제 또는 결합형 문제 헤더 */}
-                      <div
-                        className={`flex items-start gap-2 p-2 bg-[#EDEAE4] ${
-                          q.type === 'combined' ? 'cursor-pointer hover:bg-[#E5E0D8]' : ''
-                        }`}
-                        onClick={() => {
-                          if (q.type === 'combined') {
-                            setPreviewExpanded(prev => {
-                              const newSet = new Set(prev);
-                              if (newSet.has(q.id)) {
-                                newSet.delete(q.id);
-                              } else {
-                                newSet.add(q.id);
-                              }
-                              return newSet;
-                            });
-                          }
-                        }}
-                      >
-                        <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {index + 1}
-                        </span>
-                        <div className="flex-1 flex items-center gap-2">
-                          <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
-                            {q.type === 'combined' ? (q.commonQuestion || q.text || '(공통 문제 없음)') : q.text}
-                          </p>
-                          {/* 결합형: 아코디언 아이콘 */}
-                          {q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0 && (
-                            <svg
-                              className={`w-4 h-4 text-[#5C5C5C] flex-shrink-0 transition-transform ${
-                                previewExpanded.has(q.id) ? 'rotate-180' : ''
-                              }`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                      {/* 해설 (일반 문제) */}
-                      {q.type !== 'combined' && q.explanation && q.explanation.trim() && (
-                        <div className="ml-8 px-2 py-1.5 border-l-2 border-[#1D5D4A] bg-[#F0F7F4] text-[11px] text-[#1A1A1A] leading-relaxed">
-                          <span className="font-bold text-[#1D5D4A] mr-1">해설</span>
-                          {q.explanation}
-                        </div>
-                      )}
-                      {/* 결합형: 하위 문제 목록 (펼쳤을 때) */}
-                      {q.type === 'combined' && q.subQuestions && previewExpanded.has(q.id) && (
-                        <div className="ml-8 border-l-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                          {q.subQuestions.map((sq, sqIdx) => (
-                            <div key={sq.id} className="border-b border-[#EDEAE4] last:border-b-0">
-                              <div className="flex items-start gap-2 p-2">
-                                <span className="text-sm font-bold text-[#5C5C5C] flex-shrink-0 w-8">
-                                  {index + 1}-{sqIdx + 1}
-                                </span>
-                                <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
-                                  {sq.text || '(내용 없음)'}
-                                </p>
-                              </div>
-                              {sq.explanation && sq.explanation.trim() && (
-                                <div className="ml-10 mr-2 mb-2 px-2 py-1.5 border-l-2 border-[#1D5D4A] bg-[#F0F7F4] text-[11px] text-[#1A1A1A] leading-relaxed">
-                                  <span className="font-bold text-[#1D5D4A] mr-1">해설</span>
-                                  {sq.explanation}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <QuizPreviewCard
+                      key={q.id}
+                      question={q}
+                      index={index}
+                      onChange={(patch) => {
+                        setQuestions((prev) =>
+                          prev.map((old) => (old.id === q.id ? { ...old, ...patch } : old)),
+                        );
+                      }}
+                    />
                   ))}
                 </div>
               </div>
