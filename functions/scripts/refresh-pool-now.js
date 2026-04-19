@@ -11,7 +11,14 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyDfg0b7wQ_OZEHI7R01_1jS6nQRQFVSz6o";
+// ⚠️ 하드코딩 금지 — 실행 시 반드시 env 로 주입
+// 예: GEMINI_API_KEY=xxx node scripts/refresh-pool-now.js
+// 또는: firebase functions:secrets:access GEMINI_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error("❌ GEMINI_API_KEY env가 필요합니다.");
+  process.exit(1);
+}
 
 // 빌드된 코드에서 import
 const { replenishQuestionPool } = require("../lib/tekkenQuestionPool");

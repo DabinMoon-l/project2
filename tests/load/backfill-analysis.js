@@ -14,9 +14,14 @@ const sa = JSON.parse(fs.readFileSync(SA_PATH, "utf8"));
 const app = initializeApp({ credential: cert(sa) });
 const db = getFirestore(app);
 
-// Firebase Secret에서 가져온 Gemini API 키
-// 실행 전: firebase functions:secrets:access GEMINI_API_KEY
-const GEMINI_API_KEY = process.env.GEMINI_KEY || "AIzaSyAdVWhX7hBaPdWG8voloUASuzJk95Zkm8Y";
+// ⚠️ 하드코딩 금지 — 실행 시 env 주입 필수
+// firebase functions:secrets:access GEMINI_API_KEY 로 값 확인 후
+// GEMINI_KEY=xxx node tests/load/backfill-analysis.js 형태로 실행
+const GEMINI_API_KEY = process.env.GEMINI_KEY;
+if (!GEMINI_API_KEY) {
+  console.error("❌ GEMINI_KEY env가 필요합니다.");
+  process.exit(1);
+}
 
 const PROF_TYPES = ["midterm", "final", "past", "independent", "professor"];
 
