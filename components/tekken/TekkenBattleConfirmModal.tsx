@@ -24,6 +24,8 @@ interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
   onConfirm: (chapters: string[], aiOnly: boolean) => void;
   onCancel: () => void;
+  /** "배틀 신청" 버튼 — 선택한 챕터로 접속자 바텀시트 열기 */
+  onRequestInvite?: (chapters: string[]) => void;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   holdings: RabbitHolding[];
   courseId: string;
@@ -111,6 +113,7 @@ export default function TekkenBattleConfirmModal({
   isOpen,
   onConfirm,
   onCancel,
+  onRequestInvite,
   equippedRabbits,
   holdings,
   courseId,
@@ -348,8 +351,8 @@ export default function TekkenBattleConfirmModal({
               </span>
             </button>
 
-            {/* 버튼 */}
-            <div className="flex items-center gap-3 mt-1 w-full px-4">
+            {/* 버튼 — [배틀!] + [배틀 신청]?(옵션) + [취소] */}
+            <div className="flex items-center gap-2 mt-1 w-full px-4">
               <motion.button
                 onClick={canBattle ? () => onConfirm([...selectedChapters], aiOnly) : undefined}
                 disabled={!canBattle}
@@ -362,6 +365,20 @@ export default function TekkenBattleConfirmModal({
               >
                 배틀!
               </motion.button>
+              {onRequestInvite && (
+                <motion.button
+                  onClick={canBattle ? () => onRequestInvite([...selectedChapters]) : undefined}
+                  disabled={!canBattle}
+                  className={`flex-1 py-2 rounded-full font-black text-xs transition-transform ${
+                    canBattle
+                      ? 'bg-white/25 text-white border border-white/40 active:scale-95'
+                      : 'bg-white/10 text-white/30 cursor-not-allowed'
+                  }`}
+                  whileTap={canBattle ? { scale: 0.95 } : undefined}
+                >
+                  배틀 신청
+                </motion.button>
+              )}
               <button
                 onClick={onCancel}
                 className="flex-1 py-2 bg-white/10 border border-white/20 rounded-full text-white text-xs font-bold active:scale-95 transition-transform"

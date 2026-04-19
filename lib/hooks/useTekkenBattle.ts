@@ -51,6 +51,8 @@ interface UseTekkenBattleReturn {
   waitTime: number;
   startMatchmaking: (courseId: string, chapters: string[], aiOnly?: boolean) => Promise<void>;
   cancelMatch: () => void;
+  /** 배틀 신청 수락으로 이미 생성된 battleId에 접속 — 매칭 단계 스킵 */
+  attachBattleId: (battleId: string) => void;
 
   // 배틀 상태
   battle: BattleState | null;
@@ -357,6 +359,15 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }
   }, [userId, clearTimers]);
 
+  // 배틀 신청 수락 — 매칭/CF 호출 없이 이미 생성된 battleId에 접속
+  const attachBattleId = useCallback((battleId: string) => {
+    battleIdRef.current = battleId;
+    setActiveBattleId(battleId);
+    setMatchState('matched');
+    setError(null);
+    clearTimers();
+  }, [clearTimers]);
+
   // 매칭 취소
   const cancelMatch = useCallback(() => {
     if (!courseIdRef.current) return;
@@ -510,6 +521,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     waitTime,
     startMatchmaking,
     cancelMatch,
+    attachBattleId,
 
     battle,
     battleStatus: battle?.status ?? null,

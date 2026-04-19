@@ -383,6 +383,16 @@ export interface CloudFunctionMap {
     input: { courseId: string };
     output: void;
   };
+  sendBattleInvite: {
+    input: { receiverUid: string; chapters: string[] };
+    output: { inviteId: string; expiresAt: number };
+  };
+  respondBattleInvite: {
+    input: { inviteId: string; action: 'accept' | 'decline' };
+    output:
+      | { status: 'accepted'; battleId: string }
+      | { status: 'declined' };
+  };
 
   // ── 랭킹 ──
   refreshRankings: {

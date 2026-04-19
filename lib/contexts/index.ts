@@ -13,3 +13,5 @@ export { MilestoneProvider, useMilestone } from './MilestoneContext';
 export { HomeOverlayProvider, useHomeOverlay } from './HomeOverlayContext';
 
 export { DetailPanelProvider, useDetailPanel, DetailPositionProvider, useDetailPosition, useClosePanel, usePanelLock, usePanelStatePreservation } from './DetailPanelContext';
+
+export { BattleInviteProvider, useBattleInvite } from './BattleInviteContext';

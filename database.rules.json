@@ -73,6 +73,22 @@
         }
       }
     },
+    "battleInvites": {
+      "$receiverUid": {
+        "current": {
+          ".read": "auth != null && auth.uid === $receiverUid",
+          ".write": "auth != null && auth.uid === $receiverUid && !newData.exists()"
+        }
+      }
+    },
+    "battleInviteOutbox": {
+      "$senderUid": {
+        "current": {
+          ".read": "auth != null && auth.uid === $senderUid",
+          ".write": "auth != null && auth.uid === $senderUid && !newData.exists()"
+        }
+      }
+    },
     ".read": false,
     ".write": false
   }

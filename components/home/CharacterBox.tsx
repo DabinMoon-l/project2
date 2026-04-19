@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
   motion,
   AnimatePresence,
@@ -19,6 +20,8 @@ import { calcBattleXp } from '@/lib/utils/tekkenDamage';
 import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
 import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmModal';
 import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
+
+const BattleInviteSheet = dynamic(() => import('@/components/tekken/BattleInviteSheet'), { ssr: false });
 
 // 대형 컴포넌트 lazy load (조건부 렌더링 — 버튼 클릭/배틀 시작 시에만 로드)
 const RabbitDogam = dynamic(() => import('./RabbitDogam'), { ssr: false });
@@ -68,6 +71,9 @@ export default function CharacterBox() {
   const [showBattleConfirm, setShowBattleConfirm] = useState(false);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
   const [showBattle, setShowBattle] = useState(false);
+  // 실시간 배틀 신청 바텀시트
+  const [showInviteSheet, setShowInviteSheet] = useState(false);
+  const [inviteChapters, setInviteChapters] = useState<string[]>([]);
   /** 현재 배틀 세션이 AI 전용 매칭인지 — overlay가 선(先) 카운트다운 활성화 판단용 */
   const [battleAiOnly, setBattleAiOnly] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
@@ -188,6 +194,37 @@ export default function CharacterBox() {
     }
     tekken.startMatchmaking(userCourseId, chapters, aiOnly);
   }, [userCourseId, tekken]);
+
+  // "배틀 신청" — 접속자 바텀시트만 띄우고 확인 모달은 뒤에 유지
+  const handleRequestInvite = useCallback((chapters: string[]) => {
+    if (!userCourseId) return;
+    setInviteChapters(chapters);
+    setShowInviteSheet(true);
+  }, [userCourseId]);
+
+  // 신청이 수락됨 — 매칭 단계 스킵하고 바로 배틀 오버레이로 (countdown 즉시)
+  const handleInviteAccepted = useCallback((battleId: string) => {
+    setShowInviteSheet(false);
+    setShowBattleConfirm(false);
+    setBattleAiOnly(false);
+    tekken.attachBattleId(battleId);
+    setShowBattle(true);
+  }, [tekken]);
+
+  // URL `?battleId=...` 감지 — 도전장 모달에서 수락 후 라우팅된 수신자용
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    const battleId = searchParams?.get('battleId');
+    if (!battleId) return;
+    tekken.attachBattleId(battleId);
+    setBattleAiOnly(false);
+    setShowBattle(true);
+    // 쿼리 제거 — 새로고침/뒤로가기 시 재트리거 방지
+    router.replace(pathname || '/');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const onLongPressMove = useCallback((x: number, y: number) => {
     const dx = Math.abs(x - longPressStartPos.current.x);
@@ -519,10 +556,22 @@ export default function CharacterBox() {
         isOpen={showBattleConfirm}
         onConfirm={handleConfirmBattle}
         onCancel={() => setShowBattleConfirm(false)}
+        onRequestInvite={handleRequestInvite}
         equippedRabbits={[slot0, slot1].filter((s): s is { rabbitId: number; courseId: string } => s !== null)}
         holdings={holdings}
         courseId={userCourseId || 'biology'}
       />
+
+      {/* 접속자 바텀시트 — 실시간 배틀 신청 */}
+      {userCourseId && (
+        <BattleInviteSheet
+          isOpen={showInviteSheet}
+          courseId={userCourseId}
+          chapters={inviteChapters}
+          onClose={() => setShowInviteSheet(false)}
+          onAccepted={handleInviteAccepted}
+        />
+      )}
 
       {/* 철권퀴즈 매칭 모달 */}
       <TekkenMatchmakingModal

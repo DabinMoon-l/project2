@@ -93,6 +93,7 @@ export default function SettingsList({
     { key: 'profilePublic' as const, icon: '👤', label: '프로필 공개', description: '다른 사용자에게 프로필을 공개합니다' },
     { key: 'showInRanking' as const, icon: '🏆', label: '랭킹 표시', description: '랭킹에 내 정보를 표시합니다' },
     { key: 'activityPublic' as const, icon: '📋', label: '활동 내역 공개', description: '퀴즈 참여 기록을 공개합니다' },
+    { key: 'allowBattleInvites' as const, icon: '⚔️', label: '배틀 신청 받기', description: '친구의 실시간 배틀 신청 도전장을 받습니다' },
   ];
 
   return (
