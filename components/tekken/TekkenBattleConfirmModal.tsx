@@ -344,7 +344,7 @@ export default function TekkenBattleConfirmModal({
                 )}
               </span>
               <span className="text-[11px] font-bold text-white/80">
-                AI와만 매칭 (즉시 시작)
+                AI와만 매칭
               </span>
             </button>
 
