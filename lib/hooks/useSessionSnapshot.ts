@@ -21,7 +21,29 @@ import { useRouter, usePathname } from 'next/navigation';
 
 const SNAPSHOT_KEY = 'rabbitory-session-snapshot';
 const SESSION_TOKEN_KEY = 'rabbitory-session-token';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24시간
+// cold reload로 경로 복원 직후, 그 경로 페이지가 "이건 in-app navigation이 아니라
+// cold-reload 복원이다"를 구분할 수 있게 저장하는 플래그. 1회 consume 방식.
+const COLD_RESTORED_PATH_KEY = 'rabbitory-cold-restored-path';
+// "앱을 껐다 켬" vs "잠깐 다른 앱" 구분 — 30분 내 복귀면 백그라운드 복귀로 보고
+// 저장된 경로 복원. 그 이상 지났으면 사용자가 의도적으로 닫은 것으로 간주,
+// 홈화면(PWA manifest start_url=/)에 그대로 진입.
+const MAX_AGE_MS = 30 * 60 * 1000;
+
+/**
+ * cold reload로 복원된 경로를 1회 소비.
+ * 복원 로직이 `router.replace`하기 직전에 sessionStorage에 저장되고,
+ * 해당 경로의 페이지가 mount될 때 한번 읽고 제거한다. 이후 같은 페이지에
+ * 재진입해도 false가 되어 "in-app navigation"으로 정상 분류됨.
+ */
+export function consumeColdRestoredPath(): string | null {
+  try {
+    const p = sessionStorage.getItem(COLD_RESTORED_PATH_KEY);
+    if (p) sessionStorage.removeItem(COLD_RESTORED_PATH_KEY);
+    return p;
+  } catch {
+    return null;
+  }
+}
 
 interface Snapshot {
   pathname: string;
@@ -143,6 +165,9 @@ export function useSessionSnapshot() {
 
     // 복원은 1회성 → 즉시 클리어
     clearSnapshot();
+
+    // 해당 경로 페이지가 "cold-reload 복원이다"를 감지할 수 있도록 플래그 저장
+    try { sessionStorage.setItem(COLD_RESTORED_PATH_KEY, snap.pathname); } catch { /* noop */ }
 
     // 저장된 경로로 replace (뒤로가기에 홈이 쌓이지 않게)
     router.replace(snap.pathname);

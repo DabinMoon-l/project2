@@ -431,13 +431,15 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
     }
   }, [router, isPanelMode, closePanel]);
 
-  // 조회수 기록 (상세 페이지 진입 시마다)
+  // 조회수 기록 (상세 페이지 진입 시마다).
+  // 가로모드 redirect 대기 중에는 실제로 페이지가 보이지 않으므로 스킵 (조회수 허수 방지).
   useEffect(() => {
     if (!postId) return;
+    if (isWide && !isPanelMode && !isLocked) return;
     updateDoc(doc(db, 'posts', postId), { viewCount: increment(1) }).catch((err) => {
       console.error('조회수 업데이트 실패:', err);
     });
-  }, [postId]);
+  }, [postId, isWide, isPanelMode, isLocked]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -469,10 +471,13 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
     return null;
   }
 
+  // wide:hidden 공통 클래스 — 직접 라우트(가로모드) 진입 시 CSS 레벨에서 첫 paint부터 숨김
+  const wideHiddenCls = isPanelMode ? '' : 'wide:hidden';
+
   // 로딩
   if (loading) {
     return (
-      <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className={`min-h-screen pb-6 ${wideHiddenCls}`} style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-3 pb-2 border-b-2 border-[#1A1A1A]">
           <button onClick={() => goBack()} className="flex items-center py-1 text-[#3A3A3A]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -492,7 +497,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   // 에러
   if (error || !post) {
     return (
-      <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className={`min-h-screen pb-6 ${wideHiddenCls}`} style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-3 pb-2 border-b-2 border-[#1A1A1A]">
           <button onClick={() => goBack()} className="flex items-center py-1 text-[#3A3A3A]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -521,7 +526,14 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   }
 
   return (
-    <div ref={swipeRef} style={{ cursor: nextPostId ? 'grab' : undefined }}>
+    // 패널 모드가 아닐 때(= 직접 라우트 진입) + 가로모드면 wide:hidden으로 CSS 레벨에서
+    // 첫 paint부터 숨김. SW 캐시된 HTML이 세로 레이아웃으로 번쩍이는 것을 방지.
+    // useEffect는 /board로 redirect를 수행하고 있음.
+    <div
+      ref={swipeRef}
+      style={{ cursor: nextPostId ? 'grab' : undefined }}
+      className={isPanelMode ? undefined : 'wide:hidden'}
+    >
     <motion.div
       className={`min-h-screen overflow-x-hidden ${isPanelMode ? 'pb-0' : 'pb-24'}`} data-board-detail style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}

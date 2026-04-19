@@ -22,6 +22,7 @@ import { useThemeColors } from '@/styles/themes/useTheme';
 import { useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { useQuizDraft, useAutoSaveQuizDraft } from '@/lib/hooks/useQuizDraft';
 import { useSessionState } from '@/lib/hooks/useSessionState';
+import { consumeColdRestoredPath } from '@/lib/hooks/useSessionSnapshot';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -594,18 +595,16 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         (a) => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0)
       );
 
-      // "이번 사용자가 모달을 이미 처리했다" 플래그 — cold reload로 재진입 시 모달 재출현 방지.
-      // 모달 '이어하기'/'새로 시작' 클릭 시 set, 퀴즈 완료·startFresh 시 clear.
-      const engagedKey = user?.uid ? `quiz-engaged:${user.uid}:${quizId}` : '';
-      let alreadyEngaged = false;
-      try {
-        alreadyEngaged = engagedKey ? !!localStorage.getItem(engagedKey) : false;
-      } catch { /* noop */ }
+      // 이 mount가 "cold reload 경로 복원" 결과인지 판별.
+      // useSessionSnapshot이 router.replace 전에 COLD_RESTORED_PATH에 경로를 적어두고,
+      // 해당 페이지가 읽어가는 1회성 플래그. in-app 직접 네비게이션에서는 null.
+      const coldRestoredPath = consumeColdRestoredPath();
+      const isColdRestore = !!coldRestoredPath && coldRestoredPath === (panelQuizId ? `/quiz/${panelQuizId}` : `/quiz/${quizId}`);
 
       // 모달 표시 조건:
-      // - 이전 진행(Firestore or draft) 있음 + 이번 세션에 아직 engaged 플래그 없음 → 모달
-      // - engaged 플래그 있으면 → 모달 스킵하고 draft로 조용히 복원 (앱 전환 복귀 대응)
-      if ((loadedProgress || draftHasData) && !alreadyEngaged) {
+      // - in-app 진입이거나 별도 경로에서의 진입이면 항상 모달 (유저가 선택)
+      // - cold reload로 퀴즈 페이지로 복귀한 경우만 draft 조용히 복원 (이미 풀던 중)
+      if ((loadedProgress || draftHasData) && !isColdRestore) {
         const progressSource = loadedProgress ?? {
           id: '',
           answers: draft!.answers as Record<string, Answer>,
@@ -870,12 +869,9 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
       localStorage.setItem(`quiz_answers_${quizId}`, JSON.stringify(orderedAnswers));
       localStorage.setItem(`quiz_time_${quizId}`, '0'); // 시간 측정은 나중에 구현
 
-      // 저장된 진행 상황 삭제 (Firestore + 로컬 draft + engaged 플래그)
+      // 저장된 진행 상황 삭제 (Firestore + 로컬 draft)
       await deleteProgress();
       quizDraft.clear();
-      if (user?.uid) {
-        try { localStorage.removeItem(`quiz-engaged:${user.uid}:${quizId}`); } catch {}
-      }
 
       // 결과 페이지로 이동
       if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/result`); return; }
@@ -922,11 +918,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     }
     setShowResumeModal(false);
     setSavedProgress(null);
-    // 엔게이지 플래그 — 다음 mount부터 모달 재출현 방지 (앱 전환 후 복귀 시나리오)
-    if (user?.uid && quizId) {
-      try { localStorage.setItem(`quiz-engaged:${user.uid}:${quizId}`, '1'); } catch {}
-    }
-  }, [savedProgress, quizDraft, user?.uid, quizId]);
+  }, [savedProgress, quizDraft]);
 
   /**
    * 처음부터 다시 하기
@@ -945,11 +937,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     setSavedProgress(null);
     setProgressId(null);
     setCurrentQuestionIndex(0);
-    // '새로 시작' 역시 사용자가 모달을 처리한 상태이므로 engaged 플래그 set
-    if (user?.uid && quizId) {
-      try { localStorage.setItem(`quiz-engaged:${user.uid}:${quizId}`, '1'); } catch {}
-    }
-  }, [savedProgress, quizDraft, user?.uid, quizId]);
+  }, [savedProgress, quizDraft]);
 
   /**
    * 저장하고 나가기
