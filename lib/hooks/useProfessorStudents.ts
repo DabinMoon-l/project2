@@ -59,6 +59,9 @@ export interface StudentData {
   // 타임스탬프
   createdAt: Date;
   lastActiveAt: Date;
+
+  // 현재 접속 중 여부 — RTDB presence `online` 플래그 (있을 때만 true)
+  online?: boolean;
 }
 
 /** 학생 상세 정보 */
@@ -158,11 +161,12 @@ const _radarNormFetchedAtMap = new Map<string, number>();
 const RADAR_NORM_TTL = 10 * 60 * 1000;
 
 /**
- * RTDB presence 데이터 (과목별) — 학생 uid → { lastActiveAt, currentActivity }
- * useActivityTracker가 RTDB `presence/{courseId}/{uid}`에 120초마다 쓰고, onDisconnect로 정리.
+ * RTDB presence 데이터 (과목별) — 학생 uid → { online, lastActiveAt, currentActivity }
+ * useActivityTracker가 RTDB `presence/{courseId}/{uid}`에 120초마다 쓰고,
+ * 탭 닫힘/네트워크 끊김 시 `onDisconnect().update({ online: false })`로 online 플래그만 내림.
  * 교수 화면은 이 맵을 Firestore users 데이터에 덮어써서 온라인/활동 UI를 렌더.
  */
-interface PresenceEntry { lastActiveAt: Date; currentActivity?: string }
+interface PresenceEntry { online: boolean; lastActiveAt: Date; currentActivity?: string }
 const _presenceMap = new Map<string, Map<string, PresenceEntry>>();
 /** RTDB presence 구독 해제 함수 (과목별) */
 const _presenceUnsubMap = new Map<string, () => void>();
@@ -215,8 +219,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
   const unsubRef = useRef<Unsubscribe | null>(null);
   // 첫 로드 완료 여부 (과목 전환 시 스피너 방지)
   const hasLoadedRef = useRef(false);
-  // presence-only 변경 시 30초 간격 flush (온라인 정렬 갱신용)
-  const lastPresenceFlushRef = useRef(0);
 
   // 현재 fetchStudentDetail이 처리 중인 uid (stale 콜백 방지)
   const currentFetchUidRef = useRef<string | null>(null);
@@ -251,6 +253,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       feedbackCount: data.feedbackCount || 0,
       createdAt: data.createdAt?.toDate?.() || new Date(),
       lastActiveAt: presence?.lastActiveAt ?? (data.lastActiveAt?.toDate?.() || new Date(0)),
+      online: presence?.online === true,
     };
   };
 
@@ -336,6 +339,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
           ...entry,
           lastActiveAt: p?.lastActiveAt ?? entry.lastActiveAt,
           currentActivity: p?.currentActivity ?? entry.currentActivity,
+          online: p?.online === true,
         });
       }
       const studentsList = Array.from(studentsMap.values());
@@ -349,21 +353,20 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       const listener = onValue(
         presenceRootRef,
         (snap) => {
-          const val = snap.val() as Record<string, { lastActiveAt?: number; currentActivity?: string }> | null;
+          const val = snap.val() as Record<string, { online?: boolean; lastActiveAt?: number; currentActivity?: string }> | null;
           const next = new Map<string, PresenceEntry>();
           if (val) {
             for (const [uid, entry] of Object.entries(val)) {
               next.set(uid, {
+                online: entry?.online === true,
                 lastActiveAt: entry?.lastActiveAt ? new Date(entry.lastActiveAt) : new Date(0),
                 currentActivity: entry?.currentActivity,
               });
             }
           }
           _presenceMap.set(courseId, next);
-          // 30초 throttle — 너무 자주 setStudents 안 하도록
-          const now = Date.now();
-          if (now - lastPresenceFlushRef.current < 30_000) return;
-          lastPresenceFlushRef.current = now;
+          // throttle 제거: 학생 입장/퇴장이 교수 화면에 즉시 반영되어야 함.
+          // RTDB 대역폭 부담은 무시할 수준 (학생 100명 기준 ~5GB/월, 무료 티어 내).
           if (hasLoadedRef.current) applyPresenceOverlay();
         },
         (err) => {

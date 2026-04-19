@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { ref as rtdbRef, set, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
+import { ref as rtdbRef, set, onDisconnect, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
 import { doc, setDoc, arrayUnion, db } from '@/lib/repositories';
 import { getRtdb } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -30,12 +30,12 @@ function getCurrentActivity(pathname: string): string {
  * 교수의 `users` 컬렉션 onSnapshot이 모든 학생 heartbeat마다 트리거돼 읽기 폭증 유발.
  * → RTDB `presence/{courseId}/{uid}`로 분리하면 Firestore users 문서는 건드리지 않음.
  *
- * 경로: `presence/{courseId}/{uid}` = `{ lastActiveAt, currentActivity }`
- * - 120초마다 heartbeat로 갱신, 150초 지나면 교수 화면에서 offline 판정
- * - **onDisconnect로 지우지 않음** (2026-04-19 수정):
- *   탭 닫힘 시 presence를 지우면 `useProfessorStudents`가 스테일 Firestore
- *   `users.lastActiveAt`(이 훅이 더 이상 안 씀)으로 회귀해 "들어오기 전 시점"으로
- *   표시되는 버그. 대신 마지막 heartbeat 시간을 남겨두고 150초 TTL로 offline 판정.
+ * 경로: `presence/{courseId}/{uid}` = `{ online, lastActiveAt, currentActivity }`
+ * - 120초마다 heartbeat로 `online: true` + lastActiveAt 갱신
+ * - 탭 닫힘/네트워크 끊김 시 `onDisconnect().update({ online: false })` —
+ *   lastActiveAt은 건드리지 않아 마지막 활동 시각 보존 + 교수 화면 즉시 offline 반영
+ *   (2026-04-19: 기존 `.remove()`가 presence를 통째 지워 스테일 Firestore 값으로
+ *   회귀하던 버그를 해결)
  * - 교수 측은 `useProfessorStudents`에서 RTDB onValue로 병합해 렌더
  *
  * 일일 접속 기록(`dailyAttendance`)은 영구 통계용이라 Firestore 유지 (하루 1회 쓰기).
@@ -45,6 +45,7 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
   const pathname = usePathname();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onDisconnectCancelRef = useRef<(() => Promise<void>) | null>(null);
 
   // presence 쓰기 — RTDB `presence/{courseId}/{uid}` 120초마다 갱신
   useEffect(() => {
@@ -55,10 +56,17 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
 
     const write = () => {
       set(presenceRef, {
+        online: true,
         lastActiveAt: rtdbServerTimestamp(),
         currentActivity: activity,
       }).catch(() => {});
     };
+
+    // 탭 닫힘/연결 끊김 시 online=false만 세팅 (lastActiveAt 보존)
+    // → 교수 화면에서 즉시 offline 반영 + 마지막 활동 시각 유지
+    const disconnectHandle = onDisconnect(presenceRef);
+    disconnectHandle.update({ online: false }).catch(() => {});
+    onDisconnectCancelRef.current = () => disconnectHandle.cancel().catch(() => {});
 
     // 즉시 1회 쓰기 + 인터벌
     write();
@@ -67,6 +75,8 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      onDisconnectCancelRef.current?.();
+      onDisconnectCancelRef.current = null;
     };
   }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen]);
 

@@ -23,17 +23,6 @@ import { useDailyAttendance } from '@/lib/hooks/useDailyAttendance';
 import { useHomeScale } from '@/components/home/useHomeScale';
 
 // ============================================================
-// 접속 상태 유틸
-// ============================================================
-
-function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
-  const diff = Date.now() - lastActiveAt.getTime();
-  // useActivityTracker 간격(120초) + 여유 30초 = 150초
-  if (diff < 150 * 1000) return 'online';
-  return 'offline';
-}
-
-// ============================================================
 // 경고 아이템 타입 (StudentListView에 전달)
 // ============================================================
 

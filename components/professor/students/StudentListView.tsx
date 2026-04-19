@@ -23,9 +23,11 @@ interface Props {
   onManageClick?: () => void;
 }
 
-function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
+function getOnlineStatus(online: boolean | undefined, lastActiveAt: Date): 'online' | 'offline' {
+  // presence `online` 플래그가 true여야 online (탭 닫으면 즉시 false로 반영됨)
+  if (online !== true) return 'offline';
+  // 안전장치: heartbeat 누락 시 150초 지나면 offline 처리
   const diff = Date.now() - lastActiveAt.getTime();
-  // useActivityTracker 간격(120초) + 여유 30초 = 150초
   if (diff < 150 * 1000) return 'online';
   return 'offline';
 }
@@ -100,7 +102,7 @@ export default function StudentListView({ students, onStudentClick, warningMap, 
     return students.map(student => ({
       ...student,
       zScore: zScore(student.quizStats.averageScore, m, s),
-      status: getOnlineStatus(student.lastActiveAt),
+      status: getOnlineStatus(student.online, student.lastActiveAt),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, tick]);
