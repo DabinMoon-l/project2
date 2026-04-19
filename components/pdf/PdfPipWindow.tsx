@@ -400,8 +400,8 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
         width: geom.w,
         height: geom.h,
         zIndex,
-        borderRadius: 8,
-        // 필기 팔레트가 PiP 바깥으로 튀어나와야 해서 overflow visible
+        // PDF 영역은 네모. 둥근 모서리는 헤더 상단과 하단바 하단에만 있어 flush 유지.
+        borderRadius: 0,
         overflow: 'visible',
       }}
       // 어디를 터치/클릭하든 먼저 포커스(캡처 단계) — 겹친 창 중 선택한 것이 최상단으로
@@ -411,10 +411,10 @@ export default function PdfPipWindow({ pdfId, pdfName, aspect, geom, zIndex, ini
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
     >
-      {/* PDF 캔버스 — 창 모서리 둥글리기용 내부 래퍼 */}
+      {/* PDF 캔버스 — 네모 (모서리 둥글리기 없음). 헤더/하단바가 양끝만 둥글림 */}
       <div
         className="relative w-full h-full flex items-center justify-center bg-[#1A1A1A]"
-        style={{ borderRadius: 8, overflow: 'hidden' }}
+        style={{ overflow: 'hidden' }}
       >
         {isLoading && (
           <div className="text-white/60 text-xs">로딩…</div>
