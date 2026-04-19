@@ -14,7 +14,7 @@
  */
 
 import { create } from 'zustand';
-import type { PdfGeom, PdfRecord } from '@/lib/repositories/indexedDb/pdfStore';
+import type { PdfGeom, PdfRecord, PdfStroke } from '@/lib/repositories/indexedDb/pdfStore';
 import {
   listPdfMeta,
   updatePdfMeta,
@@ -46,6 +46,11 @@ interface PdfViewerStore {
 
   /** 북마크 토글 — 이미 북마크된 페이지면 해제, 아니면 추가. IDB에도 반영 */
   toggleBookmark: (pdfId: string, page: number) => void;
+
+  /** 필기 stroke 추가 (IDB 즉시 persist) */
+  addStroke: (pdfId: string, page: number, stroke: PdfStroke) => void;
+  /** 특정 페이지의 모든 stroke 삭제 */
+  clearPageStrokes: (pdfId: string, page: number) => void;
 
   /** 현재 열려 있는지 */
   isOpen: (id: string) => boolean;
@@ -123,6 +128,29 @@ export const usePdfViewerStore = create<PdfViewerStore>((set, get) => ({
         w.pdfId === id ? { ...w, geom: { ...w.geom, ...patch } } : w,
       ),
     })),
+
+  addStroke: (pdfId, page, stroke) => {
+    const current = get().savedPdfs.find((p) => p.id === pdfId);
+    if (!current) return;
+    const ann = { ...(current.annotations ?? {}) };
+    const key = String(page);
+    ann[key] = [...(ann[key] ?? []), stroke];
+    updatePdfMeta(pdfId, { annotations: ann }).catch(() => {});
+    set((s) => ({
+      savedPdfs: s.savedPdfs.map((p) => (p.id === pdfId ? { ...p, annotations: ann } : p)),
+    }));
+  },
+
+  clearPageStrokes: (pdfId, page) => {
+    const current = get().savedPdfs.find((p) => p.id === pdfId);
+    if (!current) return;
+    const ann = { ...(current.annotations ?? {}) };
+    delete ann[String(page)];
+    updatePdfMeta(pdfId, { annotations: ann }).catch(() => {});
+    set((s) => ({
+      savedPdfs: s.savedPdfs.map((p) => (p.id === pdfId ? { ...p, annotations: ann } : p)),
+    }));
+  },
 
   toggleBookmark: (pdfId, page) => {
     const current = get().savedPdfs.find((p) => p.id === pdfId);
