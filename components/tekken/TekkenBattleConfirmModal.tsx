@@ -163,7 +163,11 @@ export default function TekkenBattleConfirmModal({
         availableNums.has(num)
       );
       setSelectedChapters(new Set(recent));
-      setCarouselIdx(0);
+      // 캐러셀 초기 위치 = 가장 최다 선택 챕터 (없으면 첫 챕터)
+      const targetIdx = recent[0]
+        ? courseChapters.findIndex((c) => c.num === recent[0])
+        : -1;
+      setCarouselIdx(targetIdx >= 0 ? targetIdx : 0);
       setAiOnly(false);
     }
   }, [isOpen, courseId, courseChapters]);

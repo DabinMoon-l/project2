@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useDetailPosition } from '@/lib/contexts';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // BottomSheet 높이 타입
@@ -103,6 +104,17 @@ export default function BottomSheet({
   const previousActiveElement = useRef<HTMLElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const isWide = useWideMode();
+  const position = useDetailPosition();
+
+  // 가로모드에서 바텀시트는 호출된 패널(2쪽/3쪽) 안에 떠야 함
+  // body로 포탈되므로 body CSS 변수 대신 명시적 left/right를 사용
+  const panelStyle: { left: string; right: string } = isWide
+    ? position === 'detail'
+      ? { left: 'calc(50% + 120px)', right: '0px' }
+      : position === 'queued'
+        ? { left: '240px', right: 'calc(50% - 120px)' }
+        : { left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }
+    : { left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' };
 
   // 접근성 설정에 따라 애니메이션 선택
   const activeSheetVariants = prefersReducedMotion ? reducedMotionVariants : sheetVariants;
@@ -181,7 +193,7 @@ export default function BottomSheet({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           className={`fixed inset-0 ${zIndex}`}
-          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+          style={panelStyle}
         >
           {/* 백드롭 */}
           <motion.div

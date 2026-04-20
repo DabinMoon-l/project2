@@ -64,6 +64,7 @@ export function getDefaultBattleChapters(courseId: string): string[] {
   const threshold = Math.max(1, Math.ceil(list.length * FREQUENCY_RATIO));
   const frequent = [...counts.entries()]
     .filter(([, count]) => count >= threshold)
+    .sort((a, b) => b[1] - a[1]) // 빈도 내림차순 — 첫 번째가 "가장 많이 고른 챕터"
     .map(([num]) => num);
 
   return frequent.length > 0 ? frequent : list[0];

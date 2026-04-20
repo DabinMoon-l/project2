@@ -245,10 +245,11 @@ export function useDetailPanel() {
 }
 
 /**
- * 현재 컴포넌트가 3쪽(detail)인지 2쪽(queued)인지 구분
- * layout.tsx에서 Provider로 감싸서 사용
+ * 현재 컴포넌트가 3쪽(detail)인지 2쪽 대기(queued)인지 2쪽 메인(main)인지 구분
+ * layout.tsx에서 3쪽/2쪽 대기만 명시 래핑, 기본값은 'main' (= 2쪽 일반 페이지)
  */
-const DetailPositionContext = createContext<'detail' | 'queued'>('detail');
+export type DetailPosition = 'detail' | 'queued' | 'main';
+const DetailPositionContext = createContext<DetailPosition>('main');
 export const DetailPositionProvider = DetailPositionContext.Provider;
 
 export function useDetailPosition() {
