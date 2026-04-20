@@ -19,6 +19,10 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import {
+  getDefaultBattleChapters,
+  recordBattleChapters,
+} from '@/lib/utils/battleChapterMemory';
 
 interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
@@ -151,14 +155,18 @@ export default function TekkenBattleConfirmModal({
   // AI 전용 매칭 (기본: false — 실제 유저 매칭 시도 후 10초 뒤 봇 폴백)
   const [aiOnly, setAiOnly] = useState(false);
 
-  // isOpen 변경 시 초기화
+  // isOpen 변경 시 초기화 — 최근 자주 고른 챕터를 디폴트로 복원
   useEffect(() => {
     if (isOpen) {
-      setSelectedChapters(new Set());
+      const availableNums = new Set(courseChapters.map((c) => c.num));
+      const recent = getDefaultBattleChapters(courseId).filter((num) =>
+        availableNums.has(num)
+      );
+      setSelectedChapters(new Set(recent));
       setCarouselIdx(0);
       setAiOnly(false);
     }
-  }, [isOpen]);
+  }, [isOpen, courseId, courseChapters]);
 
   const goPrev = useCallback(() => {
     setCarouselIdx(i => (i - 1 + courseChapters.length) % courseChapters.length);
@@ -354,7 +362,15 @@ export default function TekkenBattleConfirmModal({
             {/* 버튼 — [배틀!] + [배틀 신청]?(옵션) + [취소] */}
             <div className="flex items-center gap-2 mt-1 w-full px-4">
               <motion.button
-                onClick={canBattle ? () => onConfirm([...selectedChapters], aiOnly) : undefined}
+                onClick={
+                  canBattle
+                    ? () => {
+                        const chapters = [...selectedChapters];
+                        recordBattleChapters(courseId, chapters);
+                        onConfirm(chapters, aiOnly);
+                      }
+                    : undefined
+                }
                 disabled={!canBattle}
                 className={`flex-1 py-2 rounded-full font-black text-xs transition-transform ${
                   canBattle
@@ -367,7 +383,15 @@ export default function TekkenBattleConfirmModal({
               </motion.button>
               {onRequestInvite && (
                 <motion.button
-                  onClick={canBattle ? () => onRequestInvite([...selectedChapters]) : undefined}
+                  onClick={
+                    canBattle
+                      ? () => {
+                          const chapters = [...selectedChapters];
+                          recordBattleChapters(courseId, chapters);
+                          onRequestInvite(chapters);
+                        }
+                      : undefined
+                  }
                   disabled={!canBattle}
                   className={`flex-1 py-2 rounded-full font-black text-xs transition-transform ${
                     canBattle
