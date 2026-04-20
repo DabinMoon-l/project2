@@ -142,6 +142,21 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const urlInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputBarRef = useRef<HTMLDivElement>(null);
+
+  // 하단 고정 입력바 높이 측정 → 댓글 목록 paddingBottom 로 반영 (가림 방지)
+  const [inputBarHeight, setInputBarHeight] = useState(72);
+  useEffect(() => {
+    const el = inputBarRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setInputBarHeight(entry.contentRect.height);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [user]);
 
   // textarea 높이 자동 조절
   useEffect(() => {
@@ -386,8 +401,15 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
 
   return (
     <>
-      {/* 댓글 목록 */}
-      <div className="py-4">
+      {/* 댓글 목록 — 하단 고정 입력바 높이만큼 paddingBottom 확보 (가림 방지) */}
+      <div
+        className="pt-4"
+        style={{
+          paddingBottom: user
+            ? `calc(${inputBarHeight + 16}px + env(safe-area-inset-bottom, 0px))`
+            : '1rem',
+        }}
+      >
         {/* 채택된 댓글 상단 표시 */}
         {acceptedComment && (
           <div
@@ -500,6 +522,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       {/* 하단 고정 입력바 */}
       {user && (
         <div
+          ref={inputBarRef}
           data-kb-fixed
           className="fixed z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
           style={{
