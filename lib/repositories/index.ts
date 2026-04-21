@@ -74,7 +74,6 @@ export {
 // 도메인 Repository
 export * as userRepo from './firebase/userRepo';
 export * as settingsRepo from './firebase/settingsRepo';
-export * as quizRepo from './firebase/quizRepo';
 export * as announcementRepo from './firebase/announcementRepo';
 export * as battleRepo from './firebase/battleRepo';
 export * as storageRepo from './firebase/storageRepo';
@@ -163,3 +162,17 @@ const _useSupabaseRankings =
 export const rankingRepo: typeof firebaseRankingRepo = _useSupabaseRankings
   ? (supabaseRankingRepo as typeof firebaseRankingRepo)
   : firebaseRankingRepo;
+
+// Quiz Repo — Feature flag 기반 분기 (Phase 2 Step 3)
+// NEXT_PUBLIC_USE_SUPABASE_QUIZZES=true → Supabase, 아니면 Firestore
+// 읽기는 Supabase, 쓰기는 Firebase 위임 (CF onQuizSync 가 dual-write 담당)
+import * as firebaseQuizRepo from './firebase/quizRepo';
+import * as supabaseQuizRepo from './supabase/quizRepo';
+
+const _useSupabaseQuizzes =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_QUIZZES === 'true';
+
+export const quizRepo: typeof firebaseQuizRepo = _useSupabaseQuizzes
+  ? (supabaseQuizRepo as unknown as typeof firebaseQuizRepo)
+  : firebaseQuizRepo;

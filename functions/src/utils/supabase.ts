@@ -526,7 +526,7 @@ export async function supabaseDualBatchUpsertReviews(
       }
     }
   } catch (err) {
-    console.error(`[Supabase reviews upsert] 예외:`, err);
+    console.error("[Supabase reviews upsert] 예외:", err);
   }
 }
 
@@ -635,7 +635,7 @@ async function buildPostRow(
   }
 
   // Supabase tag CHECK 제약: '학술' | '기타' | '학사' | '비공개' 만 허용
-  const ALLOWED_TAGS = new Set(['학술', '기타', '학사', '비공개']);
+  const ALLOWED_TAGS = new Set(["학술", "기타", "학사", "비공개"]);
   const tag = input.tag && ALLOWED_TAGS.has(input.tag) ? input.tag : null;
 
   return {
@@ -668,19 +668,19 @@ async function buildPostRow(
     exp_rewarded: input.expRewarded ?? null,
     metadata: input.metadata
       ? {
-          ...input.metadata,
-          // Firestore 원본의 isPinned/pinnedAt 등 Supabase 스키마에 없는 필드 보존
-          isPinned: input.isPinned ?? false,
-          pinnedAt: toIsoOrNull(input.pinnedAt ?? null),
-          pinnedBy: input.pinnedBy ?? null,
-          acceptedCommentId: input.acceptedCommentId ?? null,
-        }
+        ...input.metadata,
+        // Firestore 원본의 isPinned/pinnedAt 등 Supabase 스키마에 없는 필드 보존
+        isPinned: input.isPinned ?? false,
+        pinnedAt: toIsoOrNull(input.pinnedAt ?? null),
+        pinnedBy: input.pinnedBy ?? null,
+        acceptedCommentId: input.acceptedCommentId ?? null,
+      }
       : {
-          isPinned: input.isPinned ?? false,
-          pinnedAt: toIsoOrNull(input.pinnedAt ?? null),
-          pinnedBy: input.pinnedBy ?? null,
-          acceptedCommentId: input.acceptedCommentId ?? null,
-        },
+        isPinned: input.isPinned ?? false,
+        pinnedAt: toIsoOrNull(input.pinnedAt ?? null),
+        pinnedBy: input.pinnedBy ?? null,
+        acceptedCommentId: input.acceptedCommentId ?? null,
+      },
     source_firestore_id: input.firestoreId,
     created_at: toIsoOrNull(input.createdAt) || new Date().toISOString(),
   };
@@ -700,13 +700,13 @@ export async function supabaseDualUpsertPost(
     if (!row) return;
 
     const { error } = await client
-      .from('posts')
-      .upsert(row, { onConflict: 'source_firestore_id' });
+      .from("posts")
+      .upsert(row, { onConflict: "source_firestore_id" });
     if (error) {
       console.error(
         `[Supabase post upsert] ${input.firestoreId} 실패:`,
         error.message,
-        error.details ?? '',
+        error.details ?? "",
       );
     }
   } catch (err) {
@@ -725,9 +725,9 @@ export async function supabaseDualUpdatePostPartial(
 
   try {
     const { error } = await client
-      .from('posts')
+      .from("posts")
       .update(patch)
-      .eq('source_firestore_id', firestoreId);
+      .eq("source_firestore_id", firestoreId);
     if (error) {
       console.error(
         `[Supabase post update] ${firestoreId} 실패:`,
@@ -747,9 +747,9 @@ export async function supabaseDualDeletePost(firestoreId: string): Promise<void>
 
   try {
     const { error } = await client
-      .from('posts')
+      .from("posts")
       .delete()
-      .eq('source_firestore_id', firestoreId);
+      .eq("source_firestore_id", firestoreId);
     if (error) {
       console.error(`[Supabase post delete] ${firestoreId} 실패:`, error.message);
     }
@@ -790,9 +790,9 @@ async function getPostUuidByFirestoreId(firestoreId: string): Promise<string | n
   const client = getSupabaseAdmin();
   if (!client) return null;
   const { data } = await client
-    .from('posts')
-    .select('id')
-    .eq('source_firestore_id', firestoreId)
+    .from("posts")
+    .select("id")
+    .eq("source_firestore_id", firestoreId)
     .maybeSingle();
   const uuid = (data as { id?: string } | null)?.id || null;
   if (uuid) _postUuidCache.set(firestoreId, uuid);
@@ -804,9 +804,9 @@ async function getCommentUuidByFirestoreId(firestoreId: string): Promise<string 
   const client = getSupabaseAdmin();
   if (!client) return null;
   const { data } = await client
-    .from('comments')
-    .select('id')
-    .eq('source_firestore_id', firestoreId)
+    .from("comments")
+    .select("id")
+    .eq("source_firestore_id", firestoreId)
     .maybeSingle();
   return (data as { id?: string } | null)?.id || null;
 }
@@ -866,13 +866,13 @@ export async function supabaseDualUpsertComment(
     const row = await buildCommentRow(input, orgId);
     if (!row) return;
     const { error } = await client
-      .from('comments')
-      .upsert(row, { onConflict: 'source_firestore_id' });
+      .from("comments")
+      .upsert(row, { onConflict: "source_firestore_id" });
     if (error) {
       console.error(
         `[Supabase comment upsert] ${input.firestoreId} 실패:`,
         error.message,
-        error.details ?? '',
+        error.details ?? "",
       );
     }
   } catch (err) {
@@ -891,9 +891,9 @@ export async function supabaseDualUpdateCommentPartial(
 
   try {
     const { error } = await client
-      .from('comments')
+      .from("comments")
       .update(patch)
-      .eq('source_firestore_id', firestoreId);
+      .eq("source_firestore_id", firestoreId);
     if (error) {
       console.error(
         `[Supabase comment update] ${firestoreId} 실패:`,
@@ -913,9 +913,9 @@ export async function supabaseDualDeleteComment(firestoreId: string): Promise<vo
 
   try {
     const { error } = await client
-      .from('comments')
+      .from("comments")
       .delete()
-      .eq('source_firestore_id', firestoreId);
+      .eq("source_firestore_id", firestoreId);
     if (error) {
       console.error(
         `[Supabase comment delete] ${firestoreId} 실패:`,
@@ -944,9 +944,9 @@ export async function supabaseDualAcceptComment(
 
     if (Object.keys(postPatch).length > 0) {
       const { error: postErr } = await client
-        .from('posts')
+        .from("posts")
         .update(postPatch)
-        .eq('source_firestore_id', firestorePostId);
+        .eq("source_firestore_id", firestorePostId);
       if (postErr) {
         console.error(
           `[Supabase accept comment — post] ${firestorePostId} 실패:`,
@@ -956,12 +956,12 @@ export async function supabaseDualAcceptComment(
     }
 
     const { error: commErr } = await client
-      .from('comments')
+      .from("comments")
       .update({
         is_accepted: true,
         accepted_at: new Date().toISOString(),
       })
-      .eq('source_firestore_id', firestoreCommentId);
+      .eq("source_firestore_id", firestoreCommentId);
     if (commErr) {
       console.error(
         `[Supabase accept comment — comment] ${firestoreCommentId} 실패:`,
@@ -971,6 +971,599 @@ export async function supabaseDualAcceptComment(
   } catch (err) {
     console.error(
       `[Supabase accept comment] ${firestorePostId}/${firestoreCommentId} 예외:`,
+      err,
+    );
+  }
+}
+
+// ============================================================
+// quizzes / quiz_results / quiz_completions / feedbacks 듀얼 라이트 (Phase 2 Step 3 - quiz)
+// ============================================================
+
+const VALID_QUIZ_CATEGORIES = new Set([
+  "midterm", "final", "past",
+  "independent", "custom", "ai-generated",
+  "professor", "professor-ai",
+]);
+
+// Firestore quiz doc 에서 Supabase 컬럼으로 매핑되는 필드 (metadata 흡수 대상 제외)
+const MAPPED_QUIZ_FIELDS = new Set([
+  "title", "description", "type", "difficulty", "tags",
+  "courseId", "creatorId", "creatorUid", "creatorNickname", "creatorClassType",
+  "classType", "targetClass", "originalType", "wasPublished",
+  "questions", "questionCount",
+  "oxCount", "multipleChoiceCount", "subjectiveCount", "shortAnswerCount",
+  "isPublic", "isPublished", "isAiGenerated",
+  "participantCount", "averageScore", "bookmarkCount", "feedbackCount",
+  "rewarded", "rewardedAt", "publicRewarded", "publicRewardedAt",
+  "userScores", "userFirstReviewScores",
+  "semester", "pastYear", "pastExamType", "uploadedAt",
+  "createdAt", "updatedAt", "expRewarded",
+]);
+
+function fsTimestampToIso(v: unknown): string | null {
+  if (!v) return null;
+  if (typeof v === "string") return v;
+  if (v instanceof Date) return v.toISOString();
+  const obj = v as {
+    toDate?: () => Date;
+    _seconds?: number;
+    seconds?: number;
+  };
+  if (typeof obj.toDate === "function") return obj.toDate().toISOString();
+  if (typeof obj._seconds === "number") return new Date(obj._seconds * 1000).toISOString();
+  if (typeof obj.seconds === "number") return new Date(obj.seconds * 1000).toISOString();
+  return null;
+}
+
+function toIntOrZero(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+function toRealOrNullV(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Firestore quiz doc → Supabase quizzes row.
+ * migrate-quizzes.js 의 mapQuizDoc 과 동일한 매핑.
+ * category CHECK 위반이나 course 매핑 실패 시 null 반환 → 호출부 skip.
+ */
+async function buildQuizRow(
+  firestoreId: string,
+  data: Record<string, unknown>,
+  orgId: string,
+): Promise<Record<string, unknown> | null> {
+  const courseCode = data.courseId as string | undefined;
+  if (!courseCode) {
+    console.warn(`[Supabase quiz upsert] courseId 없음 — skip ${firestoreId}`);
+    return null;
+  }
+  const courseUuid = await getCourseUuid(courseCode);
+  if (!courseUuid) {
+    console.warn(
+      `[Supabase quiz upsert] courseId '${courseCode}' 매핑 실패 — skip ${firestoreId}`,
+    );
+    return null;
+  }
+
+  const rawType = String(data.type || "").toLowerCase();
+  if (!VALID_QUIZ_CATEGORIES.has(rawType)) {
+    console.warn(
+      `[Supabase quiz upsert] category '${rawType}' 미허용 — skip ${firestoreId}`,
+    );
+    return null;
+  }
+
+  let difficulty: string | null = null;
+  if (data.difficulty) {
+    const dl = String(data.difficulty).toLowerCase();
+    if (["easy", "medium", "hard"].includes(dl)) difficulty = dl;
+  }
+
+  // 스키마 외 필드는 metadata jsonb 에 흡수
+  const metadata: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (MAPPED_QUIZ_FIELDS.has(k)) continue;
+    if (v && typeof v === "object" && typeof (v as { toDate?: unknown }).toDate === "function") {
+      metadata[k] = fsTimestampToIso(v);
+    } else {
+      metadata[k] = v;
+    }
+  }
+
+  return {
+    org_id: orgId,
+    course_id: courseUuid,
+    creator_id:
+      (data.creatorId as string) || (data.creatorUid as string) || "unknown",
+    creator_nickname: (data.creatorNickname as string) || null,
+    creator_class_type: (data.creatorClassType as string) || null,
+
+    title: (data.title as string) || "(제목없음)",
+    description: (data.description as string) || null,
+    category: rawType,
+    difficulty,
+    tags: Array.isArray(data.tags) ? data.tags : [],
+
+    class_type: (data.classType as string) || null,
+    target_class: (data.targetClass as string) || null,
+    original_type: (data.originalType as string) || null,
+    was_published: data.wasPublished == null ? null : !!data.wasPublished,
+
+    questions: Array.isArray(data.questions) ? data.questions : [],
+    question_count: toIntOrZero(data.questionCount),
+    ox_count: toIntOrZero(data.oxCount),
+    multiple_choice_count: toIntOrZero(data.multipleChoiceCount),
+    subjective_count: toIntOrZero(data.subjectiveCount),
+    short_answer_count: toIntOrZero(data.shortAnswerCount),
+
+    is_public: !!data.isPublic,
+    is_published: !!data.isPublished,
+    is_ai_generated:
+      data.isAiGenerated == null
+        ? rawType.startsWith("ai")
+        : !!data.isAiGenerated,
+
+    participant_count: toIntOrZero(data.participantCount),
+    average_score: toRealOrNullV(data.averageScore),
+    bookmark_count: toIntOrZero(data.bookmarkCount),
+    feedback_count: toIntOrZero(data.feedbackCount),
+
+    rewarded: !!data.rewarded,
+    rewarded_at: fsTimestampToIso(data.rewardedAt),
+    // Firestore expRewarded 는 boolean 또는 number — 실 지급액은 exp_history 에서 집계
+    exp_rewarded: null,
+    public_rewarded: !!data.publicRewarded,
+    public_rewarded_at: fsTimestampToIso(data.publicRewardedAt),
+
+    user_scores:
+      data.userScores && typeof data.userScores === "object"
+        ? data.userScores
+        : {},
+    user_first_review_scores:
+      data.userFirstReviewScores && typeof data.userFirstReviewScores === "object"
+        ? data.userFirstReviewScores
+        : {},
+
+    semester: data.semester != null ? String(data.semester) : null,
+    past_year: data.pastYear != null ? String(data.pastYear) : null,
+    past_exam_type: (data.pastExamType as string) || null,
+    uploaded_at: fsTimestampToIso(data.uploadedAt),
+
+    metadata,
+    source_firestore_id: firestoreId,
+    created_at:
+      fsTimestampToIso(data.createdAt) || new Date().toISOString(),
+    updated_at:
+      fsTimestampToIso(data.updatedAt) ||
+      fsTimestampToIso(data.createdAt) ||
+      new Date().toISOString(),
+  };
+}
+
+/** quizzes 전체 upsert (onDocumentWritten 트리거 또는 직접 호출) */
+export async function supabaseDualWriteQuiz(
+  firestoreId: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+  try {
+    const row = await buildQuizRow(firestoreId, data, orgId);
+    if (!row) return;
+    const { error } = await client
+      .from("quizzes")
+      .upsert(row, { onConflict: "source_firestore_id" });
+    if (error) {
+      console.error(
+        `[Supabase quiz upsert] ${firestoreId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    } else {
+      // 성공 시 quizUuid 캐시 갱신 (다음 quiz_result 쓰기 최적화)
+      _quizUuidCache.delete(firestoreId);
+    }
+  } catch (err) {
+    console.error(`[Supabase quiz upsert] ${firestoreId} 예외:`, err);
+  }
+}
+
+/** quizzes 부분 update (source_firestore_id 기준). patch 키는 snake_case 로 전달. */
+export async function supabaseDualUpdateQuizPartial(
+  firestoreId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  if (Object.keys(patch).length === 0) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from("quizzes")
+      .update(patch)
+      .eq("source_firestore_id", firestoreId);
+    if (error) {
+      console.error(
+        `[Supabase quiz update] ${firestoreId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(`[Supabase quiz update] ${firestoreId} 예외:`, err);
+  }
+}
+
+/** quizzes 삭제 — CASCADE 로 quiz_results/quiz_completions/feedbacks 자동 정리. */
+export async function supabaseDualDeleteQuiz(firestoreId: string): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from("quizzes")
+      .delete()
+      .eq("source_firestore_id", firestoreId);
+    if (error) {
+      console.error(`[Supabase quiz delete] ${firestoreId} 실패:`, error.message);
+    }
+    _quizUuidCache.delete(firestoreId);
+  } catch (err) {
+    console.error(`[Supabase quiz delete] ${firestoreId} 예외:`, err);
+  }
+}
+
+/**
+ * quizzes.user_scores[userId]=score 머지 + participantCount/averageScore 업데이트.
+ *
+ * recordAttempt 직후 호출. 현재 row 를 읽어서 user_scores 맵 병합.
+ */
+export async function supabaseDualUpsertUserScore(
+  firestoreQuizId: string,
+  userId: string,
+  score: number,
+  extra?: { participantCount?: number; averageScore?: number },
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { data, error: readErr } = await client
+      .from("quizzes")
+      .select("id, user_scores")
+      .eq("source_firestore_id", firestoreQuizId)
+      .maybeSingle();
+    if (readErr || !data?.id) {
+      // quiz 매핑 없음 (아직 dual-write 안 됨) — skip
+      return;
+    }
+    const merged = {
+      ...((data.user_scores as Record<string, unknown>) || {}),
+      [userId]: score,
+    };
+    const patch: Record<string, unknown> = {
+      user_scores: merged,
+      updated_at: new Date().toISOString(),
+    };
+    if (extra?.participantCount !== undefined)
+      patch.participant_count = extra.participantCount;
+    if (extra?.averageScore !== undefined)
+      patch.average_score = extra.averageScore;
+    const { error } = await client
+      .from("quizzes")
+      .update(patch)
+      .eq("id", data.id);
+    if (error) {
+      console.error(
+        `[Supabase quiz userScores] ${firestoreQuizId}/${userId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz userScores] ${firestoreQuizId}/${userId} 예외:`,
+      err,
+    );
+  }
+}
+
+export interface SupabaseQuizResultInput {
+  firestoreId: string;          // Firestore quizResults/{id} doc id
+  firestoreQuizId: string;      // Firestore quizzes/{id}
+  userId: string;
+  score: number;
+  correctCount: number;
+  totalCount: number;
+  answers?: unknown[];
+  attemptNo?: number;
+  attemptKey?: string | null;
+  durationSeconds?: number | null;
+  createdAt?: Date | null;
+}
+
+/**
+ * quiz_results insert. source_firestore_id 에 이미 존재 시 중복 insert 를 피하려
+ * 선조회 후 insert 한다 (partial unique index 는 onConflict 안 먹음).
+ */
+export async function supabaseDualWriteQuizResult(
+  input: SupabaseQuizResultInput,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+  try {
+    const quizUuid = await getQuizUuidByFirestoreId(input.firestoreQuizId);
+    if (!quizUuid) {
+      console.warn(
+        `[Supabase quiz_result upsert] quiz 매핑 실패: ${input.firestoreQuizId} — skip ${input.firestoreId}`,
+      );
+      return;
+    }
+    // 중복 방지 (멱등)
+    const { data: existing } = await client
+      .from("quiz_results")
+      .select("id")
+      .eq("source_firestore_id", input.firestoreId)
+      .maybeSingle();
+    if (existing?.id) return;
+
+    const row: Record<string, unknown> = {
+      org_id: orgId,
+      quiz_id: quizUuid,
+      user_id: input.userId,
+      score: input.score,
+      correct_count: input.correctCount,
+      total_count: input.totalCount,
+      answers: input.answers ?? [],
+      attempt_no: input.attemptNo ?? 1,
+      attempt_key: input.attemptKey ?? null,
+      is_first_attempt: (input.attemptNo ?? 1) === 1,
+      duration_seconds: input.durationSeconds ?? null,
+      source_firestore_id: input.firestoreId,
+      created_at: input.createdAt
+        ? input.createdAt.toISOString()
+        : new Date().toISOString(),
+    };
+    const { error } = await client.from("quiz_results").insert(row);
+    if (error) {
+      console.error(
+        `[Supabase quiz_result insert] ${input.firestoreId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz_result insert] ${input.firestoreId} 예외:`,
+      err,
+    );
+  }
+}
+
+/** quiz_results 부분 update (source_firestore_id 기준) — regrade/rewarded 등. */
+export async function supabaseDualUpdateQuizResult(
+  firestoreId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  if (Object.keys(patch).length === 0) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from("quiz_results")
+      .update(patch)
+      .eq("source_firestore_id", firestoreId);
+    if (error) {
+      console.error(
+        `[Supabase quiz_result update] ${firestoreId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(`[Supabase quiz_result update] ${firestoreId} 예외:`, err);
+  }
+}
+
+/**
+ * quiz_results 배치 upsert (regrade 용).
+ * source_firestore_id 있는 row 만 처리, 기존 row 찾아서 update.
+ */
+export async function supabaseDualBatchUpdateQuizResults(
+  updates: Array<{ firestoreId: string; patch: Record<string, unknown> }>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  if (updates.length === 0) return;
+  // 간단히 직렬 처리 (배치 100건 내외 예상)
+  for (const { firestoreId, patch } of updates) {
+    await supabaseDualUpdateQuizResult(firestoreId, patch);
+  }
+}
+
+/** quiz_completions upsert (UNIQUE quiz_id + user_id 기준). */
+export async function supabaseDualUpsertCompletion(
+  firestoreQuizId: string,
+  userId: string,
+  fields: {
+    bestScore?: number | null;
+    completedAt?: Date | null;
+  },
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+  try {
+    const quizUuid = await getQuizUuidByFirestoreId(firestoreQuizId);
+    if (!quizUuid) {
+      console.warn(
+        `[Supabase quiz_completion upsert] quiz 매핑 실패: ${firestoreQuizId}/${userId} — skip`,
+      );
+      return;
+    }
+    const row: Record<string, unknown> = {
+      org_id: orgId,
+      quiz_id: quizUuid,
+      user_id: userId,
+      completed_at: fields.completedAt
+        ? fields.completedAt.toISOString()
+        : new Date().toISOString(),
+    };
+    if (fields.bestScore !== undefined) row.best_score = fields.bestScore;
+    const { error } = await client
+      .from("quiz_completions")
+      .upsert(row, { onConflict: "quiz_id,user_id" });
+    if (error) {
+      console.error(
+        `[Supabase quiz_completion upsert] ${firestoreQuizId}/${userId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz_completion upsert] ${firestoreQuizId}/${userId} 예외:`,
+      err,
+    );
+  }
+}
+
+/** 특정 유저의 quiz_results 전체 삭제 (학기 전환 / 계정 삭제 용). */
+export async function supabaseDualDeleteQuizResultsByUser(
+  userId: string,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from("quiz_results")
+      .delete()
+      .eq("user_id", userId);
+    if (error) {
+      console.error(
+        `[Supabase quiz_results delete by user] ${userId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz_results delete by user] ${userId} 예외:`,
+      err,
+    );
+  }
+}
+
+/** 특정 유저의 quiz_completions 전체 삭제 (학기 전환 / 계정 삭제 용). */
+export async function supabaseDualDeleteCompletionsByUser(
+  userId: string,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const { error } = await client
+      .from("quiz_completions")
+      .delete()
+      .eq("user_id", userId);
+    if (error) {
+      console.error(
+        `[Supabase quiz_completions delete by user] ${userId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz_completions delete by user] ${userId} 예외:`,
+      err,
+    );
+  }
+}
+
+/** quiz_completions 삭제 (학기 전환 / 재설정 용). */
+export async function supabaseDualDeleteCompletion(
+  firestoreQuizId: string,
+  userId: string,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  if (!client) return;
+  try {
+    const quizUuid = await getQuizUuidByFirestoreId(firestoreQuizId);
+    if (!quizUuid) return;
+    const { error } = await client
+      .from("quiz_completions")
+      .delete()
+      .eq("quiz_id", quizUuid)
+      .eq("user_id", userId);
+    if (error) {
+      console.error(
+        `[Supabase quiz_completion delete] ${firestoreQuizId}/${userId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase quiz_completion delete] ${firestoreQuizId}/${userId} 예외:`,
+      err,
+    );
+  }
+}
+
+export interface SupabaseFeedbackInput {
+  firestoreId: string;
+  firestoreQuizId: string;
+  userId: string;
+  content: string;
+  rating?: number | null;
+  createdAt?: Date | null;
+}
+
+/** feedbacks insert (source_firestore_id UNIQUE 기준 upsert). */
+export async function supabaseDualWriteFeedback(
+  input: SupabaseFeedbackInput,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+  try {
+    const quizUuid = await getQuizUuidByFirestoreId(input.firestoreQuizId);
+    if (!quizUuid) {
+      console.warn(
+        `[Supabase feedback upsert] quiz 매핑 실패: ${input.firestoreQuizId} — skip ${input.firestoreId}`,
+      );
+      return;
+    }
+    const row: Record<string, unknown> = {
+      org_id: orgId,
+      quiz_id: quizUuid,
+      user_id: input.userId,
+      content: input.content,
+      rating: input.rating ?? null,
+      source_firestore_id: input.firestoreId,
+      created_at: input.createdAt
+        ? input.createdAt.toISOString()
+        : new Date().toISOString(),
+    };
+    const { error } = await client
+      .from("feedbacks")
+      .upsert(row, { onConflict: "source_firestore_id" });
+    if (error) {
+      console.error(
+        `[Supabase feedback upsert] ${input.firestoreId} 실패:`,
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase feedback upsert] ${input.firestoreId} 예외:`,
       err,
     );
   }

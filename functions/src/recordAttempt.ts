@@ -18,6 +18,14 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { incrementShard, getShardedTotal } from "./utils/shardedCounter";
 import { checkRateLimitV2 } from "./utils/rateLimitV2";
 import { gradeQuestion, UserAnswer, GradeableQuestion } from "./utils/gradeQuestion";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteQuizResult,
+  supabaseDualUpsertCompletion,
+  supabaseDualUpsertUserScore,
+} from "./utils/supabase";
 
 /** Firestore 퀴즈 문제 (채점 가능 필드 + 메타데이터) */
 interface QuizQuestion extends GradeableQuestion {
@@ -52,6 +60,11 @@ export const recordAttempt = onCall(
     maxInstances: 200,
     minInstances: 1,
     concurrency: 250,
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (request) => {
     // 인증 확인
@@ -217,6 +230,20 @@ export const recordAttempt = onCall(
       createdAt: FieldValue.serverTimestamp(),
     });
 
+    // ⑤-b Supabase dual-write (quiz_results)
+    supabaseDualWriteQuizResult({
+      firestoreId: resultRef.id,
+      firestoreQuizId: quizId,
+      userId,
+      score,
+      correctCount,
+      totalCount,
+      answers: answersArr,
+      attemptNo,
+      attemptKey,
+      createdAt: new Date(),
+    }).catch((e) => console.warn("[Supabase quiz_result dual-write] 실패:", e));
+
     // ── ⑥ quiz_completions + 분산 카운터 + 이전 점수 조회 — 병렬 처리 ──
     const completionDocId = `${quizId}_${userId}`;
 
@@ -242,6 +269,12 @@ export const recordAttempt = onCall(
       },
       { merge: true }
     );
+
+    // Supabase dual-write (quiz_completions) — Firestore 쓰기와 병렬
+    supabaseDualUpsertCompletion(quizId, userId, {
+      bestScore: score,
+      completedAt: new Date(),
+    }).catch((e) => console.warn("[Supabase quiz_completion dual-write] 실패:", e));
 
     // 3개 병렬 실행
     const [prevCompletionDoc] = await Promise.all([
@@ -269,11 +302,19 @@ export const recordAttempt = onCall(
           averageScore,
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Supabase dual-write: user_scores[userId]=score + participant_count + average_score
+        await supabaseDualUpsertUserScore(quizId, userId, score, {
+          participantCount,
+          averageScore,
+        });
       } catch (e) {
         db.doc(`quizzes/${quizId}`).update({
           [`userScores.${userId}`]: score,
           updatedAt: FieldValue.serverTimestamp(),
         }).catch(() => {});
+        // Supabase 도 최소한 userScores 만 갱신
+        supabaseDualUpsertUserScore(quizId, userId, score).catch(() => {});
         console.warn(`quizzes/${quizId} 통계 업데이트 실패 (무시 가능):`, e);
       }
     })();
