@@ -6,12 +6,12 @@ import { callFunction } from '@/lib/api';
 import {
   doc,
   setDoc,
-  addDoc,
   serverTimestamp,
   collection,
   Timestamp,
   onSnapshot,
   db,
+  reviewRepo,
 } from '@/lib/repositories';
 import { useUser, useMilestone } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -437,7 +437,7 @@ export default function AIQuizContainer() {
       // AI 퀴즈는 recordAttempt를 거치지 않으므로 reviews만 저장
 
       // 모든 문제를 reviews 컬렉션에 저장
-      const reviewsRef = collection(db, 'reviews');
+      const reviewsToAdd: Record<string, unknown>[] = [];
 
       for (const result of results) {
         const question = savedQuiz.questions.find(q => q.id === result.questionId);
@@ -483,7 +483,6 @@ export default function AIQuizContainer() {
           isCorrect: result.isCorrect,
           reviewCount: 0,
           lastReviewedAt: null,
-          createdAt: serverTimestamp(),
           quizUpdatedAt: serverTimestamp(),
           chapterId: question.chapterId,
           chapterDetailId: question.chapterDetailId,
@@ -493,14 +492,13 @@ export default function AIQuizContainer() {
           quizCreatorId: profile.uid,
         };
 
-        // solved 타입으로 저장 (모든 문제)
-        await addDoc(reviewsRef, { ...reviewData, reviewType: 'solved' });
-
-        // 오답인 경우 wrong 타입으로도 저장
+        reviewsToAdd.push({ ...reviewData, reviewType: 'solved' });
         if (!result.isCorrect) {
-          await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' });
+          reviewsToAdd.push({ ...reviewData, reviewType: 'wrong' });
         }
       }
+
+      await reviewRepo.batchAddReviews(reviewsToAdd);
 
       // AI 퀴즈 풀이는 서버에서 XP를 지급하지 않음 (생성 시 이미 지급됨)
 
@@ -621,7 +619,7 @@ function AIQuizPracticePanel({
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      const reviewsRef = collection(db, 'reviews');
+      const reviewsToAdd: Record<string, unknown>[] = [];
       for (const result of results) {
         const question = quizDoc.questions.find(q => q.id === result.questionId);
         if (!question) continue;
@@ -655,18 +653,19 @@ function AIQuizPracticePanel({
           choiceExplanations: question.choiceExplanations || null,
           isBookmarked: false, isCorrect: result.isCorrect,
           reviewCount: 0, lastReviewedAt: null,
-          createdAt: serverTimestamp(), quizUpdatedAt: serverTimestamp(),
+          quizUpdatedAt: serverTimestamp(),
           chapterId: question.chapterId, chapterDetailId: question.chapterDetailId,
           imageUrl: question.imageUrl || null,
           courseId: userCourseId || null,
           quizType: 'ai-generated', quizCreatorId: userId,
         };
 
-        await addDoc(reviewsRef, { ...reviewData, reviewType: 'solved' });
+        reviewsToAdd.push({ ...reviewData, reviewType: 'solved' });
         if (!result.isCorrect) {
-          await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' });
+          reviewsToAdd.push({ ...reviewData, reviewType: 'wrong' });
         }
       }
+      await reviewRepo.batchAddReviews(reviewsToAdd);
     } catch (err) {
       console.error('퀴즈 결과 저장 오류:', err);
     }

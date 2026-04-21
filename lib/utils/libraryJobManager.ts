@@ -6,11 +6,8 @@
  */
 
 import {
-  doc,
-  setDoc,
-  collection,
   serverTimestamp,
-  db,
+  quizRepo,
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { getCourseIndex } from '@/lib/courseIndex';
@@ -200,9 +197,6 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
       throw new Error('문제 생성 시간이 초과되었습니다.');
     }
 
-    // Firestore 저장
-    const quizRef = doc(collection(db, 'quizzes'));
-
     // 태그에서 chapterId 폴백 후보 추출 (Gemini가 chapterId 누락 시 사용)
     const fallbackChapterIds = extractChapterIdsFromTags(
       config.courseId,
@@ -262,7 +256,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
       updatedAt: serverTimestamp(),
     };
 
-    await setDoc(quizRef, quizData);
+    await quizRepo.createQuizWithId(quizData);
 
     emit({ type: 'completed', questionCount: questions.length });
 

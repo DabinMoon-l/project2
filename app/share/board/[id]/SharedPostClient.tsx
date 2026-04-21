@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { postRepo } from '@/lib/repositories';
 import LinkifiedText from '@/components/board/LinkifiedText';
 
 function formatDate(date: Date) {
@@ -49,47 +48,42 @@ export default function SharedPostClient({ postId }: { postId: string }) {
   useEffect(() => {
     async function load() {
       try {
-        const postSnap = await getDoc(doc(db, 'posts', postId));
-        if (!postSnap.exists()) {
+        const postDoc = await postRepo.getPost(postId);
+        if (!postDoc) {
           setError('삭제되었거나 존재하지 않는 글입니다.');
           setLoading(false);
           return;
         }
 
-        const data = postSnap.data();
+        const data = postDoc as Record<string, unknown>;
         // 비공개 글도 공유 링크로는 열람 가능 (본인이 의도적으로 공유하는 것)
         setPost({
-          title: data.title,
-          content: data.content,
-          authorNickname: data.authorNickname || '알 수 없음',
-          authorClassType: data.authorClassType,
-          tag: data.tag,
-          imageUrl: data.imageUrl,
-          imageUrls: data.imageUrls,
-          likes: data.likes || 0,
-          commentCount: data.commentCount || 0,
-          viewCount: data.viewCount || 0,
-          createdAt: data.createdAt?.toDate() || new Date(),
+          title: (data.title as string) || '',
+          content: (data.content as string) || '',
+          authorNickname: (data.authorNickname as string) || '알 수 없음',
+          authorClassType: data.authorClassType as string | undefined,
+          tag: data.tag as string | undefined,
+          imageUrl: data.imageUrl as string | undefined,
+          imageUrls: data.imageUrls as string[] | undefined,
+          likes: (data.likes as number) || 0,
+          commentCount: (data.commentCount as number) || 0,
+          viewCount: (data.viewCount as number) || 0,
+          createdAt: (data.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date(),
         });
 
-        const commentsQuery = query(
-          collection(db, 'comments'),
-          where('postId', '==', postId),
-          orderBy('createdAt', 'asc')
-        );
-        const commentsSnap = await getDocs(commentsQuery);
-        setComments(commentsSnap.docs.map(d => {
-          const c = d.data();
+        const commentDocs = await postRepo.fetchCommentsByPost(postId);
+        setComments(commentDocs.map((d) => {
+          const c = d as Record<string, unknown>;
           return {
             id: d.id,
-            parentId: c.parentId,
-            authorNickname: c.authorNickname || '알 수 없음',
-            authorClassType: c.authorClassType,
-            authorId: c.authorId || '',
-            content: c.content || '',
-            imageUrls: c.imageUrls,
-            isAIReply: c.isAIReply,
-            createdAt: c.createdAt?.toDate() || new Date(),
+            parentId: c.parentId as string | undefined,
+            authorNickname: (c.authorNickname as string) || '알 수 없음',
+            authorClassType: c.authorClassType as string | undefined,
+            authorId: (c.authorId as string) || '',
+            content: (c.content as string) || '',
+            imageUrls: c.imageUrls as string[] | undefined,
+            isAIReply: c.isAIReply as boolean | undefined,
+            createdAt: (c.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date(),
           };
         }));
       } catch (err) {

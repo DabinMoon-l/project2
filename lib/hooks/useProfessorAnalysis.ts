@@ -2,13 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
   Timestamp,
-  db,
+  quizRepo,
+  type DocumentData,
 } from '@/lib/repositories';
 
 // ============================================================
@@ -146,14 +142,11 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
         setError(null);
 
         // 1. 교수님이 출제한 퀴즈 목록 조회
-        const quizzesRef = collection(db, 'quizzes');
-        const quizzesQuery = query(
-          quizzesRef,
-          where('creatorUid', '==', professorUid),
-          where('type', '==', 'professor'),
-          orderBy('createdAt', 'desc')
+        const quizzes = await quizRepo.fetchQuizzesByFilters(
+          { creatorUid: professorUid, type: 'professor' },
+          10000,
         );
-        const quizzesSnap = await getDocs(quizzesQuery);
+        const quizDocs = quizzes.items;
 
         const allQuestions: QuestionAnalysis[] = [];
         const summaries: QuizAnalysisSummary[] = [];
@@ -166,41 +159,31 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
         const typeCount = { ox: 0, multiple: 0, subjective: 0 };
 
         // 2. quizResults + feedbacks 배치 병렬 조회 (N+1 제거)
-        const allQuizIds = quizzesSnap.docs.map(d => d.id);
+        const allQuizIds = quizDocs.map(d => d.id);
         const filteredQuizIds = options.quizId
           ? allQuizIds.filter(id => id === options.quizId)
           : allQuizIds;
 
-        // Firestore `in` 최대 30개 → 배치 병렬
-        const resultsBatchPromises = [];
-        const feedbacksBatchPromises = [];
-        for (let i = 0; i < filteredQuizIds.length; i += 30) {
-          const batch = filteredQuizIds.slice(i, i + 30);
-          resultsBatchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
-          feedbacksBatchPromises.push(getDocs(query(collection(db, 'feedbacks'), where('quizId', 'in', batch))));
-        }
-        const [resultsBatches, feedbacksBatches] = await Promise.all([
-          Promise.all(resultsBatchPromises),
-          Promise.all(feedbacksBatchPromises),
+        const [resultsList, feedbacksList] = await Promise.all([
+          quizRepo.fetchQuizResultsByQuizzes<DocumentData>(filteredQuizIds),
+          quizRepo.fetchFeedbacksByQuizzes<DocumentData>(filteredQuizIds),
         ]);
 
         // quizId별로 그룹핑
         const resultsByQuiz = new Map<string, any[]>();
-        resultsBatches.forEach(snap => snap.docs.forEach(d => {
-          const data = d.data();
+        resultsList.forEach((data) => {
           if (!resultsByQuiz.has(data.quizId)) resultsByQuiz.set(data.quizId, []);
           resultsByQuiz.get(data.quizId)!.push(data);
-        }));
+        });
         const feedbacksByQuiz = new Map<string, any[]>();
-        feedbacksBatches.forEach(snap => snap.docs.forEach(d => {
-          const data = d.data();
+        feedbacksList.forEach((data) => {
           if (!feedbacksByQuiz.has(data.quizId)) feedbacksByQuiz.set(data.quizId, []);
           feedbacksByQuiz.get(data.quizId)!.push(data);
-        }));
+        });
 
         // 3. 각 퀴즈의 문제별 분석 (DB 조회 없이 메모리에서 처리)
-        for (const quizDoc of quizzesSnap.docs) {
-          const quizData = quizDoc.data();
+        for (const quizDoc of quizDocs) {
+          const quizData = quizDoc as DocumentData;
           const quizId = quizDoc.id;
 
           if (options.quizId && options.quizId !== quizId) continue;

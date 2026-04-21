@@ -2,18 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  updateDoc,
-  getDoc,
-  getDocs,
-  writeBatch,
   serverTimestamp,
-  db,
+  reviewRepo,
+  quizRepo,
   type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
@@ -59,10 +50,9 @@ export function useLearningQuizzes() {
   const [quizzes, setQuizzes] = useState<LearningQuiz[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /** snapshot docs → LearningQuiz[] 변환 헬퍼 */
-  const toItems = useCallback((docs: { id: string; data: () => DocumentData }[], userId: string): LearningQuiz[] => {
-    return docs.map((docSnap) => {
-      const data = docSnap.data();
+  /** quiz docs → LearningQuiz[] 변환 헬퍼 */
+  const toItems = useCallback((quizzes: (DocumentData & { id: string })[], userId: string): LearningQuiz[] => {
+    return quizzes.map((data) => {
       const myScore = data.userScores?.[userId] ?? data.score ?? 0;
       const myFirstReviewScore = data.userFirstReviewScores?.[userId];
 
@@ -77,7 +67,7 @@ export function useLearningQuizzes() {
       });
 
       return {
-        id: docSnap.id,
+        id: data.id,
         title: data.title || '제목 없음',
         questionCount: data.questions?.length || data.totalQuestions || 0,
         score: data.score || 0,
@@ -110,19 +100,13 @@ export function useLearningQuizzes() {
 
     const userId = user.uid;
 
-    const q = query(
-      collection(db, 'quizzes'),
-      where('creatorId', '==', userId)
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const filteredDocs = snap.docs.filter((d) => {
-        const data = d.data();
+    const unsub = quizRepo.subscribeQuizzesByCreator(userId, (items) => {
+      const filtered = items.filter((data) => {
         if (data.type === 'ai-generated') return true;
         if (data.type === 'custom' && data.isPublic === false) return true;
         return false;
-      });
-      const all = toItems(filteredDocs, userId);
+      }) as (DocumentData & { id: string })[];
+      const all = toItems(filtered, userId);
       all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setQuizzes(all);
       setLoading(false);
@@ -138,7 +122,7 @@ export function useLearningQuizzes() {
   // 서재 퀴즈 삭제
   const deleteQuiz = useCallback(async (quizId: string) => {
     try {
-      await deleteDoc(doc(db, 'quizzes', quizId));
+      await quizRepo.deleteQuiz(quizId);
     } catch (error) {
       console.error('서재 퀴즈 삭제 오류:', error);
       throw error;
@@ -159,14 +143,12 @@ export function useLearningQuizzes() {
 
     try {
       // 1. 퀴즈 문서 가져오기
-      const quizRef = doc(db, 'quizzes', quizId);
-      const quizDoc = await getDoc(quizRef);
+      const quizData = await quizRepo.getQuiz<DocumentData>(quizId);
 
-      if (!quizDoc.exists()) {
+      if (!quizData) {
         throw new Error('퀴즈를 찾을 수 없습니다.');
       }
 
-      const quizData = quizDoc.data();
       const questions = quizData.questions || [];
       const score = quizData.score || 0;
       const quizTitle = quizData.title || '퀴즈';
@@ -175,16 +157,13 @@ export function useLearningQuizzes() {
       const missingExps = questions.some((q: DocumentData) => !q.choiceExplanations && q.type === 'multiple');
       if (missingExps) {
         try {
-          const reviewDocs = await getDocs(query(
-            collection(db, 'reviews'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', quizId)
-          ));
+          const reviewDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, quizId);
           const reviewExpsMap: Record<string, string[]> = {};
-          reviewDocs.docs.forEach(d => {
-            const data = d.data();
-            if (data.choiceExplanations?.length > 0) {
-              reviewExpsMap[data.questionId] = data.choiceExplanations;
+          reviewDocs.forEach(d => {
+            const data = d as Record<string, unknown>;
+            const exps = data.choiceExplanations as string[] | undefined;
+            if (exps && exps.length > 0) {
+              reviewExpsMap[data.questionId as string] = exps;
             }
           });
           let questionsChanged = false;
@@ -199,7 +178,7 @@ export function useLearningQuizzes() {
             }
           });
           if (questionsChanged) {
-            await updateDoc(quizRef, { questions });
+            await quizRepo.updateQuizRaw(quizId, { questions });
           }
         } catch (e) {
           console.error('choiceExplanations 동기화 오류:', e);
@@ -222,7 +201,7 @@ export function useLearningQuizzes() {
         updatedAt: serverTimestamp(),
       };
       if (isAiType) updateData.isAiGenerated = true;
-      await updateDoc(quizRef, updateData);
+      await quizRepo.updateQuizRaw(quizId, updateData);
 
       // 분산 카운터 + quiz_completions 초기화 (출제자 점수 반영)
       // CF에서 quiz_agg 샤드 + quiz_completions 생성 → recordAttempt와 정합성 유지
@@ -230,8 +209,8 @@ export function useLearningQuizzes() {
         console.warn('출제자 통계 초기화 실패 (무시 가능):', e)
       );
 
-      // 3. reviews 컬렉션에 각 문제 일괄 저장 (writeBatch)
-      const batch = writeBatch(db);
+      // 3. reviews 컬렉션에 각 문제 일괄 저장 (batchAddReviews)
+      const reviewsToAdd: Record<string, unknown>[] = [];
 
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
@@ -299,15 +278,11 @@ export function useLearningQuizzes() {
           chapterDetailId: question.chapterDetailId || null,
           choiceExplanations: question.choiceExplanations || null,
           imageUrl: question.imageUrl || null,
-          createdAt: serverTimestamp(),
         };
 
-        // solved 타입으로 저장
-        batch.set(doc(collection(db, 'reviews')), reviewData);
-
-        // 오답인 경우 wrong 타입으로도 저장
+        reviewsToAdd.push(reviewData);
         if (!isCorrect) {
-          batch.set(doc(collection(db, 'reviews')), {
+          reviewsToAdd.push({
             ...reviewData,
             isCorrect: false,
             reviewType: 'wrong' as const,
@@ -315,7 +290,7 @@ export function useLearningQuizzes() {
         }
       }
 
-      await batch.commit();
+      await reviewRepo.batchAddReviews(reviewsToAdd);
 
       console.log(`퀴즈 "${quizTitle}" 공개 업로드 완료 (${questions.length}문제)`);
     } catch (error) {

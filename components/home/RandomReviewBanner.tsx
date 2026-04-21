@@ -3,14 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  limit,
-  db,
-} from '@/lib/repositories';
+import { reviewRepo } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 
@@ -34,25 +27,17 @@ export default function RandomReviewBanner() {
 
     try {
       // 오답 문제 가져오기
-      const reviewsQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', profile.uid),
-        where('reviewType', '==', 'wrong')
-      );
-      const snapshot = await getDocs(reviewsQuery);
+      const allWrongQuestions = await reviewRepo.fetchReviewsByUser(profile.uid, {
+        reviewType: 'wrong',
+      });
 
-      if (snapshot.empty) {
+      if (allWrongQuestions.length === 0) {
         alert('아직 오답 문제가 없습니다!');
         setLoading(false);
         return;
       }
 
       // 랜덤으로 5개 선택
-      const allWrongQuestions = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
       const shuffled = [...allWrongQuestions].sort(() => Math.random() - 0.5);
       const selected = shuffled.slice(0, Math.min(5, shuffled.length));
 

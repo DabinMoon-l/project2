@@ -16,7 +16,7 @@ import {
   type DocumentData,
 } from '@/lib/repositories';
 import type { Unsubscribe } from '@/lib/repositories';
-import { rankingRepo } from '@/lib/repositories';
+import { rankingRepo, quizRepo } from '@/lib/repositories';
 import { ref as rtdbRef, onValue, off as rtdbOff } from 'firebase/database';
 import { getRtdb } from '@/lib/firebase';
 import { rankPercentile } from '@/lib/utils/statistics';
@@ -483,28 +483,29 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       if (!baseData) return null;
 
       // 전체 퀴즈 결과 가져오기 (중복 제출 대비 quizId 기준 중복 제거)
-      const [quizResultsSnap, feedbacksSnap] = await Promise.all([
+      const [quizResultsList, feedbacksList] = await Promise.all([
         courseId
-          ? getDocs(query(
-              collection(db, 'quizResults'),
-              where('userId', '==', uid),
-              where('courseId', '==', courseId),
-              orderBy('createdAt', 'desc'),
-            )).catch(() => null)
-          : Promise.resolve(null),
-        getDocs(query(
-          collection(db, 'feedbacks'),
-          where('userId', '==', uid),
-          orderBy('createdAt', 'desc'),
-          limit(5),
-        )).catch(() => null),
+          ? quizRepo.fetchQuizResultsByUser<DocumentData>(uid, { courseId }).catch(() => [] as DocumentData[])
+          : Promise.resolve([] as DocumentData[]),
+        quizRepo.fetchFeedbacksByUser<DocumentData>(uid).catch(() => [] as DocumentData[]),
       ]);
+
+      // createdAt desc 정렬
+      const sortedResults = [...quizResultsList].sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      const sortedFeedbacks = [...feedbacksList].sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      }).slice(0, 5);
 
       // quizId 기준 중복 제거 (최신 1건만 유지, createdAt desc이므로 첫 등장이 최신)
       const seenQuizIds = new Set<string>();
       const recentQuizzes: { quizId: string; quizTitle: string; score: number; totalQuestions: number; completedAt: Date }[] = [];
-      for (const d of (quizResultsSnap?.docs ?? [])) {
-        const data = d.data();
+      for (const data of sortedResults) {
         const qid = data.quizId || '';
         if (seenQuizIds.has(qid)) continue;
         seenQuizIds.add(qid);
@@ -517,15 +518,12 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         });
       }
 
-      const recentFeedbacks = (feedbacksSnap?.docs ?? []).map(d => {
-        const data = d.data();
-        return {
-          feedbackId: d.id,
-          quizTitle: data.quizTitle || '퀴즈',
-          content: data.content || '',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-        };
-      });
+      const recentFeedbacks = sortedFeedbacks.map((data) => ({
+        feedbackId: data.id,
+        quizTitle: data.quizTitle || '퀴즈',
+        content: data.content || '',
+        createdAt: data.createdAt?.toDate?.() || new Date(),
+      }));
 
       // radarNorm에서 레이더 계산 (있으면)
       const norm = courseId ? _radarNormMap.get(courseId) : null;

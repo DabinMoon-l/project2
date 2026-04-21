@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { collection, query, where, orderBy, getDocs, limit, db } from '@/lib/repositories';
+import { postRepo } from '@/lib/repositories';
 import { useCourse } from '@/lib/contexts';
 
 interface SidebarPost {
@@ -37,22 +37,16 @@ export default function BoardListSidebar() {
 
     const loadPosts = async () => {
       try {
-        const q = query(
-          collection(db, 'posts'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-        const snap = await getDocs(q);
-        const items: SidebarPost[] = snap.docs.map(d => {
-          const data = d.data();
+        const docs = await postRepo.fetchAllPostsForCourse(userCourseId, 50);
+        const items: SidebarPost[] = docs.map(d => {
+          const data = d as Record<string, unknown>;
           return {
             id: d.id,
-            title: data.title || '제목 없음',
-            authorNickname: data.authorNickname || '익명',
-            createdAt: data.createdAt?.toMillis?.() || 0,
-            isPinned: data.isPinned || false,
-            commentCount: data.commentCount || 0,
+            title: (data.title as string) || '제목 없음',
+            authorNickname: (data.authorNickname as string) || '익명',
+            createdAt: (data.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() || 0,
+            isPinned: (data.isPinned as boolean) || false,
+            commentCount: (data.commentCount as number) || 0,
           };
         });
 

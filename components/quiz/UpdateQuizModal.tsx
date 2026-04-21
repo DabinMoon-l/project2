@@ -11,17 +11,10 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  doc,
-  addDoc,
-  updateDoc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
   serverTimestamp,
   Timestamp,
-  db,
+  reviewRepo,
+  quizRepo,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
@@ -332,22 +325,17 @@ export default function UpdateQuizModal({
       if (practiceOnly) {
         // Step 1: reviews 내용만 최신화 + quizUpdatedAt 갱신
         try {
-          const reviewsQuery = query(
-            collection(db, 'reviews'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', updateInfo.quizId)
-          );
-          const reviewsSnapshot = await getDocs(reviewsQuery);
+          const reviewDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, updateInfo.quizId);
           const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
 
-          for (const reviewDoc of reviewsSnapshot.docs) {
-            const reviewData = reviewDoc.data();
-            const questionId = reviewData.questionId;
+          for (const reviewDoc of reviewDocs) {
+            const reviewData = reviewDoc as Record<string, unknown>;
+            const questionId = reviewData.questionId as string;
 
             if (updatedQuestionIds.has(questionId)) {
               const updatedQ = questions.find((q) => q.questionId === questionId);
               if (updatedQ) {
-                await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+                await reviewRepo.updateReview(reviewDoc.id, {
                   question: updatedQ.questionText,
                   options: updatedQ.choices || [],
                   correctAnswer: updatedQ.correctAnswer,
@@ -356,7 +344,7 @@ export default function UpdateQuizModal({
                 });
               }
             } else {
-              await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+              await reviewRepo.updateReview(reviewDoc.id, {
                 quizUpdatedAt: serverTimestamp(),
               });
             }
@@ -419,7 +407,7 @@ export default function UpdateQuizModal({
       const newScore = Math.round((totalCorrect / totalQuestionCount) * 100);
 
       // 4. 업데이트 결과 저장
-      await addDoc(collection(db, 'quizResults'), {
+      await quizRepo.addQuizResult({
         userId: user.uid,
         quizId: updateInfo.quizId,
         quizTitle: updateInfo.quizTitle,
@@ -440,26 +428,21 @@ export default function UpdateQuizModal({
       });
 
       // 5. reviews 업데이트 (수정된 문제의 정답 여부, 답변, 복습횟수 반영)
-      const reviewsQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', updateInfo.quizId)
-      );
-      const reviewsSnapshot = await getDocs(reviewsQuery);
+      const reviewDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, updateInfo.quizId);
 
       // 업데이트된 문제의 questionId 집합
       const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
 
       // 각 리뷰 업데이트 (수정된 문제 + 전체 quizUpdatedAt 갱신)
-      for (const reviewDoc of reviewsSnapshot.docs) {
-        const reviewData = reviewDoc.data();
-        const questionId = reviewData.questionId;
+      for (const reviewDoc of reviewDocs) {
+        const reviewData = reviewDoc as Record<string, unknown>;
+        const questionId = reviewData.questionId as string;
 
         if (updatedQuestionIds.has(questionId)) {
           // 수정된 문제: 답변 + quizUpdatedAt 업데이트
           const result = questionResults.find((r) => r.questionId === questionId);
           if (result) {
-            const currentReviewType = reviewData.reviewType;
+            const currentReviewType = reviewData.reviewType as string | undefined;
             let newReviewType = currentReviewType;
 
             if (result.isCorrect && currentReviewType === 'wrong') {
@@ -468,11 +451,11 @@ export default function UpdateQuizModal({
               newReviewType = 'wrong';
             }
 
-            await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+            await reviewRepo.updateReview(reviewDoc.id, {
               userAnswer: result.userAnswer,
               isCorrect: result.isCorrect,
               reviewType: newReviewType,
-              reviewCount: (reviewData.reviewCount || 0) + 1,
+              reviewCount: ((reviewData.reviewCount as number) || 0) + 1,
               lastReviewedAt: serverTimestamp(),
               answeredAt: serverTimestamp(),
               quizUpdatedAt: serverTimestamp(),
@@ -480,7 +463,7 @@ export default function UpdateQuizModal({
           }
         } else {
           // 수정 안 된 문제: quizUpdatedAt만 갱신 (폴더/문제 뱃지 제거용)
-          await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+          await reviewRepo.updateReview(reviewDoc.id, {
             quizUpdatedAt: serverTimestamp(),
           });
         }
@@ -488,7 +471,7 @@ export default function UpdateQuizModal({
 
       // 6. 원본 quizResult의 questionScores 업데이트 (뱃지 제거용)
       // 원본 결과의 answeredAt을 업데이트해야 useQuizUpdate 훅에서 업데이트 완료로 인식
-      await updateDoc(doc(db, 'quizResults', updateInfo.originalResultId), {
+      await quizRepo.updateQuizResult(updateInfo.originalResultId, {
         questionScores: mergedScores,
         score: newScore,
         correctCount: totalCorrect,
@@ -496,7 +479,7 @@ export default function UpdateQuizModal({
 
       // 7. 퀴즈 문서의 userScores, averageScore 업데이트
       try {
-        const currentQuizDoc = await getDoc(doc(db, 'quizzes', updateInfo.quizId));
+        const currentQuizDoc = await quizRepo.getQuizRaw(updateInfo.quizId);
         if (currentQuizDoc.exists()) {
           const currentQuizData = currentQuizDoc.data();
           const currentUserScores = currentQuizData?.userScores || {};
@@ -510,7 +493,7 @@ export default function UpdateQuizModal({
             ? allScores.reduce((sum, s) => sum + s, 0) / allScores.length
             : 0;
 
-          await updateDoc(doc(db, 'quizzes', updateInfo.quizId), {
+          await quizRepo.updateQuizRaw(updateInfo.quizId, {
             [`userScores.${user.uid}`]: newScore,
             averageScore: Math.round(newAverageScore * 10) / 10,
           });

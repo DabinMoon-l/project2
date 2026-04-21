@@ -6,20 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  arrayUnion,
-  increment,
   serverTimestamp,
-  query,
-  where,
-  getDocs,
-  db,
+  reviewRepo,
+  quizRepo,
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -155,9 +144,9 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
             );
             if (hasMissingExps) {
               try {
-                const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+                const quizDoc = await quizRepo.getQuizRaw(quizId);
                 if (quizDoc.exists()) {
-                  const questions: FirestoreQuizQuestion[] = quizDoc.data().questions || [];
+                  const questions: FirestoreQuizQuestion[] = quizDoc.data()!.questions || [];
                   cachedResult.questionResults.forEach((qr: QuestionResult, qrIdx: number) => {
                     if (!qr.choiceExplanations && qr.type === 'multiple') {
                       // questionId 여러 형식으로 매칭 시도
@@ -188,9 +177,7 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
       }
 
       // 서버에 이미 제출 완료된 퀴즈인지 확인 (새로고침/재방문 시 중복 제출 방지)
-      const completionDocId = `${quizId}_${user.uid}`;
-      const completionDoc = await getDoc(doc(db, 'quiz_completions', completionDocId));
-      const alreadyCompleted = completionDoc.exists();
+      const alreadyCompleted = await quizRepo.isQuizCompleted(quizId, user.uid);
 
       const answersParam = searchParams.get('answers');
       let userAnswers: string[] = [];
@@ -207,13 +194,13 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
         }
       }
 
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+      const quizDoc = await quizRepo.getQuizRaw(quizId);
       if (!quizDoc.exists()) {
         setError('퀴즈를 찾을 수 없습니다.');
         return;
       }
 
-      const quizData = quizDoc.data();
+      const quizData = quizDoc.data()!;
       const questions = quizData.questions || [];
 
       let correctCount = 0;
@@ -482,7 +469,7 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
             };
           });
 
-          await addDoc(collection(db, 'quizResults'), {
+          await quizRepo.addQuizResult({
             userId: user.uid,
             quizId,
             quizTitle: quizData.title || '퀴즈',
@@ -503,15 +490,14 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
 
           // 폴백: quiz_completions 문서 생성 + userScores 업데이트
           try {
-            const completionDocId = `${quizId}_${user.uid}`;
-            await setDoc(doc(db, 'quiz_completions', completionDocId), {
+            await quizRepo.mergeQuizCompletion(quizId, user.uid, {
               quizId,
               userId: user.uid,
               score,
               attemptNo: 1,
               completedAt: serverTimestamp(),
-            }, { merge: true });
-            await updateDoc(doc(db, 'quizzes', quizId), {
+            });
+            await quizRepo.updateQuizRaw(quizId, {
               [`userScores.${user.uid}`]: score,
             });
           } catch (e) {
@@ -548,7 +534,7 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                 }
               }
             }
-            await addDoc(collection(db, 'reviews'), {
+            await reviewRepo.addReview({
               userId: user.uid,
               quizId,
               quizTitle: quizData.title || '퀴즈',
@@ -583,7 +569,6 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
               bogiQuestionText: questionResult.bogiQuestionText || null, // 보기 발문
               bogi: questionResult.bogi ? JSON.parse(JSON.stringify(questionResult.bogi)) : null, // 보기 박스
               choiceExplanations: questionResult.choiceExplanations || null, // 선지별 해설 (AI 문제용)
-              createdAt: serverTimestamp(),
               ...combinedFields,
             });
           }
@@ -627,7 +612,7 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                   }
                 }
 
-                await addDoc(collection(db, 'reviews'), {
+                await reviewRepo.addReview({
                   userId: user.uid,
                   quizId,
                   quizTitle: quizData.title || '퀴즈',
@@ -659,14 +644,13 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                   bogiQuestionText: subQ.bogiQuestionText || null,
                   bogi: subQ.bogi ? JSON.parse(JSON.stringify(subQ.bogi)) : null,
                   choiceExplanations: subQ.choiceExplanations || null, // 선지별 해설 (AI 문제용)
-                  createdAt: serverTimestamp(),
                   ...subCombinedFields,
                 });
               }
             } else {
               // 비결합형 문제: 개별 저장
               const normalizedWrongType = wrongAnswer.type === 'subjective' ? 'short' : wrongAnswer.type;
-              await addDoc(collection(db, 'reviews'), {
+              await reviewRepo.addReview({
                 userId: user.uid,
                 quizId,
                 quizTitle: quizData.title || '퀴즈',
@@ -698,7 +682,6 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                 bogiQuestionText: wrongAnswer.bogiQuestionText || null,
                 bogi: wrongAnswer.bogi ? JSON.parse(JSON.stringify(wrongAnswer.bogi)) : null,
                 choiceExplanations: wrongAnswer.choiceExplanations || null, // 선지별 해설 (AI 문제용)
-                createdAt: serverTimestamp(),
               });
             }
           }
@@ -745,23 +728,19 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
 
     try {
       // 기존 북마크 문서 조회
-      const bookmarkQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', resultData.quizId),
-        where('questionId', '==', questionId),
-        where('reviewType', '==', 'bookmark')
-      );
-      const existingBookmarks = await getDocs(bookmarkQuery);
+      const existingBookmarks = await reviewRepo.fetchReviewsByQuiz(user.uid, resultData.quizId, {
+        reviewType: 'bookmark',
+        questionId,
+      });
 
       if (wasBookmarked) {
         // 찜 해제: 기존 문서들 삭제
-        for (const docSnapshot of existingBookmarks.docs) {
-          await deleteDoc(docSnapshot.ref);
+        for (const b of existingBookmarks) {
+          await reviewRepo.deleteReview(b.id);
         }
       } else {
         // 찜하기: 기존 문서가 없을 때만 추가
-        if (existingBookmarks.empty) {
+        if (existingBookmarks.length === 0) {
           // 타입 정규화: subjective -> short
           const normalizedBookmarkType = question.type === 'subjective' ? 'short' : question.type;
           // 결합형 필드 준비
@@ -781,7 +760,7 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
               }
             }
           }
-          await addDoc(collection(db, 'reviews'), {
+          await reviewRepo.addReview({
             userId: user.uid,
             quizId: resultData.quizId,
             quizTitle: resultData.quizTitle,
@@ -815,7 +794,6 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
             bogiQuestionText: question.bogiQuestionText || null, // 보기 발문
             bogi: question.bogi ? JSON.parse(JSON.stringify(question.bogi)) : null, // 보기 박스
             choiceExplanations: question.choiceExplanations || null, // 선지별 해설 (AI 문제용)
-            createdAt: serverTimestamp(),
             ...bookmarkCombinedFields,
           });
         }

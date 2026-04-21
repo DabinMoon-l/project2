@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-  collection, query, where, getDocs, Timestamp, db,
+  collection, query, where, getDocs, Timestamp, db, quizRepo, type DocumentData,
 } from '@/lib/repositories';
 import type { CourseId } from '@/lib/types/course';
 import {
@@ -394,24 +394,23 @@ export function useProfessorStats() {
 
     try {
       // 전체 퀴즈 + 학생 병렬 조회
-      const [quizSnap, usersSnap] = await Promise.all([
-        getDocs(query(collection(db, 'quizzes'), where('courseId', '==', courseId))),
+      const [quizDocs, usersSnap] = await Promise.all([
+        quizRepo.fetchQuizzesByCourse<DocumentData>(courseId),
         getDocs(query(collection(db, 'users'), where('role', '==', 'student'), where('courseId', '==', courseId))),
       ]);
 
       const quizzes: QuizDoc[] = [];
       const quizIds: string[] = [];
-      quizSnap.forEach(d => {
-        const data = d.data();
+      quizDocs.forEach((data) => {
         quizzes.push({
-          id: d.id,
+          id: data.id,
           type: data.type,
           courseId: data.courseId,
           difficulty: data.difficulty,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
           questions: data.questions || [],
         });
-        quizIds.push(d.id);
+        quizIds.push(data.id);
       });
 
       const userClassMap: Record<string, ClassType> = {};
@@ -436,15 +435,8 @@ export function useProfessorStats() {
       // quizResults 배치 조회
       const results: ResultDoc[] = [];
       if (quizIds.length > 0) {
-        const batchPromises = [];
-        for (let i = 0; i < quizIds.length; i += 30) {
-          const batch = quizIds.slice(i, i + 30);
-          batchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
-        }
-        const batchResults = await Promise.all(batchPromises);
-        batchResults.forEach(resSnap => {
-          resSnap.forEach(d => {
-            const r = d.data();
+        const resultDocs = await quizRepo.fetchQuizResultsByQuizzes<DocumentData>(quizIds);
+        resultDocs.forEach((r) => {
             if (!userClassMap[r.userId]) return;
             results.push({
               userId: r.userId,
@@ -456,7 +448,6 @@ export function useProfessorStats() {
               createdAt: r.createdAt instanceof Timestamp ? r.createdAt.toDate() : new Date(r.createdAt),
               isUpdate: r.isUpdate === true,
             });
-          });
         });
       }
 

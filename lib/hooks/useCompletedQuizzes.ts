@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, db, query, where, onSnapshot, getDocs, limit, Timestamp } from '@/lib/repositories';
+import { quizRepo, Timestamp } from '@/lib/repositories';
 import type { User } from 'firebase/auth';
 import type { LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 
@@ -36,18 +36,14 @@ export function useCompletedQuizzes(
       return;
     }
 
-    const completionsRef = collection(db, 'quiz_completions');
-    const q = query(completionsRef, where('userId', '==', user.uid));
-
-    const unsub = onSnapshot(q, async (snap) => {
+    const unsub = quizRepo.subscribeQuizCompletionsByUser(user.uid, async (completions) => {
       const completionMap = new Map<string, { score: number; total: number; courseId: string | null; completedAt: Timestamp | null }>();
-      snap.docs.forEach(d => {
-        const data = d.data();
-        completionMap.set(data.quizId, {
-          score: data.score ?? 0,
-          total: data.totalCount ?? data.totalQuestions ?? 0,
-          courseId: data.courseId ?? null,
-          completedAt: data.completedAt,
+      completions.forEach((data) => {
+        completionMap.set(data.quizId as string, {
+          score: (data.score as number) ?? 0,
+          total: (data.totalCount as number) ?? (data.totalQuestions as number) ?? 0,
+          courseId: (data.courseId as string) ?? null,
+          completedAt: data.completedAt as Timestamp | null,
         });
       });
 
@@ -69,24 +65,13 @@ export function useCompletedQuizzes(
       // 퀴즈 메타데이터 배치 로드 (캐시 우선, 미캐싱분만 Firestore 조회)
       const quizzes: LearningQuiz[] = [];
       const foundIds = new Set<string>();
-      const BATCH = 30;
 
       // 캐시에 없는 ID만 fetch
       const uncachedIds = quizIds.filter(id => !_quizMetaCache.has(id));
       if (uncachedIds.length > 0) {
-        const metaBatches = [];
-        for (let i = 0; i < uncachedIds.length; i += BATCH) {
-          metaBatches.push(uncachedIds.slice(i, i + BATCH));
-        }
-        const metaResults = await Promise.all(
-          metaBatches.map(batch =>
-            getDocs(query(collection(db, 'quizzes'), where('__name__', 'in', batch)))
-          )
-        );
-        for (const batchSnap of metaResults) {
-          batchSnap.docs.forEach(d => {
-            _quizMetaCache.set(d.id, { id: d.id, ...d.data() });
-          });
+        const quizDocs = await quizRepo.fetchQuizzesByIds<Record<string, unknown>>(uncachedIds);
+        for (const data of quizDocs) {
+          _quizMetaCache.set(data.id, data);
         }
         // 존재하지 않는 퀴즈도 null로 캐시 (재조회 방지)
         for (const id of uncachedIds) {
@@ -135,19 +120,16 @@ export function useCompletedQuizzes(
             let quizType: string | undefined;
             let quizIsPublic = false;
             try {
-              const resultSnap = await getDocs(query(
-                collection(db, 'quizResults'),
-                where('userId', '==', user.uid),
-                where('quizId', '==', missingId),
-                limit(1)
-              ));
-              if (!resultSnap.empty) {
-                const resultData = resultSnap.docs[0].data();
-                title = resultData.quizTitle || '퀴즈';
-                totalCount = resultData.totalCount || totalCount;
-                quizCreatorId = resultData.quizCreatorId || undefined;
-                quizType = resultData.quizType || undefined;
-                quizIsPublic = resultData.quizIsPublic ?? false;
+              const results = await quizRepo.fetchQuizResultsByUserAndQuiz<Record<string, unknown>>(
+                user.uid, missingId, 1,
+              );
+              if (results.length > 0) {
+                const resultData = results[0];
+                title = (resultData.quizTitle as string) || '퀴즈';
+                totalCount = (resultData.totalCount as number) || totalCount;
+                quizCreatorId = (resultData.quizCreatorId as string) || undefined;
+                quizType = (resultData.quizType as string) || undefined;
+                quizIsPublic = (resultData.quizIsPublic as boolean) ?? false;
               }
             } catch { /* 무시 */ }
             if (!quizType && quizCreatorId && quizCreatorId !== user.uid) {

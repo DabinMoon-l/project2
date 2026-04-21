@@ -11,6 +11,14 @@
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  DEFAULT_ORG_ID_SECRET,
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  supabaseDualDeleteReviewsByQuiz,
+  supabaseDualBatchUpsertReviews,
+  type SupabaseReviewInput,
+} from "./utils/supabase";
 
 /** Firestore 퀴즈 문제 필드 (reviews 생성에 필요한 부분) */
 interface QuizQuestionData {
@@ -40,12 +48,85 @@ interface QuizQuestionData {
 
 const db = getFirestore();
 
+interface QuestionScoreEntry {
+  correctAnswer?: unknown;
+  userAnswer?: unknown;
+  isCorrect?: boolean;
+}
+
+/** reviewsGenerator 전용: Firestore review 1건 → Supabase 입력 변환 */
+function toSupabaseReviewInput(
+  firestoreId: string,
+  userId: string,
+  firestoreQuizId: string,
+  questionId: string,
+  q: QuizQuestionData,
+  qs: QuestionScoreEntry,
+  quizData: FirebaseFirestore.DocumentData,
+  reviewType: "solved" | "wrong",
+  bookmarkedQuestionIds: Set<string>,
+  preserved: { count: number; lastAt: FirebaseFirestore.Timestamp | null } | undefined,
+): SupabaseReviewInput {
+  let normalizedType = q.type || "multiple";
+  if (normalizedType === "short") normalizedType = "short_answer";
+
+  const questionData: Record<string, unknown> = {
+    question: q.text || "",
+    type: normalizedType,
+    options: q.choices || [],
+    correctAnswer: qs.correctAnswer,
+    userAnswer: qs.userAnswer,
+    explanation: q.explanation || "",
+    choiceExplanations: q.choiceExplanations || null,
+    image: q.image || null,
+    imageUrl: q.imageUrl || null,
+    combinedGroupId: q.combinedGroupId ?? null,
+    combinedIndex: q.combinedIndex ?? null,
+    combinedTotal: q.combinedTotal ?? null,
+    passage: q.passage ?? null,
+    passageType: q.passageType ?? null,
+    passageImage: q.passageImage ?? null,
+    koreanAbcItems: q.koreanAbcItems ?? null,
+    passageMixedExamples: q.passageMixedExamples ?? null,
+    commonQuestion: q.commonQuestion ?? null,
+    combinedMainText: q.combinedMainText ?? null,
+    bogi: q.bogi ?? null,
+    mixedExamples: q.mixedExamples ?? null,
+  };
+
+  return {
+    firestoreId,
+    userId,
+    firestoreQuizId,
+    courseCode: (quizData.courseId as string) || null,
+    questionId,
+    chapterId: q.chapterId ?? null,
+    chapterDetailId: q.chapterDetailId ?? null,
+    reviewType,
+    isCorrect: qs.isCorrect ?? null,
+    isBookmarked: bookmarkedQuestionIds.has(questionId),
+    reviewCount: preserved?.count ?? 0,
+    lastReviewedAt: preserved?.lastAt ? preserved.lastAt.toDate() : null,
+    questionData,
+    metadata: {
+      quizTitle: quizData.title || "",
+      quizCreatorId: quizData.creatorId || null,
+      quizUpdatedAt: quizData.updatedAt?.toDate?.()?.toISOString?.() || null,
+    },
+  };
+}
+
 export const generateReviewsOnResult = onDocumentCreated(
   {
     document: "quizResults/{resultId}",
     region: "asia-northeast3",
     memory: "512MiB",
     timeoutSeconds: 120,
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const snapshot = event.data;
@@ -122,6 +203,9 @@ export const generateReviewsOnResult = onDocumentCreated(
         await deleteBatch.commit();
       }
 
+      // Supabase 듀얼 라이트: 같은 user_id + quiz_id reviews 전체 삭제
+      await supabaseDualDeleteReviewsByQuiz(userId, quizId);
+
       // 보존된 데이터를 아래에서 사용 (클로저 캡처)
       restoredBookmarkedQuestionIds = bookmarkedQuestionIds;
       restoredPreservedReviewCounts = preservedReviewCounts;
@@ -135,6 +219,7 @@ export const generateReviewsOnResult = onDocumentCreated(
     // reviews 배치 생성
     const batch = db.batch();
     let batchCount = 0;
+    const supabaseInputs: SupabaseReviewInput[] = [];
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -213,19 +298,27 @@ export const generateReviewsOnResult = onDocumentCreated(
       }
 
       // solved 타입 저장
-      batch.create(db.collection("reviews").doc(), {
+      const solvedRef = db.collection("reviews").doc();
+      batch.create(solvedRef, {
         ...reviewBase,
         reviewType: "solved",
       });
       batchCount++;
+      supabaseInputs.push(
+        toSupabaseReviewInput(solvedRef.id, userId, quizId, qId, q, qs, quizData, "solved", bookmarkedQuestionIds, preserved),
+      );
 
       // wrong 타입 추가 저장 (오답만)
       if (!qs.isCorrect) {
-        batch.create(db.collection("reviews").doc(), {
+        const wrongRef = db.collection("reviews").doc();
+        batch.create(wrongRef, {
           ...reviewBase,
           reviewType: "wrong",
         });
         batchCount++;
+        supabaseInputs.push(
+          toSupabaseReviewInput(wrongRef.id, userId, quizId, qId, q, qs, quizData, "wrong", bookmarkedQuestionIds, preserved),
+        );
       }
 
       // Firestore batch 한계 (500 operations)
@@ -237,6 +330,11 @@ export const generateReviewsOnResult = onDocumentCreated(
 
     if (batchCount > 0) {
       await batch.commit();
+    }
+
+    // Supabase 듀얼 라이트: reviews 배치 upsert
+    if (supabaseInputs.length > 0) {
+      await supabaseDualBatchUpsertReviews(supabaseInputs);
     }
 
     // reviews 생성 완료 플래그

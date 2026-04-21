@@ -8,22 +8,9 @@
 
 import { useState, useCallback } from 'react';
 import {
-  collection,
-  doc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   Timestamp,
-  db,
-  type DocumentSnapshot,
-  type QueryDocumentSnapshot,
+  quizRepo,
+  type QuizPageCursor,
   type DocumentData,
 } from '@/lib/repositories';
 import { computeQuizStatistics, type QuizResultData } from '@/lib/utils/quizStatsComputation';
@@ -50,6 +37,7 @@ export interface QuizQuestion {
   choices?: string[];
   answer: number | number[] | string;
   explanation?: string;
+  choiceExplanations?: string[];
   chapterId?: string;
   chapterDetailId?: string;
   rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
@@ -191,7 +179,6 @@ interface UseProfessorQuizReturn {
 // 상수
 // ============================================================
 
-const QUIZZES_COLLECTION = 'quizzes';
 const PAGE_SIZE = 10;
 
 // ============================================================
@@ -199,12 +186,11 @@ const PAGE_SIZE = 10;
 // ============================================================
 
 /**
- * Firestore 문서를 ProfessorQuiz 타입으로 변환
+ * 평탄화된 QuizDoc 를 ProfessorQuiz 타입으로 변환
  */
-const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz => {
-  const data = doc.data()!;
+const docToQuiz = (data: DocumentData & { id: string }): ProfessorQuiz => {
   return {
-    id: doc.id,
+    id: data.id,
     title: data.title,
     description: data.description,
     type: data.type,
@@ -268,7 +254,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [lastCursor, setLastCursor] = useState<QuizPageCursor | null>(null);
   const [currentCreatorUid, setCurrentCreatorUid] = useState<string | null>(null);
   const [currentFilters, setCurrentFilters] = useState<QuizFilterOptions>({});
 
@@ -293,29 +279,19 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         const hasClassFilter = options.targetClass && options.targetClass !== 'all';
         const effectivePageSize = hasClassFilter ? basePageSize * 3 : basePageSize;
 
-        // 기본 쿼리: 생성자 필터 + 최신순 정렬
-        let q = query(
-          collection(db, QUIZZES_COLLECTION),
-          where('creatorUid', '==', creatorUid),
-          where('type', 'in', typeFilter),
-          orderBy('createdAt', 'desc'),
-          limit(effectivePageSize)
+        const isPublishedFilter =
+          options.isPublished !== undefined && options.isPublished !== 'all'
+            ? options.isPublished
+            : undefined;
+
+        const page = await quizRepo.fetchQuizzesForProfessorPage(
+          creatorUid,
+          typeFilter,
+          effectivePageSize,
+          isPublishedFilter,
         );
 
-        // 공개 상태 필터
-        if (options.isPublished !== undefined && options.isPublished !== 'all') {
-          q = query(
-            collection(db, QUIZZES_COLLECTION),
-            where('creatorUid', '==', creatorUid),
-            where('type', 'in', typeFilter),
-            where('isPublished', '==', options.isPublished),
-            orderBy('createdAt', 'desc'),
-            limit(effectivePageSize)
-          );
-        }
-
-        const snapshot = await getDocs(q);
-        let fetchedQuizzes = snapshot.docs.map(docToQuiz);
+        let fetchedQuizzes = page.items.map((d) => docToQuiz(d as DocumentData & { id: string }));
 
         // 대상 반 필터 (클라이언트 측 필터링 - Firestore 복합 쿼리 제한 회피)
         if (hasClassFilter) {
@@ -325,8 +301,8 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         }
 
         setQuizzes(fetchedQuizzes);
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-        setHasMore(snapshot.docs.length === effectivePageSize);
+        setLastCursor(page.nextCursor);
+        setHasMore(page.hasMore);
       } catch (err) {
         const message = err instanceof Error ? err.message : '퀴즈 목록을 불러오는데 실패했습니다.';
         setError(message);
@@ -342,7 +318,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
    * 더 불러오기 (무한 스크롤)
    */
   const fetchMore = useCallback(async (): Promise<void> => {
-    if (!currentCreatorUid || !lastDoc || !hasMore || loadingMore) return;
+    if (!currentCreatorUid || !lastCursor || !hasMore || loadingMore) return;
 
     try {
       setLoadingMore(true);
@@ -354,30 +330,20 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       const hasClassFilter = currentFilters.targetClass && currentFilters.targetClass !== 'all';
       const effectivePageSize = hasClassFilter ? PAGE_SIZE * 3 : PAGE_SIZE;
 
-      let q = query(
-        collection(db, QUIZZES_COLLECTION),
-        where('creatorUid', '==', currentCreatorUid),
-        where('type', 'in', typeFilter),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastDoc),
-        limit(effectivePageSize)
+      const isPublishedFilter =
+        currentFilters.isPublished !== undefined && currentFilters.isPublished !== 'all'
+          ? currentFilters.isPublished
+          : undefined;
+
+      const page = await quizRepo.fetchQuizzesForProfessorPage(
+        currentCreatorUid,
+        typeFilter,
+        effectivePageSize,
+        isPublishedFilter,
+        lastCursor,
       );
 
-      // 공개 상태 필터
-      if (currentFilters.isPublished !== undefined && currentFilters.isPublished !== 'all') {
-        q = query(
-          collection(db, QUIZZES_COLLECTION),
-          where('creatorUid', '==', currentCreatorUid),
-          where('type', 'in', typeFilter),
-          where('isPublished', '==', currentFilters.isPublished),
-          orderBy('createdAt', 'desc'),
-          startAfter(lastDoc),
-          limit(effectivePageSize)
-        );
-      }
-
-      const snapshot = await getDocs(q);
-      let fetchedQuizzes = snapshot.docs.map(docToQuiz);
+      let fetchedQuizzes = page.items.map((d) => docToQuiz(d as DocumentData & { id: string }));
 
       // 대상 반 필터
       if (hasClassFilter) {
@@ -387,8 +353,8 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       }
 
       setQuizzes((prev) => [...prev, ...fetchedQuizzes]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === effectivePageSize);
+      setLastCursor(page.nextCursor);
+      setHasMore(page.hasMore);
     } catch (err) {
       const message = err instanceof Error ? err.message : '더 불러오는데 실패했습니다.';
       setError(message);
@@ -396,21 +362,16 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
     } finally {
       setLoadingMore(false);
     }
-  }, [currentCreatorUid, currentFilters, lastDoc, hasMore, loadingMore]);
+  }, [currentCreatorUid, currentFilters, lastCursor, hasMore, loadingMore]);
 
   /**
    * 단일 퀴즈 조회
    */
   const fetchQuiz = useCallback(async (quizId: string): Promise<ProfessorQuiz | null> => {
     try {
-      const docRef = doc(db, QUIZZES_COLLECTION, quizId);
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
-        return null;
-      }
-
-      return docToQuiz(docSnap);
+      const quizData = await quizRepo.getQuiz<DocumentData>(quizId);
+      if (!quizData) return null;
+      return docToQuiz(quizData);
     } catch (err) {
       const message = err instanceof Error ? err.message : '퀴즈를 불러오는데 실패했습니다.';
       setError(message);
@@ -430,21 +391,12 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
     async (quizId: string, questions: QuizQuestion[]): Promise<QuizStatistics | null> => {
       try {
         // quizResults에서 해당 퀴즈의 모든 결과 가져오기
-        const resultsQuery = query(
-          collection(db, 'quizResults'),
-          where('quizId', '==', quizId)
-        );
-        const resultsSnapshot = await getDocs(resultsQuery);
-
-        // Firestore 문서 → 순수 데이터로 변환 (Firestore 의존성 제거)
-        const resultDocs: QuizResultData[] = resultsSnapshot.docs.map(d => {
-          const data = d.data();
-          return {
-            answers: data.answers || [],
-            questionScores: data.questionScores,
-            createdAt: data.createdAt,
-          };
-        });
+        const results = await quizRepo.fetchQuizResultsByQuiz<DocumentData>(quizId);
+        const resultDocs: QuizResultData[] = results.map((data) => ({
+          answers: data.answers || [],
+          questionScores: data.questionScores,
+          createdAt: data.createdAt,
+        }));
 
         // 순수 함수로 통계 계산 위임
         return computeQuizStatistics(questions, resultDocs);
@@ -506,12 +458,12 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           updatedAt: now,
         };
 
-        const docRef = await addDoc(collection(db, QUIZZES_COLLECTION), quizData);
+        const newId = await quizRepo.createQuiz(quizData);
 
         // 목록에 추가
         const newQuiz: ProfessorQuiz = {
           ...input,
-          id: docRef.id,
+          id: newId,
           courseId: input.courseId || undefined,
           type: input.quizType || 'professor',
           questionCount: actualQuestionCount,
@@ -526,7 +478,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         setQuizzes((prev) => [newQuiz, ...prev]);
 
-        return docRef.id;
+        return newId;
       } catch (err) {
         const message = err instanceof Error ? err.message : '퀴즈 생성에 실패했습니다.';
         setError(message);
@@ -586,8 +538,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         };
         const updateData = removeUndefined(raw) as Record<string, unknown>;
 
-        const docRef = doc(db, QUIZZES_COLLECTION, quizId);
-        await updateDoc(docRef, updateData);
+        await quizRepo.updateQuizRaw(quizId, updateData);
 
         // 목록 업데이트
         const actualQuestionCount = input.questionCount ?? input.questions?.length;
@@ -621,8 +572,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
     try {
       setError(null);
 
-      const docRef = doc(db, QUIZZES_COLLECTION, quizId);
-      await deleteDoc(docRef);
+      await quizRepo.deleteQuiz(quizId);
 
       // 목록에서 제거
       setQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
@@ -642,8 +592,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       try {
         setError(null);
 
-        const docRef = doc(db, QUIZZES_COLLECTION, quizId);
-        await updateDoc(docRef, {
+        await quizRepo.updateQuizRaw(quizId, {
           isPublished,
           updatedAt: Timestamp.now(),
         });

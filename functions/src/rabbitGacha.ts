@@ -15,6 +15,19 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getBaseStats } from "./utils/rabbitStats";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteRabbit,
+  supabaseDualWriteRabbitHolding,
+} from "./utils/supabase";
+
+const RABBIT_DUAL_WRITE_SECRETS = [
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+];
 
 /** Roll 결과 타입 (Phase 1 반환값) */
 interface RollResult {
@@ -43,6 +56,8 @@ interface ClaimResult {
  * 4. rabbit 문서 존재 확인 → undiscovered / discovered 판별
  * 5. lastGachaExp 갱신 + pendingSpin 저장
  */
+// spinRabbitGacha: users 문서만 건드림 (lastGachaExp/pendingSpin/spinLock).
+// rabbits/rabbit_holdings 에는 쓰지 않으므로 듀얼 라이트 불필요.
 export const spinRabbitGacha = onCall(
   { region: "asia-northeast3" },
   async (request) => {
@@ -224,7 +239,7 @@ export const spinRabbitGacha = onCall(
  *   4. equipSlot 파라미터로 슬롯 지정 가능
  */
 export const claimGachaRabbit = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: RABBIT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -323,6 +338,15 @@ export const claimGachaRabbit = onCall(
       let needsNaming = false;
       let rabbitName: string | null;
 
+      // 트랜잭션 이후 Supabase dual-write 에 쓸 값 캡처
+      let rabbitUpsertPayload: {
+        name: string | null;
+        firstDiscovererUserId?: string;
+        firstDiscovererName?: string;
+        discoverers: Array<{ userId: string; nickname: string; discoveryOrder: number }>;
+        discovererCount: number;
+      };
+
       if (!rabbitData) {
         // 미존재 → 최초 발견자 등록
         if (!trimmedName) {
@@ -377,10 +401,26 @@ export const claimGachaRabbit = onCall(
           level: 1,
           stats: getBaseStats(rabbitId),
         });
+
+        rabbitUpsertPayload = {
+          name: trimmedName,
+          firstDiscovererUserId: userId,
+          firstDiscovererName: userName,
+          discoverers: [{ userId, nickname: userName, discoveryOrder: 1 }],
+          discovererCount: 1,
+        };
       } else {
         // 존재 → 후속 발견자 등록
         discoveryOrder = (rabbitData.discovererCount || 1) + 1;
         rabbitName = rabbitData.name || null;
+
+        // Supabase 는 FieldValue.increment/arrayUnion 을 직접 인식 못 함 → 새 값 계산
+        const existingDiscoverers: Array<{ userId: string; nickname: string; discoveryOrder: number }> =
+          Array.isArray(rabbitData.discoverers) ? rabbitData.discoverers : [];
+        const nextDiscoverers = [
+          ...existingDiscoverers,
+          { userId, nickname: userName, discoveryOrder },
+        ];
 
         transaction.update(rabbitRef, {
           discovererCount: FieldValue.increment(1),
@@ -401,6 +441,12 @@ export const claimGachaRabbit = onCall(
           level: 1,
           stats: getBaseStats(rabbitId),
         });
+
+        rabbitUpsertPayload = {
+          name: rabbitName,
+          discoverers: nextDiscoverers,
+          discovererCount: discoveryOrder,
+        };
       }
 
       // 장착 처리: 빈 슬롯 자동 장착 (2개 미만)
@@ -443,9 +489,23 @@ export const claimGachaRabbit = onCall(
         discoveryOrder,
         needsNaming,
         rabbitName,
-      } as ClaimResult;
+        // 트랜잭션 외부에서 dual-write 하기 위한 payload (반환 타입엔 없음)
+        _supabasePayload: rabbitUpsertPayload,
+      } as ClaimResult & { _supabasePayload: typeof rabbitUpsertPayload };
     });
 
-    return result;
+    // Supabase dual-write (트랜잭션 성공 후)
+    await supabaseDualWriteRabbit(courseId, rabbitId, result._supabasePayload);
+    await supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
+      level: 1,
+      stats: getBaseStats(rabbitId),
+      discoveryOrder: result.discoveryOrder,
+      discoveredAt: new Date(),
+    });
+
+    // 내부 페이로드 노출 방지
+    const { _supabasePayload: _unused, ...publicResult } = result;
+    void _unused;
+    return publicResult;
   }
 );

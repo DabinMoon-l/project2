@@ -9,19 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  collection,
-  doc,
-  query,
-  where,
-  limit,
-  getDocs,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  serverTimestamp,
-  db,
-} from '@/lib/repositories';
+import { postRepo } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import type { Post, UseLikeReturn, UseMyLikedPostsReturn } from './useBoardTypes';
 import { docToPost } from './useBoardUtils';
@@ -53,23 +41,7 @@ export const useLike = (): UseLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const likeDocId = `${user.uid}_post_${postId}`;
-        const likeRef = doc(db, 'likes', likeDocId);
-        const likeSnap = await getDoc(likeRef);
-
-        if (likeSnap.exists()) {
-          await deleteDoc(likeRef);
-        } else {
-          const postSnap = await getDoc(doc(db, 'posts', postId));
-          const postAuthorId = postSnap.data()?.authorId || postSnap.data()?.userId || '';
-          await setDoc(likeRef, {
-            userId: user.uid,
-            targetType: 'post',
-            targetId: postId,
-            targetUserId: postAuthorId,
-            createdAt: serverTimestamp(),
-          });
-        }
+        await postRepo.togglePostLike(postId, user.uid);
 
         return true;
       } catch (err) {
@@ -120,23 +92,7 @@ export const useCommentLike = (): UseCommentLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const likeDocId = `${user.uid}_comment_${commentId}`;
-        const likeRef = doc(db, 'likes', likeDocId);
-        const likeSnap = await getDoc(likeRef);
-
-        if (likeSnap.exists()) {
-          await deleteDoc(likeRef);
-        } else {
-          const commentSnap = await getDoc(doc(db, 'comments', commentId));
-          const commentAuthorId = commentSnap.data()?.authorId || commentSnap.data()?.userId || '';
-          await setDoc(likeRef, {
-            userId: user.uid,
-            targetType: 'comment',
-            targetId: commentId,
-            targetUserId: commentAuthorId,
-            createdAt: serverTimestamp(),
-          });
-        }
+        await postRepo.toggleCommentLike(commentId, user.uid);
 
         return true;
       } catch (err) {
@@ -173,14 +129,9 @@ export const useMyLikedPosts = (skip = false): UseMyLikedPostsReturn => {
       setLoading(true);
       setError(null);
 
-      const likedQuery = query(
-        collection(db, 'posts'),
-        where('likedBy', 'array-contains', user.uid),
-        limit(30)
-      );
-
-      const snapshot = await getDocs(likedQuery);
-      const likedPosts = snapshot.docs.map(docToPost)
+      const raw = await postRepo.fetchLikedPostsByUser(user.uid, 30);
+      const likedPosts = raw
+        .map((d) => docToPost(d))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
       setPosts(likedPosts);

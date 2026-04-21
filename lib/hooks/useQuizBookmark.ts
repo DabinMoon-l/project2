@@ -16,12 +16,11 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  updateDoc,
   increment,
   serverTimestamp,
-  documentId,
   Timestamp,
   db,
+  quizRepo,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
@@ -132,32 +131,21 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
 
       // 퀴즈 정보 + 완료 여부를 배치 조회 (N+1 → 2~4 쿼리)
       const quizIds = Array.from(ids);
-      const BATCH_SIZE = 30; // Firestore 'in' 쿼리 최대 30개
 
       // 퀴즈 문서 배치 조회
       const quizDataMap2 = new Map<string, any>();
-      for (let i = 0; i < quizIds.length; i += BATCH_SIZE) {
-        const batch = quizIds.slice(i, i + BATCH_SIZE);
-        const quizSnap = await getDocs(
-          query(collection(db, 'quizzes'), where(documentId(), 'in', batch))
-        );
-        for (const d of quizSnap.docs) {
-          quizDataMap2.set(d.id, d.data());
-        }
+      const quizDocs = await quizRepo.fetchQuizzesByIds<Record<string, unknown>>(quizIds);
+      for (const q of quizDocs) {
+        quizDataMap2.set(q.id, q);
       }
 
       // 완료 여부 배치 조회
       const completionSet = new Set<string>();
       if (user) {
         const completionIds = quizIds.map(qid => `${qid}_${user.uid}`);
-        for (let i = 0; i < completionIds.length; i += BATCH_SIZE) {
-          const batch = completionIds.slice(i, i + BATCH_SIZE);
-          const compSnap = await getDocs(
-            query(collection(db, 'quiz_completions'), where(documentId(), 'in', batch))
-          );
-          for (const d of compSnap.docs) {
-            completionSet.add(d.id);
-          }
+        const compDocs = await quizRepo.fetchQuizCompletionsByIds<Record<string, unknown>>(completionIds);
+        for (const c of compDocs) {
+          completionSet.add(c.id);
         }
       }
 
@@ -235,7 +223,6 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
     if (!user) return;
 
     const bookmarkRef = doc(db, 'quizBookmarks', `${user.uid}_${quizId}`);
-    const quizRef = doc(db, 'quizzes', quizId);
     const wasBookmarked = bookmarkedQuizIds.has(quizId);
 
     // 낙관적 업데이트: 즉시 UI 반영
@@ -253,7 +240,7 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
     try {
       if (wasBookmarked) {
         await deleteDoc(bookmarkRef);
-        await updateDoc(quizRef, { bookmarkCount: increment(-1) });
+        await quizRepo.updateQuizRaw(quizId, { bookmarkCount: increment(-1) });
       } else {
         await setDoc(bookmarkRef, {
           userId: user.uid,
@@ -261,7 +248,7 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
           courseId: userCourseId || null,
           bookmarkedAt: serverTimestamp(),
         });
-        await updateDoc(quizRef, { bookmarkCount: increment(1) });
+        await quizRepo.updateQuizRaw(quizId, { bookmarkCount: increment(1) });
         // 추가 시 배경에서 전체 새로고침 (퀴즈 상세 정보 포함)
         fetchBookmarks();
       }

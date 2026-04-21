@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { collection, query, where, getDocs, db } from '@/lib/repositories';
+import { reviewRepo } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 
@@ -51,25 +51,22 @@ export default function ReviewListSidebar() {
 
     const loadReviews = async () => {
       try {
-        const q = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('courseId', '==', userCourseId)
-        );
-        const snap = await getDocs(q);
+        const docs = await reviewRepo.fetchReviewsByUser(user.uid, {
+          courseId: userCourseId,
+        });
 
         // quizId별 + type별 그룹화
         const reviewMap = new Map<string, SidebarReview>();
-        snap.forEach(d => {
-          const data = d.data();
-          const quizId = data.quizId || d.id;
-          const type = data.filterType || data.type || 'wrong';
+        docs.forEach(d => {
+          const data = d as Record<string, unknown>;
+          const quizId = (data.quizId as string) || d.id;
+          const type = ((data.filterType as string) || (data.type as string) || 'wrong') as SidebarReview['type'];
           const key = `${type}_${quizId}`;
 
           if (!reviewMap.has(key)) {
             reviewMap.set(key, {
               id: quizId,
-              quizTitle: data.quizTitle || '제목 없음',
+              quizTitle: (data.quizTitle as string) || '제목 없음',
               type,
               questionCount: 1,
             });

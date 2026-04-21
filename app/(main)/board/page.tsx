@@ -4,7 +4,7 @@ import { useCallback, useState, useMemo, memo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, db } from '@/lib/repositories';
+import { postRepo } from '@/lib/repositories';
 import { Skeleton, ScrollToTopButton } from '@/components/common';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import { usePosts, usePinnedPosts, useMyPrivatePost, type Post, type Comment, type BoardTag, BOARD_TAGS } from '@/lib/hooks/useBoard';
@@ -514,33 +514,14 @@ export default function BoardPage() {
     const postIds = postIdsKey.split(',').filter(Boolean);
     if (postIds.length === 0) return;
 
-    // Firestore는 'in' 쿼리에 최대 30개까지만 지원
-    const chunks: string[][] = [];
-    for (let i = 0; i < postIds.length; i += 30) {
-      chunks.push(postIds.slice(i, i + 30));
-    }
-
-    // chunk별 댓글 결과를 저장할 맵
-    const chunkResults = new Map<number, Map<string, Comment[]>>();
-    const unsubscribes: (() => void)[] = [];
-
     // 모든 chunk 결과를 합쳐서 정렬 후 setCommentsMap (ID 기반 중복 제거)
-    const mergeAllChunks = () => {
+    const mergeAndSet = (allComments: Comment[]) => {
       const newMap = new Map<string, Comment[]>();
-
-      chunkResults.forEach((chunkMap) => {
-        chunkMap.forEach((comments, postId) => {
-          const existing = newMap.get(postId) || [];
-          const seenIds = new Set(existing.map(c => c.id));
-          for (const c of comments) {
-            if (!seenIds.has(c.id)) {
-              existing.push(c);
-              seenIds.add(c.id);
-            }
-          }
-          newMap.set(postId, existing);
-        });
-      });
+      for (const c of allComments) {
+        const existing = newMap.get(c.postId) || [];
+        existing.push(c);
+        newMap.set(c.postId, existing);
+      }
 
       // 각 게시글의 댓글을 좋아요순 > 오래된순으로 정렬
       newMap.forEach((comments, postId) => {
@@ -582,40 +563,28 @@ export default function BoardPage() {
       setCommentsMap(newMap);
     };
 
-    // getDocs 1회 조회 (onSnapshot → getDocs: 목록 미리보기용 실시간 불필요)
+    // 목록 미리보기용 실시간 불필요 — 일회성 조회 (repo 내부 30개씩 배치)
     let cancelled = false;
-    Promise.all(
-      chunks.map(async (chunk, chunkIndex) => {
-        const commentsQuery = query(
-          collection(db, 'comments'),
-          where('postId', 'in', chunk)
-        );
-        const snapshot = await getDocs(commentsQuery);
-        const chunkMap = new Map<string, Comment[]>();
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const comment: Comment = {
-            id: doc.id,
-            postId: data.postId || '',
-            parentId: data.parentId || undefined,
-            authorId: data.authorId || '',
-            authorNickname: data.authorNickname || '알 수 없음',
-            authorClassType: data.authorClassType || undefined,
-            content: data.content || '',
-            isAnonymous: data.isAnonymous || false,
-            isAIReply: data.isAIReply || false,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            likes: data.likes || 0,
-            likedBy: data.likedBy || [],
-          };
-          const existing = chunkMap.get(comment.postId) || [];
-          existing.push(comment);
-          chunkMap.set(comment.postId, existing);
-        });
-        chunkResults.set(chunkIndex, chunkMap);
-      })
-    ).then(() => {
-      if (!cancelled) mergeAllChunks();
+    postRepo.fetchCommentsByPostIds(postIds).then((docs) => {
+      if (cancelled) return;
+      const all: Comment[] = docs.map((d) => {
+        const data = d as Record<string, unknown>;
+        return {
+          id: d.id,
+          postId: (data.postId as string) || '',
+          parentId: (data.parentId as string | undefined) || undefined,
+          authorId: (data.authorId as string) || '',
+          authorNickname: (data.authorNickname as string) || '알 수 없음',
+          authorClassType: (data.authorClassType as Comment['authorClassType']) || undefined,
+          content: (data.content as string) || '',
+          isAnonymous: (data.isAnonymous as boolean) || false,
+          isAIReply: (data.isAIReply as boolean) || false,
+          createdAt: (data.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date(),
+          likes: (data.likes as number) || 0,
+          likedBy: (data.likedBy as string[]) || [],
+        } as Comment;
+      });
+      mergeAndSet(all);
     }).catch((err) => {
       console.error('댓글 조회 실패:', err);
     });

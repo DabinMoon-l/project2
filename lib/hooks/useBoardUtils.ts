@@ -97,12 +97,20 @@ export const recordCommentTime = (): void => {
 };
 
 // ============================================================
-// Firestore 문서 -> Post 변환
+// Firestore 문서 -> Post 변환 (snapshot 또는 { id, ...data } 평탄 객체 둘 다 지원)
 // ============================================================
-export const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
-  const data = doc.data();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DocOrData = QueryDocumentSnapshot | DocumentSnapshot | ({ id: string } & Record<string, any>);
+
+export const docToPost = (input: DocOrData): Post => {
+  const maybeSnap = input as { data?: unknown; id: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any =
+    typeof maybeSnap.data === 'function'
+      ? (maybeSnap.data as () => Record<string, unknown>)()
+      : (input as Record<string, unknown>);
   return {
-    id: doc.id,
+    id: maybeSnap.id,
     title: data?.title || '',
     content: data?.content || '',
     imageUrl: data?.imageUrl,
@@ -140,12 +148,17 @@ export const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post =
 };
 
 // ============================================================
-// Firestore 문서 -> Comment 변환
+// Firestore 문서 -> Comment 변환 (snapshot 또는 { id, ...data } 평탄 객체 둘 다 지원)
 // ============================================================
-export const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment => {
-  const data = doc.data();
+export const docToComment = (input: DocOrData): Comment => {
+  const maybeSnap = input as { data?: unknown; id: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any =
+    typeof maybeSnap.data === 'function'
+      ? (maybeSnap.data as () => Record<string, unknown>)()
+      : (input as Record<string, unknown>);
   return {
-    id: doc.id,
+    id: maybeSnap.id,
     postId: data?.postId || '',
     parentId: data?.parentId || undefined,
     authorId: data?.authorId || '',

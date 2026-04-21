@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, updateDoc, increment, getDoc, db } from '@/lib/repositories';
+import { doc, getDoc, db, postRepo } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
@@ -436,7 +436,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   useEffect(() => {
     if (!postId) return;
     if (isWide && !isPanelMode && !isLocked) return;
-    updateDoc(doc(db, 'posts', postId), { viewCount: increment(1) }).catch((err) => {
+    postRepo.incrementPostView(postId).catch((err) => {
       console.error('조회수 업데이트 실패:', err);
     });
   }, [postId, isWide, isPanelMode, isLocked]);

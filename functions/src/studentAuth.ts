@@ -12,6 +12,22 @@ import { getAuth } from "firebase-admin/auth";
 import * as nodemailer from "nodemailer";
 import { getBaseStats } from "./utils/rabbitStats";
 import { verifyProfessorAccess } from "./utils/professorAccess";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteEnrollment,
+  supabaseDualDeleteEnrollment,
+  supabaseDualWriteRabbit,
+  supabaseDualWriteRabbitHolding,
+} from "./utils/supabase";
+
+// 듀얼 라이트가 필요한 모든 CF에 공통 바인딩 (enrollment + rabbit 공용)
+const ENROLLMENT_DUAL_WRITE_SECRETS = [
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+];
 
 // 이메일 발송용 시크릿
 const GMAIL_ADDRESS = defineSecret("GMAIL_ADDRESS");
@@ -64,7 +80,7 @@ interface EnrollStudent {
 }
 
 export const bulkEnrollStudents = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -92,12 +108,15 @@ export const bulkEnrollStudents = onCall(
     let duplicateCount = 0;
     let errorCount = 0;
     const errors: string[] = [];
+    // Supabase 듀얼 라이트 대상 (chunk 커밋 후 한번에 전송)
+    const supabaseQueue: Array<{ studentId: string; name: string; classId: string | null }> = [];
 
     // 배치 쓰기 (500개 제한 고려)
     const batchSize = 400;
     for (let i = 0; i < students.length; i += batchSize) {
       const chunk = students.slice(i, i + batchSize);
       const batch = db.batch();
+      const chunkAdded: Array<{ studentId: string; name: string; classId: string | null }> = [];
 
       for (const student of chunk) {
         // 유효성 검사 (학번 필수, 이름은 선택)
@@ -143,11 +162,27 @@ export const bulkEnrollStudents = onCall(
           docData.classId = student.classId;
         }
         batch.set(docRef, docData);
+        chunkAdded.push({
+          studentId: student.studentId,
+          name: student.name || "",
+          classId: student.classId || null,
+        });
 
         successCount++;
       }
 
       await batch.commit();
+      supabaseQueue.push(...chunkAdded);
+    }
+
+    // Firestore 커밋 성공한 학생만 Supabase 듀얼 라이트
+    for (const s of supabaseQueue) {
+      await supabaseDualWriteEnrollment(courseId, s.studentId, {
+        name: s.name,
+        classId: s.classId,
+        isRegistered: false,
+        registeredUid: null,
+      });
     }
 
     console.log(`학생 일괄 등록 완료: ${successCount}명 성공, ${duplicateCount}명 중복, ${errorCount}명 오류`);
@@ -167,7 +202,7 @@ export const bulkEnrollStudents = onCall(
 // ============================================================
 
 export const registerStudent = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
   async (request) => {
     const { studentId, password, courseId, classId, nickname, name } = request.data as {
       studentId: string;
@@ -278,6 +313,16 @@ export const registerStudent = onCall(
     const rabbitRef = db.collection("rabbits").doc(holdingKey);
     const displayNickname = nickname || "알 수 없음";
 
+    // 트랜잭션 이후 Supabase dual-write 에 쓸 rabbit payload 캡처
+    let rabbitSupabasePayload: {
+      name: string | null;
+      firstDiscovererUserId?: string;
+      firstDiscovererName?: string;
+      discoverers: Array<{ userId: string; nickname: string; discoveryOrder: number }>;
+      discovererCount: number;
+    };
+    let holdingDiscoveryOrder = 1;
+
     await db.runTransaction(async (transaction) => {
       // READ: 기본 토끼 문서 확인
       const rabbitDoc = await transaction.get(rabbitRef);
@@ -322,6 +367,15 @@ export const registerStudent = onCall(
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        rabbitSupabasePayload = {
+          name: null,
+          firstDiscovererUserId: uid,
+          firstDiscovererName: displayNickname,
+          discoverers: [{ userId: uid, nickname: displayNickname, discoveryOrder: 1 }],
+          discovererCount: 1,
+        };
+        holdingDiscoveryOrder = 1;
       } else {
         const existingData = rabbitDoc.data()!;
         const nextOrder = (existingData.discovererCount || 1) + 1;
@@ -334,7 +388,28 @@ export const registerStudent = onCall(
           }),
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        const existingDiscoverers: Array<{ userId: string; nickname: string; discoveryOrder: number }> =
+          Array.isArray(existingData.discoverers) ? existingData.discoverers : [];
+        rabbitSupabasePayload = {
+          name: existingData.name ?? null,
+          discoverers: [
+            ...existingDiscoverers,
+            { userId: uid, nickname: displayNickname, discoveryOrder: nextOrder },
+          ],
+          discovererCount: nextOrder,
+        };
+        holdingDiscoveryOrder = nextOrder;
       }
+    });
+
+    // Supabase dual-write (트랜잭션 성공 후)
+    await supabaseDualWriteRabbit(courseId, rabbitId, rabbitSupabasePayload!);
+    await supabaseDualWriteRabbitHolding(courseId, uid, rabbitId, {
+      level: 1,
+      stats: getBaseStats(rabbitId),
+      discoveryOrder: holdingDiscoveryOrder,
+      discoveredAt: new Date(),
     });
 
     // enrolledStudents 업데이트
@@ -342,6 +417,13 @@ export const registerStudent = onCall(
       isRegistered: true,
       registeredUid: uid,
       registeredAt: FieldValue.serverTimestamp(),
+    });
+
+    // Supabase 듀얼 라이트 (가입 완료 반영)
+    await supabaseDualWriteEnrollment(courseId, studentId, {
+      isRegistered: true,
+      registeredUid: uid,
+      classId,
     });
 
     console.log(`학생 가입 완료: ${studentId} → ${uid} (기본 토끼 지급 포함)`);
@@ -866,7 +948,7 @@ export const updateRecoveryEmail = onCall(
  * 기존 비밀번호는 그대로 유지됨.
  */
 export const migrateExistingAccounts = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -953,6 +1035,14 @@ export const migrateExistingAccounts = onCall(
               registeredAt: FieldValue.serverTimestamp(),
             });
           }
+
+          // Supabase 듀얼 라이트
+          await supabaseDualWriteEnrollment(courseId, studentId, {
+            name: data.name || data.nickname || "",
+            classId: data.classId || "A",
+            isRegistered: true,
+            registeredUid: uid,
+          });
         }
 
         migratedCount++;
@@ -1067,7 +1157,7 @@ async function cleanupStudentData(
 // ============================================================
 
 export const deleteStudentAccount = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1111,6 +1201,12 @@ export const deleteStudentAccount = onCall(
             recoveryEmail: FieldValue.delete(),
             recoveryEmailUpdatedAt: FieldValue.delete(),
           });
+
+          // Supabase 듀얼 라이트 (가입 해제)
+          await supabaseDualWriteEnrollment(courseId, studentId, {
+            isRegistered: false,
+            registeredUid: null,
+          });
         }
       }
 
@@ -1135,7 +1231,7 @@ export const deleteStudentAccount = onCall(
 // ============================================================
 
 export const removeEnrolledStudent = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1188,6 +1284,9 @@ export const removeEnrolledStudent = onCall(
 
       // enrolledStudents 문서 삭제
       await enrolledRef.delete();
+
+      // Supabase 듀얼 라이트 (삭제)
+      await supabaseDualDeleteEnrollment(courseId, studentId);
 
       console.log(`등록 학생 삭제: ${studentId} (courseId: ${courseId}, wasRegistered: ${wasRegistered})`);
 

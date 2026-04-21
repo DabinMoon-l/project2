@@ -75,13 +75,80 @@ export {
 export * as userRepo from './firebase/userRepo';
 export * as settingsRepo from './firebase/settingsRepo';
 export * as quizRepo from './firebase/quizRepo';
-export * as reviewRepo from './firebase/reviewRepo';
-export * as postRepo from './firebase/postRepo';
-export * as rabbitRepo from './firebase/rabbitRepo';
 export * as announcementRepo from './firebase/announcementRepo';
 export * as battleRepo from './firebase/battleRepo';
-export * as enrollmentRepo from './firebase/enrollmentRepo';
 export * as storageRepo from './firebase/storageRepo';
+
+// postRepo 타입 re-export
+export type {
+  PostDoc,
+  CommentDoc,
+  PostPageCursor,
+  PostPageResult,
+  PostFeedFilters,
+} from './firebase/postRepo';
+
+// quizRepo 타입 re-export
+export type {
+  QuizDoc,
+  QuizResultDoc,
+  QuizCompletionDoc,
+  FeedbackDoc,
+  QuizPageCursor,
+  QuizPageResult,
+  QuizFeedFilters,
+} from './firebase/quizRepo';
+
+// Enrollment Repo — Feature flag 기반 분기 (Phase 2 Step 3)
+// NEXT_PUBLIC_USE_SUPABASE_ENROLLMENT=true → Supabase, 아니면 Firestore
+import * as firebaseEnrollmentRepo from './firebase/enrollmentRepo';
+import * as supabaseEnrollmentRepo from './supabase/enrollmentRepo';
+
+const _useSupabaseEnrollment =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_ENROLLMENT === 'true';
+
+export const enrollmentRepo: typeof firebaseEnrollmentRepo = _useSupabaseEnrollment
+  ? (supabaseEnrollmentRepo as typeof firebaseEnrollmentRepo)
+  : firebaseEnrollmentRepo;
+
+// Rabbit Repo — Feature flag 기반 분기 (Phase 2 Step 3)
+import * as firebaseRabbitRepo from './firebase/rabbitRepo';
+import * as supabaseRabbitRepo from './supabase/rabbitRepo';
+
+const _useSupabaseRabbits =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_RABBITS === 'true';
+
+export const rabbitRepo: typeof firebaseRabbitRepo = _useSupabaseRabbits
+  ? (supabaseRabbitRepo as typeof firebaseRabbitRepo)
+  : firebaseRabbitRepo;
+
+// Review Repo — Feature flag 기반 분기 (Phase 2 Step 3)
+// NEXT_PUBLIC_USE_SUPABASE_REVIEWS=true → Supabase, 아니면 Firestore
+import * as firebaseReviewRepo from './firebase/reviewRepo';
+import * as supabaseReviewRepo from './supabase/reviewRepo';
+
+const _useSupabaseReviews =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_REVIEWS === 'true';
+
+export const reviewRepo: typeof firebaseReviewRepo = _useSupabaseReviews
+  ? (supabaseReviewRepo as unknown as typeof firebaseReviewRepo)
+  : firebaseReviewRepo;
+
+// Post Repo — Feature flag 기반 분기 (Phase 2 Step 3)
+// NEXT_PUBLIC_USE_SUPABASE_POSTS=true → Supabase Realtime, 아니면 Firestore onSnapshot
+import * as firebasePostRepo from './firebase/postRepo';
+import * as supabasePostRepo from './supabase/postRepo';
+
+const _useSupabasePosts =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_POSTS === 'true';
+
+export const postRepo: typeof firebasePostRepo = _useSupabasePosts
+  ? (supabasePostRepo as unknown as typeof firebasePostRepo)
+  : firebasePostRepo;
 
 // Ranking Repo — Feature flag 기반 분기 (Phase 1 마이그레이션)
 // NEXT_PUBLIC_USE_SUPABASE_RANKINGS=true → Supabase, 아니면 Firestore
