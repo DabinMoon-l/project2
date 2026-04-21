@@ -42,6 +42,7 @@ interface Post {
   likeCount?: number;
   likes?: number;
   commentCount: number;
+  viewCount?: number;
   rewarded?: boolean;
   toProfessor?: boolean; // 교수님께 전달 여부
   aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
@@ -309,6 +310,7 @@ export const onPostUpdate = onDocumentWritten(
     if ((before.likeCount || 0) !== (after.likeCount || 0)) patch.like_count = after.likeCount || 0;
     if ((before.likes || 0) !== (after.likes || 0)) patch.likes = after.likes || 0;
     if ((before.commentCount || 0) !== (after.commentCount || 0)) patch.comment_count = after.commentCount || 0;
+    if ((before.viewCount || 0) !== (after.viewCount || 0)) patch.view_count = after.viewCount || 0;
     // likedBy, isPinned 등은 onLikeReceived / pinPost 훅 에서 별도 처리
     if (Object.keys(patch).length > 0) {
       await supabaseDualUpdatePostPartial(postId, patch);
