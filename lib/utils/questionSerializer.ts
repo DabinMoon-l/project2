@@ -66,6 +66,7 @@ export function isQuestionChanged(original: AnyValue | undefined, current: Quest
   }
 
   if ((original.explanation || '') !== (current.explanation || '')) return true;
+  if (JSON.stringify(original.choiceExplanations || []) !== JSON.stringify(current.choiceExplanations || [])) return true;
   if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
   if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
   if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
@@ -111,6 +112,7 @@ export function isQuestionChangedForSubQuestion(original: AnyValue, current: Sub
   }
 
   if ((original.explanation || '') !== (current.explanation || '')) return true;
+  if (JSON.stringify(original.choiceExplanations || []) !== JSON.stringify(current.choiceExplanations || [])) return true;
   if ((original.imageUrl || null) !== (current.image || null)) return true;
   if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
   if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
@@ -195,6 +197,9 @@ export function flattenQuestionsForSave(
           choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
           answer,
           explanation: sq.explanation || undefined,
+          choiceExplanations: sq.type === 'multiple' && sq.choiceExplanations && sq.choiceExplanations.some((e) => e && e.trim())
+            ? sq.choiceExplanations.slice(0, (sq.choices || []).filter((c) => c.trim()).length)
+            : undefined,
           imageUrl: sq.image || undefined,
           examples: sq.mixedExamples || undefined,
           mixedExamples: sq.mixedExamples || undefined,
@@ -256,6 +261,9 @@ export function flattenQuestionsForSave(
         choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
         answer,
         explanation: q.explanation || undefined,
+        choiceExplanations: q.type === 'multiple' && q.choiceExplanations && q.choiceExplanations.some((e) => e && e.trim())
+          ? q.choiceExplanations.slice(0, (q.choices || []).filter((c) => c.trim()).length)
+          : undefined,
         imageUrl: q.imageUrl || undefined,
         examples: q.examples || undefined,
         mixedExamples: q.mixedExamples || undefined,

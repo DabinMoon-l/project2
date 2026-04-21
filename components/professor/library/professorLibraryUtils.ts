@@ -84,6 +84,9 @@ export const convertToQuestionDataList = (rawQuestions: AnyValue[]): QuestionDat
           isMultipleAnswer: isMultipleAnswer || undefined,
           answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
           explanation: sq.explanation || undefined,
+          choiceExplanations: Array.isArray((sq as { choiceExplanations?: string[] }).choiceExplanations)
+            ? [...((sq as { choiceExplanations?: string[] }).choiceExplanations as string[])]
+            : undefined,
           mixedExamples: sq.examples || sq.mixedExamples || undefined,
           image: sq.imageUrl || undefined,
           chapterId: sq.chapterId || undefined,
@@ -144,6 +147,9 @@ export const convertToQuestionDataList = (rawQuestions: AnyValue[]): QuestionDat
         isMultipleAnswer: isMultipleAnswer || undefined,
         answerText: typeof q.answer === 'string' ? q.answer : '',
         explanation: q.explanation || '',
+        choiceExplanations: Array.isArray((q as { choiceExplanations?: string[] }).choiceExplanations)
+          ? [...((q as { choiceExplanations?: string[] }).choiceExplanations as string[])]
+          : undefined,
         imageUrl: q.imageUrl || null,
         examples: q.examples || null,
         mixedExamples: q.mixedExamples || null,
