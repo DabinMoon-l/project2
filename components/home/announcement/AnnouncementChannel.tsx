@@ -14,6 +14,7 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  getDocs,
   db,
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
@@ -27,6 +28,7 @@ import type { Announcement, EditingPoll, EditSubmitData } from './types';
 import { getImageUrls, getPolls, getFiles, fmtSize, dateKey, lastReadKey } from './types';
 import AnnouncementMessageItem from './AnnouncementMessageItem';
 import MediaDrawer from './MediaDrawer';
+import PollResponsesBottomSheet from './PollResponsesBottomSheet';
 import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 // ─── 모듈 레벨 캐시 (재마운트 시 즉시 표시) ──────────────
@@ -48,7 +50,7 @@ export default function AnnouncementChannel({
   onClosePanel?: () => void;
 } = {}) {
   const { profile, isProfessor } = useUser();
-  const { userCourseId: contextCourseId } = useCourse();
+  const { userCourseId: contextCourseId, userCourse } = useCourse();
   const userCourseId = overrideCourseId ?? contextCourseId;
   const { theme } = useTheme();
   const logOverlay = useLogOverlayView();
@@ -65,7 +67,7 @@ export default function AnnouncementChannel({
   const [showToolbar, setShowToolbar] = useState(false);
   const [showPollCreator, setShowPollCreator] = useState(false);
   // 캐러셀 투표 편집기: 각 항목이 하나의 투표 폼
-  const [editingPolls, setEditingPolls] = useState<EditingPoll[]>([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+  const [editingPolls, setEditingPolls] = useState<EditingPoll[]>([{ question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
   const [editingPollIdx, setEditingPollIdx] = useState(0);
   const [showMaxSelDropdown, setShowMaxSelDropdown] = useState(false);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
@@ -78,6 +80,25 @@ export default function AnnouncementChannel({
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [viewerImages, setViewerImages] = useState<{ urls: string[]; index: number } | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
+  // 주관식 응답 — 본인 답변만 local state에 캐시 (교수/학생 모두)
+  // 구조: { [announcementId]: { [pollIdx]: text } }
+  const [myTextResponses, setMyTextResponses] = useState<Record<string, Record<number, string>>>({});
+  // 객관식 투표 — 본인이 선택한 선지 (즉시 반영용)
+  // 구조: { [announcementId]: { [pollIdx]: number[] } }  (복수선택 지원)
+  // 제출 전: draft (로컬만), 제출 후: 서버 저장된 값과 동일
+  const [myChoiceVotes, setMyChoiceVotes] = useState<Record<string, Record<number, number[]>>>({});
+  // 제출 완료된 공지 ID 집합 — 이 안에 있으면 수정 불가
+  const [submittedAids, setSubmittedAids] = useState<Set<string>>(new Set());
+  // 제출 진행 중인 공지 ID (중복 제출 방지)
+  const [submittingAids, setSubmittingAids] = useState<Set<string>>(new Set());
+  // 교수 전용 응답 확인 바텀시트 — 해당 공지의 전체 투표 목록 + 현재 인덱스 + 내보내기 메타
+  const [responseSheet, setResponseSheet] = useState<{
+    aid: string;
+    polls: import('./types').Poll[];
+    currentIdx: number;
+    content: string;
+    createdAtMs: number | null;
+  } | null>(null);
   const [sheetTop, setSheetTop] = useState(0);
   const [showScrollFab, setShowScrollFab] = useState(false);
   // 모달 콘텐츠 지연 렌더링 (애니메이션 후 메시지 표시)
@@ -404,7 +425,14 @@ export default function AnnouncementChannel({
 
   // ─── 공지 작성
   const handlePost = async () => {
-    const validPolls = showPollCreator ? editingPolls.filter((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2) : [];
+    // 유효 투표 필터: 객관식은 선택지 2개 이상, 주관식은 질문만 있으면 됨
+    const validPolls = showPollCreator
+      ? editingPolls.filter((p) => {
+          if (!p.question.trim()) return false;
+          if (p.type === 'text') return true;
+          return p.options.filter((o) => o.trim()).length >= 2;
+        })
+      : [];
     const hasPoll = validPolls.length > 0;
     const content = textareaRef.current?.value?.trim() || '';
     if (!profile || !userCourseId || (!content && !pendingImages.length && !pendingFiles.length && !hasPoll)) return;
@@ -427,9 +455,23 @@ export default function AnnouncementChannel({
       // 다중 투표 수집
       if (validPolls.length > 0) {
         data.polls = validPolls.map((p) => {
+          if (p.type === 'text') {
+            return {
+              question: p.question.trim(),
+              type: 'text' as const,
+              options: [] as string[],
+              allowMultiple: false,
+              voteCounts: {},
+              responseCount: 0,
+            };
+          }
           const opts = p.options.filter((o) => o.trim());
           return {
-            question: p.question.trim(), options: opts, votes: {}, allowMultiple: p.allowMultiple,
+            question: p.question.trim(),
+            type: 'choice' as const,
+            options: opts,
+            allowMultiple: p.allowMultiple,
+            voteCounts: {},
             ...(p.allowMultiple ? { maxSelections: Math.min(p.maxSelections, opts.length) } : {}),
           };
         });
@@ -437,7 +479,7 @@ export default function AnnouncementChannel({
       await addDoc(collection(db, 'announcements'), data);
       if (textareaRef.current) textareaRef.current.value = '';
       setHasText(false); setShowPollCreator(false);
-      setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+      setEditingPolls([{ question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
       setEditingPollIdx(0); clearAllImgs(); setPendingFiles([]); setLinkedImageUrls([]); setShowUrlInput(false); setShowToolbar(false);
       setInputExpanded(false); setInputOverflows(false);
       requestAnimationFrame(() => { const t = textareaRef.current; if (t) t.style.height = '36px'; });
@@ -460,18 +502,22 @@ export default function AnnouncementChannel({
     // 투표: 빈 선지 제거, 빈 질문 투표 제거, 옵션 변경 시 자동 votes 리셋
     update.polls = data.polls
       .map((p, i) => {
-        const cleaned = { ...p, options: p.options.filter(o => o.trim()) };
-        // 명시적 초기화 대상이거나, 옵션이 변경된 경우 votes 리셋
-        // (옵션 순서/내용 변경 시 인덱스 기반 votes 키가 꼬이므로)
+        const cleaned = { ...p, options: p.type === 'text' ? [] : p.options.filter(o => o.trim()) };
+        // 명시적 초기화 대상이거나, 옵션이 변경된 경우 집계 리셋
+        // (옵션 순서/내용 변경 시 인덱스 기반 voteCounts 키가 꼬이므로)
         const origPoll = data.originalPolls?.[i];
-        const optionsChanged = origPoll && (
+        const optionsChanged = origPoll && p.type !== 'text' && (
           origPoll.options.length !== cleaned.options.length ||
           origPoll.options.some((o: string, j: number) => o !== cleaned.options[j])
         );
-        if (data.resetPollIndices.includes(i) || optionsChanged) cleaned.votes = {};
+        if (data.resetPollIndices.includes(i) || optionsChanged) {
+          cleaned.votes = {};
+          cleaned.voteCounts = {};
+          if (p.type === 'text') cleaned.responseCount = 0;
+        }
         return cleaned;
       })
-      .filter(p => p.question.trim() && p.options.length >= 2);
+      .filter(p => p.question.trim() && (p.type === 'text' || p.options.length >= 2));
     await updateDoc(doc(db, 'announcements', id), update);
   }, [uploadMultipleImages, uploadMultipleFiles]);
 
@@ -484,13 +530,185 @@ export default function AnnouncementChannel({
     setShowEmojiPicker(null);
   }, [profile]);
 
-  // ─── 투표 (단일/복수 공통, CF에서 호출자 UID만 처리)
-  const handleVote = useCallback(async (aid: string, pollIdx: number, optIndices: number[]) => {
-    if (!profile || optIndices.length === 0) return;
+  // ─── 객관식 선택 (로컬 draft) — 제출 전까진 서버 호출 X
+  // 빈 배열을 받으면 해당 pollIdx에서 선택 해제
+  const handleVote = useCallback((aid: string, pollIdx: number, optIndices: number[]) => {
+    if (!profile || submittedAids.has(aid)) return;
+    setMyChoiceVotes((prev) => {
+      const next = { ...prev };
+      const aidMap = { ...(next[aid] || {}) };
+      if (optIndices.length === 0) delete aidMap[pollIdx];
+      else aidMap[pollIdx] = optIndices;
+      next[aid] = aidMap;
+      return next;
+    });
+  }, [profile, submittedAids]);
+
+  // ─── 주관식 입력 (로컬 draft) — 제출 전까진 서버 호출 X
+  const handleSubmitText = useCallback((aid: string, pollIdx: number, text: string) => {
+    if (!profile || submittedAids.has(aid)) return;
+    setMyTextResponses((prev) => ({
+      ...prev,
+      [aid]: { ...(prev[aid] || {}), [pollIdx]: text },
+    }));
+  }, [profile, submittedAids]);
+
+  // ─── 설문 일괄 제출 (제출 버튼) — 단일 CF 호출로 모든 답변 처리
+  // CF 콜드스타트가 한 번만 발생하도록 submitPollSurvey 사용
+  const handleSubmitSurvey = useCallback(async (aid: string) => {
+    if (!profile || submittedAids.has(aid) || submittingAids.has(aid)) return;
+    const anc = announcements.find((a) => a.id === aid);
+    if (!anc) return;
+    const pollList = getPolls(anc);
+    const draftChoices = myChoiceVotes[aid] || {};
+    const draftTexts = myTextResponses[aid] || {};
+
+    // CF 입력 데이터 구성
+    const choices: Record<string, number[]> = {};
+    const texts: Record<string, string> = {};
+    for (let i = 0; i < pollList.length; i++) {
+      const p = pollList[i];
+      if (p.type === 'text') {
+        const t = (draftTexts[i] || '').trim();
+        if (t) texts[String(i)] = t;
+      } else {
+        const opts = draftChoices[i] || [];
+        if (opts.length > 0) choices[String(i)] = opts;
+      }
+    }
+
+    setSubmittingAids((prev) => new Set(prev).add(aid));
     try {
-      await callFunction('voteOnPoll', { announcementId: aid, pollIdx, optIndices });
-    } catch (err) { console.error('투표 실패:', err); }
-  }, [profile]);
+      await callFunction('submitPollSurvey', { announcementId: aid, choices, texts });
+      setSubmittedAids((prev) => { const s = new Set(prev); s.add(aid); return s; });
+    } catch (err) {
+      console.error('설문 제출 실패:', err);
+      alert('제출에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSubmittingAids((prev) => { const s = new Set(prev); s.delete(aid); return s; });
+    }
+  }, [profile, announcements, myChoiceVotes, myTextResponses, submittedAids, submittingAids]);
+
+  // ─── 응답 확인 바텀시트 오픈 (교수 전용)
+  // 해당 공지의 전체 투표 목록을 함께 넘겨서 좌우 스와이프로 이동 가능
+  const handleViewResponses = useCallback((aid: string, pollIdx: number) => {
+    if (!isProfessor) return;
+    const anc = announcements.find((a) => a.id === aid);
+    const pollList = anc ? getPolls(anc) : [];
+    if (pollList.length === 0 || !anc) return;
+    setResponseSheet({
+      aid,
+      polls: pollList,
+      currentIdx: pollIdx,
+      content: anc.content || '',
+      createdAtMs: anc.createdAt ? anc.createdAt.toMillis() : null,
+    });
+  }, [isProfessor, announcements]);
+
+  // ─── 본인 객관식 투표 초기 로드 — pollVotes 서브컬렉션에서
+  useEffect(() => {
+    if (!profile?.uid || announcements.length === 0) return;
+    const choiceAncIds = announcements
+      .filter((a) => getPolls(a).some((p) => p.type !== 'text'))
+      .map((a) => a.id);
+    if (choiceAncIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(
+          choiceAncIds.map(async (aid) => {
+            const q = query(
+              collection(db, 'announcements', aid, 'pollVotes'),
+              where('uid', '==', profile.uid)
+            );
+            const snap = await getDocs(q);
+            const byPollIdx: Record<number, number[]> = {};
+            snap.forEach((docSnap) => {
+              const d = docSnap.data() as { pollIdx?: number; optIndices?: number[] };
+              if (typeof d.pollIdx === 'number' && Array.isArray(d.optIndices)) {
+                byPollIdx[d.pollIdx] = d.optIndices;
+              }
+            });
+            return [aid, byPollIdx] as const;
+          })
+        );
+        if (cancelled) return;
+        setMyChoiceVotes((prev) => {
+          const next = { ...prev };
+          for (const [aid, byPollIdx] of results) {
+            if (Object.keys(byPollIdx).length > 0) {
+              next[aid] = { ...(next[aid] || {}), ...byPollIdx };
+            }
+          }
+          return next;
+        });
+        // 서버에 투표 기록이 있으면 = 이전에 제출한 공지 → submittedAids에 추가
+        setSubmittedAids((prev) => {
+          const next = new Set(prev);
+          for (const [aid, byPollIdx] of results) {
+            if (Object.keys(byPollIdx).length > 0) next.add(aid);
+          }
+          return next;
+        });
+      } catch (err) {
+        console.warn('내 객관식 투표 로드 실패:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [announcements, profile?.uid]);
+
+  // ─── 본인 주관식 응답 초기 로드 (announcements 갱신 시)
+  // 보안 규칙: 학생은 본인 것만 read 가능 → where(uid==myUid) 쿼리
+  useEffect(() => {
+    if (!profile?.uid || announcements.length === 0) return;
+    const textAncIds = announcements
+      .filter((a) => getPolls(a).some((p) => p.type === 'text'))
+      .map((a) => a.id);
+    if (textAncIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(
+          textAncIds.map(async (aid) => {
+            const q = query(
+              collection(db, 'announcements', aid, 'pollResponses'),
+              where('uid', '==', profile.uid)
+            );
+            const snap = await getDocs(q);
+            const byPollIdx: Record<number, string> = {};
+            snap.forEach((docSnap) => {
+              const d = docSnap.data() as { pollIdx?: number; text?: string };
+              if (typeof d.pollIdx === 'number' && typeof d.text === 'string') {
+                byPollIdx[d.pollIdx] = d.text;
+              }
+            });
+            return [aid, byPollIdx] as const;
+          })
+        );
+        if (cancelled) return;
+        setMyTextResponses((prev) => {
+          const next = { ...prev };
+          for (const [aid, byPollIdx] of results) {
+            if (Object.keys(byPollIdx).length > 0) next[aid] = { ...(next[aid] || {}), ...byPollIdx };
+          }
+          return next;
+        });
+        // 서버에 주관식 응답 기록 있으면 submittedAids에 추가
+        setSubmittedAids((prev) => {
+          const next = new Set(prev);
+          for (const [aid, byPollIdx] of results) {
+            if (Object.keys(byPollIdx).length > 0) next.add(aid);
+          }
+          return next;
+        });
+      } catch (err) {
+        console.warn('내 주관식 응답 로드 실패:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [announcements, profile?.uid]);
 
   // ─── 이모지 피커 토글
   const handleToggleEmojiPicker = useCallback((aid: string | null) => {
@@ -792,6 +1010,13 @@ export default function AnnouncementChannel({
                             onReaction={handleReaction}
                             onToggleEmojiPicker={handleToggleEmojiPicker}
                             onVote={handleVote}
+                            onSubmitText={handleSubmitText}
+                            onViewResponses={isProfessor ? handleViewResponses : undefined}
+                            myTextResponses={myTextResponses}
+                            myChoiceVotes={myChoiceVotes}
+                            submittedAids={submittedAids}
+                            submittingAids={submittingAids}
+                            onSubmitSurvey={handleSubmitSurvey}
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                             professorRabbitId={professorRabbitId}
@@ -958,9 +1183,24 @@ export default function AnnouncementChannel({
                                     </button>
                                   </div>
                                 )}
-                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder="투표 질문"
+                                {/* 투표 타입 탭 (객관식/주관식) */}
+                                <div className="flex gap-1 mb-1">
+                                  <button
+                                    onClick={() => updateCur((p) => ({ ...p, type: 'choice' }))}
+                                    className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${cur.type !== 'text' ? 'bg-white/20 text-white font-bold' : 'bg-white/5 text-white/50 hover:text-white/80'}`}
+                                  >
+                                    객관식
+                                  </button>
+                                  <button
+                                    onClick={() => updateCur((p) => ({ ...p, type: 'text', allowMultiple: false }))}
+                                    className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${cur.type === 'text' ? 'bg-white/20 text-white font-bold' : 'bg-white/5 text-white/50 hover:text-white/80'}`}
+                                  >
+                                    주관식
+                                  </button>
+                                </div>
+                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
                                   className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
-                                {cur.options.map((o, idx) => (
+                                {cur.type !== 'text' && cur.options.map((o, idx) => (
                                   <div key={`opt-${idx}`} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
                                     <input value={o}
                                       onChange={(e) => updateCur((p) => {
@@ -980,16 +1220,23 @@ export default function AnnouncementChannel({
                                     )}
                                   </div>
                                 ))}
-                                <button onClick={() => updateCur((p) => ({ ...p, options: [...p.options, ''] }))} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
+                                {cur.type !== 'text' && (
+                                  <button onClick={() => updateCur((p) => ({ ...p, options: [...p.options, ''] }))} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
+                                )}
+                                {cur.type === 'text' && (
+                                  <p className="text-[10px] text-white/50 italic py-1">자유 답변 — 학생이 직접 입력 (교수만 답변 확인 가능)</p>
+                                )}
                                 <div className="flex items-center gap-2 pt-1 border-t border-white/10">
-                                  <label className="flex items-center gap-1.5 text-[11px] text-white/70 cursor-pointer select-none">
-                                    <input
-                                      type="checkbox" checked={cur.allowMultiple}
-                                      onChange={(e) => { updateCur((p) => ({ ...p, allowMultiple: e.target.checked, maxSelections: 2 })); setShowMaxSelDropdown(false); }}
-                                      className="w-3 h-3 accent-white"
-                                    />
-                                    복수선택
-                                  </label>
+                                  {cur.type !== 'text' && (
+                                    <label className="flex items-center gap-1.5 text-[11px] text-white/70 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox" checked={cur.allowMultiple}
+                                        onChange={(e) => { updateCur((p) => ({ ...p, allowMultiple: e.target.checked, maxSelections: 2 })); setShowMaxSelDropdown(false); }}
+                                        className="w-3 h-3 accent-white"
+                                      />
+                                      복수선택
+                                    </label>
+                                  )}
                                   {cur.allowMultiple && (() => {
                                     const totalSlots = Math.max(cur.options.length, 1);
                                     const choices = Array.from({ length: totalSlots }, (_, i) => i + 1);
@@ -1050,7 +1297,7 @@ export default function AnnouncementChannel({
                               </div>
                               <button
                                 onClick={() => {
-                                  setEditingPolls((prev) => [...prev, { question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                  setEditingPolls((prev) => [...prev, { question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
                                   setEditingPollIdx(editingPolls.length);
                                 }}
                                 className="shrink-0 w-8 flex items-center justify-center border border-white/15 bg-white/5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
@@ -1124,7 +1371,7 @@ export default function AnnouncementChannel({
                       </div>
 
                       <button onClick={handlePost}
-                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !linkedImageUrls.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2))) || uploadLoading}
+                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !linkedImageUrls.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && (p.type === 'text' || p.options.filter((o) => o.trim()).length >= 2)))) || uploadLoading}
                         className="w-9 h-9 flex items-center justify-center shrink-0 text-white/70 disabled:text-white/20 transition-colors -mt-1"
                       >
                         {uploadLoading ? (
@@ -1159,7 +1406,7 @@ export default function AnnouncementChannel({
                             <button onClick={() => {
                               if (showPollCreator) {
                                 setShowPollCreator(false);
-                                setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                setEditingPolls([{ question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
                                 setEditingPollIdx(0);
                               } else {
                                 if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -1451,6 +1698,13 @@ export default function AnnouncementChannel({
                             onReaction={handleReaction}
                             onToggleEmojiPicker={handleToggleEmojiPicker}
                             onVote={handleVote}
+                            onSubmitText={handleSubmitText}
+                            onViewResponses={isProfessor ? handleViewResponses : undefined}
+                            myTextResponses={myTextResponses}
+                            myChoiceVotes={myChoiceVotes}
+                            submittedAids={submittedAids}
+                            submittingAids={submittingAids}
+                            onSubmitSurvey={handleSubmitSurvey}
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                             professorRabbitId={professorRabbitId}
@@ -1623,9 +1877,24 @@ export default function AnnouncementChannel({
                                     </button>
                                   </div>
                                 )}
-                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder="투표 질문"
+                                {/* 투표 타입 탭 (객관식/주관식) */}
+                                <div className="flex gap-1 mb-1">
+                                  <button
+                                    onClick={() => updateCur((p) => ({ ...p, type: 'choice' }))}
+                                    className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${cur.type !== 'text' ? 'bg-white/20 text-white font-bold' : 'bg-white/5 text-white/50 hover:text-white/80'}`}
+                                  >
+                                    객관식
+                                  </button>
+                                  <button
+                                    onClick={() => updateCur((p) => ({ ...p, type: 'text', allowMultiple: false }))}
+                                    className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${cur.type === 'text' ? 'bg-white/20 text-white font-bold' : 'bg-white/5 text-white/50 hover:text-white/80'}`}
+                                  >
+                                    주관식
+                                  </button>
+                                </div>
+                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
                                   className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
-                                {cur.options.map((o, idx) => (
+                                {cur.type !== 'text' && cur.options.map((o, idx) => (
                                   <div key={`opt-${idx}`} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
                                     <input value={o}
                                       onChange={(e) => updateCur((p) => {
@@ -1645,17 +1914,24 @@ export default function AnnouncementChannel({
                                     )}
                                   </div>
                                 ))}
-                                <button onClick={() => updateCur((p) => ({ ...p, options: [...p.options, ''] }))} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
+                                {cur.type !== 'text' && (
+                                  <button onClick={() => updateCur((p) => ({ ...p, options: [...p.options, ''] }))} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
+                                )}
+                                {cur.type === 'text' && (
+                                  <p className="text-[10px] text-white/50 italic py-1">자유 답변 — 학생이 직접 입력 (교수만 답변 확인 가능)</p>
+                                )}
                                 {/* 복수선택 + 삭제 */}
                                 <div className="flex items-center gap-2 pt-1 border-t border-white/10">
-                                  <label className="flex items-center gap-1.5 text-[11px] text-white/70 cursor-pointer select-none">
-                                    <input
-                                      type="checkbox" checked={cur.allowMultiple}
-                                      onChange={(e) => { updateCur((p) => ({ ...p, allowMultiple: e.target.checked, maxSelections: 2 })); setShowMaxSelDropdown(false); }}
-                                      className="w-3 h-3 accent-white"
-                                    />
-                                    복수선택
-                                  </label>
+                                  {cur.type !== 'text' && (
+                                    <label className="flex items-center gap-1.5 text-[11px] text-white/70 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox" checked={cur.allowMultiple}
+                                        onChange={(e) => { updateCur((p) => ({ ...p, allowMultiple: e.target.checked, maxSelections: 2 })); setShowMaxSelDropdown(false); }}
+                                        className="w-3 h-3 accent-white"
+                                      />
+                                      복수선택
+                                    </label>
+                                  )}
                                   {cur.allowMultiple && (() => {
                                     const totalSlots = Math.max(cur.options.length, 1);
                                     const choices = Array.from({ length: totalSlots }, (_, i) => i + 1);
@@ -1718,7 +1994,7 @@ export default function AnnouncementChannel({
                               {/* 우측 + 버튼 */}
                               <button
                                 onClick={() => {
-                                  setEditingPolls((prev) => [...prev, { question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                  setEditingPolls((prev) => [...prev, { question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
                                   setEditingPollIdx(editingPolls.length);
                                 }}
                                 className="shrink-0 w-8 flex items-center justify-center border border-white/15 bg-white/5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
@@ -1796,7 +2072,7 @@ export default function AnnouncementChannel({
                       </div>
 
                       <button onClick={handlePost}
-                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !linkedImageUrls.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2))) || uploadLoading}
+                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !linkedImageUrls.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && (p.type === 'text' || p.options.filter((o) => o.trim()).length >= 2)))) || uploadLoading}
                         className="w-9 h-9 flex items-center justify-center shrink-0 text-white/70 disabled:text-white/20 transition-colors -mt-1"
                       >
                         {uploadLoading ? (
@@ -1832,7 +2108,7 @@ export default function AnnouncementChannel({
                             <button onClick={() => {
                               if (showPollCreator) {
                                 setShowPollCreator(false);
-                                setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                setEditingPolls([{ question: '', type: 'choice', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
                                 setEditingPollIdx(0);
                               } else {
                                 // 키보드 닫고 투표 편집기 열기
@@ -1881,6 +2157,21 @@ export default function AnnouncementChannel({
       {viewerImages && (
         <ImageViewer urls={viewerImages.urls} initialIndex={viewerImages.index} onClose={() => setViewerImages(null)} />
       )}
+
+      {/* ═══ 투표 응답 확인 바텀시트 (교수 전용) ═══ */}
+      <PollResponsesBottomSheet
+        isOpen={!!responseSheet}
+        onClose={() => setResponseSheet(null)}
+        announcementId={responseSheet?.aid ?? null}
+        polls={responseSheet?.polls ?? []}
+        currentIdx={responseSheet?.currentIdx ?? 0}
+        onIndexChange={(idx) =>
+          setResponseSheet((prev) => (prev ? { ...prev, currentIdx: idx } : prev))
+        }
+        announcementContent={responseSheet?.content}
+        announcementCreatedAtMs={responseSheet?.createdAtMs}
+        courseName={userCourse?.name}
+      />
     </>
   );
 }

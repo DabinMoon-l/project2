@@ -22,6 +22,13 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   onReaction,
   onToggleEmojiPicker,
   onVote,
+  onSubmitText,
+  onViewResponses,
+  myTextResponses,
+  myChoiceVotes,
+  submittedAids,
+  submittingAids,
+  onSubmitSurvey,
   onImageClick,
   onEditSubmit,
   professorRabbitId,
@@ -37,6 +44,20 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   onReaction: (aid: string, emoji: string) => void;
   onToggleEmojiPicker: (aid: string | null) => void;
   onVote: (aid: string, pollIdx: number, optIndices: number[]) => void;
+  /** 주관식 투표 제출 */
+  onSubmitText?: (aid: string, pollIdx: number, text: string) => Promise<void> | void;
+  /** 교수 전용 응답 확인 바텀시트 오픈 */
+  onViewResponses?: (aid: string, pollIdx: number) => void;
+  /** 본인 주관식 응답 맵 — aid → pollIdx → text */
+  myTextResponses?: Record<string, Record<number, string>>;
+  /** 본인 객관식 투표 맵 — aid → pollIdx → number[] */
+  myChoiceVotes?: Record<string, Record<number, number[]>>;
+  /** 제출 완료된 공지 ID 집합 */
+  submittedAids?: Set<string>;
+  /** 제출 진행 중인 공지 ID 집합 */
+  submittingAids?: Set<string>;
+  /** 설문 일괄 제출 */
+  onSubmitSurvey?: (aid: string) => void;
   onImageClick: (urls: string[], index: number) => void;
   onEditSubmit?: (id: string, data: EditSubmitData) => Promise<void>;
   /** 교수 프로필 토끼 ID (공지 데이터에 없을 때 폴백) */
@@ -289,41 +310,48 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                   </div>
 
                   {/* 투표 편집 */}
-                  {editPolls.map((poll, pi) => (
-                    <div key={pi} className="border border-[#D4CFC4] p-2 space-y-1">
-                      <div className="flex items-center gap-1">
-                        <input value={poll.question} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, question: e.target.value } : p))}
-                          className="flex-1 bg-transparent text-sm text-[#1A1A1A] font-bold outline-none border-b border-[#D4CFC4] pb-0.5" placeholder="투표 질문" />
-                        <button onClick={() => { setEditPolls(prev => prev.filter((_, i) => i !== pi)); setEditResetPolls(prev => { const s = new Set(prev); s.delete(pi); return s; }); }}
-                          className="text-red-400 hover:text-red-600 shrink-0">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                      </div>
-                      {poll.options.map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-1 pl-2">
-                          <span className="text-xs text-[#5C5C5C] shrink-0">{oi + 1}.</span>
-                          <input value={opt} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.map((o, j) => j === oi ? e.target.value : o) } : p))}
-                            className="flex-1 bg-transparent text-xs text-[#1A1A1A] outline-none border-b border-[#D4CFC4]/50 pb-0.5" placeholder={`선지 ${oi + 1}`} />
-                          {poll.options.length > 2 && (
-                            <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.filter((_, j) => j !== oi) } : p))}
-                              className="text-[#5C5C5C] hover:text-red-400 shrink-0">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          )}
+                  {editPolls.map((poll, pi) => {
+                    const isText = poll.type === 'text';
+                    return (
+                      <div key={pi} className="border border-[#D4CFC4] p-2 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <input value={poll.question} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, question: e.target.value } : p))}
+                            className="flex-1 bg-transparent text-sm text-[#1A1A1A] font-bold outline-none border-b border-[#D4CFC4] pb-0.5" placeholder="투표 질문" />
+                          <button onClick={() => { setEditPolls(prev => prev.filter((_, i) => i !== pi)); setEditResetPolls(prev => { const s = new Set(prev); s.delete(pi); return s; }); }}
+                            className="text-red-400 hover:text-red-600 shrink-0">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
                         </div>
-                      ))}
-                      <div className="flex items-center justify-between">
-                        <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: [...p.options, ''] } : p))}
-                          className="text-[10px] text-[#5C5C5C] hover:text-[#1A1A1A] pl-2">+ 선지 추가</button>
-                        <label className="flex items-center gap-1 cursor-pointer select-none">
-                          <input type="checkbox" checked={editResetPolls.has(pi)}
-                            onChange={(e) => setEditResetPolls(prev => { const s = new Set(prev); if (e.target.checked) s.add(pi); else s.delete(pi); return s; })}
-                            className="w-3 h-3 accent-[#1A1A1A]" />
-                          <span className="text-[10px] text-[#5C5C5C]">결과 초기화</span>
-                        </label>
+                        {!isText && poll.options.map((opt, oi) => (
+                          <div key={oi} className="flex items-center gap-1 pl-2">
+                            <span className="text-xs text-[#5C5C5C] shrink-0">{oi + 1}.</span>
+                            <input value={opt} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.map((o, j) => j === oi ? e.target.value : o) } : p))}
+                              className="flex-1 bg-transparent text-xs text-[#1A1A1A] outline-none border-b border-[#D4CFC4]/50 pb-0.5" placeholder={`선지 ${oi + 1}`} />
+                            {poll.options.length > 2 && (
+                              <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.filter((_, j) => j !== oi) } : p))}
+                                className="text-[#5C5C5C] hover:text-red-400 shrink-0">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between">
+                          {!isText ? (
+                            <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: [...p.options, ''] } : p))}
+                              className="text-[10px] text-[#5C5C5C] hover:text-[#1A1A1A] pl-2">+ 선지 추가</button>
+                          ) : (
+                            <span className="text-[10px] text-[#B8B0A0] italic pl-2">자유 답변 (교수만 열람)</span>
+                          )}
+                          <label className="flex items-center gap-1 cursor-pointer select-none">
+                            <input type="checkbox" checked={editResetPolls.has(pi)}
+                              onChange={(e) => setEditResetPolls(prev => { const s = new Set(prev); if (e.target.checked) s.add(pi); else s.delete(pi); return s; })}
+                              className="w-3 h-3 accent-[#1A1A1A]" />
+                            <span className="text-[10px] text-[#5C5C5C]">결과 초기화</span>
+                          </label>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* 하단: 전송 */}
                   <div className="flex items-center justify-end pt-1 border-t border-[#D4CFC4]/50">
@@ -346,7 +374,20 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                   <MessageContent content={a.content} />
                   <ImageCarousel urls={imgUrls} onImageClick={onImageClick} />
                   <FileCarousel files={fileList} />
-                  <PollCarousel polls={pollList} announcementId={a.id} profileUid={profileUid} onVote={onVote} isProfessor={isProfessor} />
+                  <PollCarousel
+                    polls={pollList}
+                    announcementId={a.id}
+                    profileUid={profileUid}
+                    onVote={onVote}
+                    onSubmitText={onSubmitText}
+                    onViewResponses={onViewResponses}
+                    myTextResponses={myTextResponses?.[a.id]}
+                    myChoiceVotes={myChoiceVotes?.[a.id]}
+                    isSubmitted={!!submittedAids?.has(a.id)}
+                    isSubmitting={!!submittingAids?.has(a.id)}
+                    onSubmitSurvey={onSubmitSurvey ? () => onSubmitSurvey(a.id) : undefined}
+                    isProfessor={isProfessor}
+                  />
                 </>
               )}
             </Bubble>

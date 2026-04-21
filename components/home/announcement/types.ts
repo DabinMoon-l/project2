@@ -10,16 +10,29 @@ export interface FileAttachment {
   size: number;
 }
 
+/** 투표 타입 — 객관식(선택지) 또는 주관식(자유 응답) */
+export type PollType = 'choice' | 'text';
+
 export interface Poll {
   question: string;
-  options: string[];
-  votes: Record<string, string[]>;
+  type?: PollType;                      // 'text'면 주관식, 미지정/choice면 객관식 (레거시 호환)
+  options: string[];                    // 주관식은 빈 배열로 저장
+  /**
+   * @deprecated 신규 데이터는 서브컬렉션 pollVotes에 저장됨.
+   * 레거시 공지 호환용 — 읽기 전용으로만 참고.
+   */
+  votes?: Record<string, string[]>;
+  /** 선택지별 집계 카운트 (학생/교수 공통 노출) */
+  voteCounts?: Record<string, number>;
+  /** 주관식 응답 수 (집계값만 노출) */
+  responseCount?: number;
   allowMultiple: boolean;
   maxSelections?: number;
 }
 
 export interface EditingPoll {
   question: string;
+  type: PollType;
   options: string[];
   allowMultiple: boolean;
   maxSelections: number;
@@ -101,11 +114,51 @@ export function getPolls(a: Announcement): Poll[] {
   } else if (a.poll) {
     polls = [a.poll];
   }
-  // options 없는 깨진 데이터 필터 + votes 타입 검증
-  return polls.filter((p) => p && Array.isArray(p.options) && p.options.length > 0).map((p) => ({
-    ...p,
-    votes: (p.votes && typeof p.votes === 'object' && !Array.isArray(p.votes)) ? p.votes : {},
-  }));
+  // 타입별 필터 + 기본값 채우기
+  return polls
+    .filter((p) => {
+      if (!p) return false;
+      if (p.type === 'text') return typeof p.question === 'string';
+      // 객관식: options 필요
+      return Array.isArray(p.options) && p.options.length > 0;
+    })
+    .map((p) => ({
+      ...p,
+      type: p.type ?? 'choice',
+      options: Array.isArray(p.options) ? p.options : [],
+      votes: p.votes && typeof p.votes === 'object' && !Array.isArray(p.votes) ? p.votes : {},
+      voteCounts: p.voteCounts && typeof p.voteCounts === 'object' && !Array.isArray(p.voteCounts) ? p.voteCounts : {},
+    }));
+}
+
+/**
+ * 선택지별 투표 수 계산 — voteCounts 우선, 없으면 레거시 votes 배열 길이
+ * 신규 데이터는 voteCounts, 레거시 공지는 votes → 둘 다 처리
+ */
+export function getVoteCount(p: Poll, optIdx: number): number {
+  const key = String(optIdx);
+  if (p.voteCounts && typeof p.voteCounts[key] === 'number') {
+    return p.voteCounts[key];
+  }
+  const arr = p.votes?.[key];
+  return Array.isArray(arr) ? arr.length : 0;
+}
+
+/** 투표 총 참여자 수 — voteCounts 합산 or 레거시 votes 유니크 UID 수 */
+export function getTotalVoters(p: Poll): number {
+  if (p.responseCount !== undefined) return p.responseCount;
+  if (p.voteCounts) {
+    // 복수선택이면 중복 집계되지만 대략적 표시용
+    return Object.values(p.voteCounts).reduce((a, b) => a + b, 0);
+  }
+  if (p.votes) {
+    const all = new Set<string>();
+    for (const arr of Object.values(p.votes)) {
+      if (Array.isArray(arr)) arr.forEach((id) => all.add(id));
+    }
+    return all.size;
+  }
+  return 0;
 }
 
 /** 파일 배열 추출 (하위 호환) */

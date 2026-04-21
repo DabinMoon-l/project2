@@ -451,7 +451,7 @@ export { initProfessorAccount } from "./professorAuth";
 // ============================================
 // 공지 채널 투표/리액션/읽음 (서버사이드 검증)
 // ============================================
-export { voteOnPoll, reactToAnnouncement, markAnnouncementsRead } from "./announcementActions";
+export { voteOnPoll, submitPollTextResponse, submitPollSurvey, getPollResponses, getPollResponsesBatch, reactToAnnouncement, markAnnouncementsRead } from "./announcementActions";
 
 // ============================================
 // 학번+비밀번호 인증 시스템 Functions

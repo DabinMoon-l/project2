@@ -608,6 +608,29 @@ service cloud.firestore {
 
       // 삭제: 교수님만
       allow delete: if isProfessor();
+
+      // ──────────────────────────────────────────────
+      // 투표 서브컬렉션 (프라이버시 보호)
+      // ──────────────────────────────────────────────
+      // 객관식 투표 기록 — {pollIdx}_{uid} 문서
+      // 학생: 본인 것만 read, 교수: 전체 read. write는 CF(voteOnPoll)에서만.
+      match /pollVotes/{voteId} {
+        allow read: if isAuthenticated() && (
+          isProfessor() ||
+          (resource != null && resource.data.uid == request.auth.uid)
+        );
+        allow write: if false;
+      }
+
+      // 주관식 응답 — {pollIdx}_{uid} 문서 (답변 본문 포함)
+      // 학생: 본인 것만 read, 교수: 전체 read. write는 CF(submitPollTextResponse)에서만.
+      match /pollResponses/{responseId} {
+        allow read: if isAuthenticated() && (
+          isProfessor() ||
+          (resource != null && resource.data.uid == request.auth.uid)
+        );
+        allow write: if false;
+      }
     }
 
     // ============================================================
