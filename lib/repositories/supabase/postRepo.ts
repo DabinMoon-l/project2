@@ -413,7 +413,7 @@ export function subscribePost(
 
       // Realtime 단건 구독
       channel = supabase
-        .channel(`post-${uuid}`)
+        .channel(`post-${uuid}-${Math.random().toString(36).slice(2)}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'posts', filter: `id=eq.${uuid}` },
@@ -477,7 +477,7 @@ export function subscribeMyPrivatePost(
       await fetchOnce();
 
       channel = supabase
-        .channel(`my-private-${userId}`)
+        .channel(`my-private-${userId}-${Math.random().toString(36).slice(2)}`)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `author_id=eq.${userId}` }, async () => {
           if (cancelled) return;
@@ -717,7 +717,7 @@ export function subscribeComments(
       emit();
 
       channel = supabase
-        .channel(`comments-${postUuid}`)
+        .channel(`comments-${postUuid}-${Math.random().toString(36).slice(2)}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${postUuid}` },
