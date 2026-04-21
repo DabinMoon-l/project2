@@ -16,6 +16,8 @@ import {
   SUPABASE_SERVICE_ROLE_SECRET,
   supabaseDualDeleteReviewsByUser,
   supabaseDualDeleteFoldersByUser,
+  supabaseDualDeleteQuizResultsByUser,
+  supabaseDualDeleteCompletionsByUser,
 } from "./utils/supabase";
 
 // 과목 ID 상수
@@ -93,6 +95,10 @@ async function resetStudentData(
     }
     await resultsBatch.commit();
   }
+
+  // Supabase 듀얼 삭제 (quiz_results + quiz_completions)
+  await supabaseDualDeleteQuizResultsByUser(userId);
+  await supabaseDualDeleteCompletionsByUser(userId);
 
   // 4. 커스텀 폴더 삭제 (customFolders)
   const foldersSnapshot = await db
@@ -179,6 +185,8 @@ async function deleteStudentAccount(
   // Supabase 듀얼 삭제
   await supabaseDualDeleteReviewsByUser(userId);
   await supabaseDualDeleteFoldersByUser(userId);
+  await supabaseDualDeleteQuizResultsByUser(userId);
+  await supabaseDualDeleteCompletionsByUser(userId);
 
   // 2. 경험치 히스토리 삭제 (서브컬렉션)
   const expHistorySnapshot = await db
@@ -270,7 +278,7 @@ export const februaryTransition = onSchedule(
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      console.log(`=== 2월 22일 학기 전환 완료 ===`);
+      console.log("=== 2월 22일 학기 전환 완료 ===");
       console.log(`이동 성공: ${transitionCount}명, 실패: ${errorCount}명`);
     } catch (error) {
       console.error("2월 22일 학기 전환 전체 실패:", error);
@@ -377,7 +385,7 @@ export const augustTransition = onSchedule(
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      console.log(`=== 8월 22일 학기 전환 완료 ===`);
+      console.log("=== 8월 22일 학기 전환 완료 ===");
       console.log(`삭제: ${deleteCount}명, 이동: ${transitionCount}명, 실패: ${errorCount}명`);
     } catch (error) {
       console.error("8월 22일 학기 전환 전체 실패:", error);

@@ -8,6 +8,14 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
 import { gradeQuestion, UserAnswer } from "./utils/gradeQuestion";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpdateQuizResult,
+  supabaseDualUpsertCompletion,
+  supabaseDualUpdateQuizPartial,
+} from "./utils/supabase";
 
 const db = getFirestore();
 
@@ -44,6 +52,11 @@ export const regradeQuestions = onCall(
     region: "asia-northeast3",
     memory: "512MiB",
     timeoutSeconds: 120,
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (request) => {
     // 인증 확인
@@ -99,6 +112,17 @@ export const regradeQuestions = onCall(
 
     let regradedResults = 0;
     let changedScores = 0;
+
+    // Supabase dual-write 큐 (배치 커밋 후 일괄 적용)
+    const supabaseResultUpdates: Array<{
+      firestoreId: string;
+      patch: Record<string, unknown>;
+    }> = [];
+    const supabaseCompletionUpdates: Array<{
+      firestoreQuizId: string;
+      userId: string;
+      bestScore: number;
+    }> = [];
 
     // ── ④ 배치로 재채점 ──
     // Firestore 배치 최대 500건이므로 분할 처리
@@ -177,6 +201,22 @@ export const regradeQuestions = onCall(
       });
       batchCount++;
 
+      // Supabase dual-write 큐에 추가
+      supabaseResultUpdates.push({
+        firestoreId: resultDoc.id,
+        patch: {
+          score: newScore,
+          correct_count: correctCount,
+          total_count: totalCount,
+          answers: newAnswersArr,
+        },
+      });
+      supabaseCompletionUpdates.push({
+        firestoreQuizId: quizId,
+        userId: resultData.userId,
+        bestScore: newScore,
+      });
+
       // quiz_completions 업데이트
       const completionDocId = `${quizId}_${resultData.userId}`;
       const compRef = db.doc(`quiz_completions/${completionDocId}`);
@@ -204,6 +244,8 @@ export const regradeQuestions = onCall(
     }
 
     // ── ⑥ quizzes 문서의 userScores + averageScore 재계산 ──
+    let newAverageScore = 0;
+    let newUserScores: Record<string, number> = {};
     try {
       // 모든 quiz_completions 조회해서 userScores 재구성
       const completionsSnap = await db
@@ -228,6 +270,9 @@ export const regradeQuestions = onCall(
         ? Math.round((scoreSum / count) * 10) / 10
         : 0;
 
+      newAverageScore = averageScore;
+      newUserScores = userScores;
+
       await db.doc(`quizzes/${quizId}`).update({
         userScores,
         averageScore,
@@ -236,6 +281,31 @@ export const regradeQuestions = onCall(
       // userScores 업데이트 실패해도 재채점 자체는 성공
       console.warn(`quizzes/${quizId} userScores 업데이트 실패 (무시 가능):`, e);
     }
+
+    // ── ⑥-b Supabase dual-write: quiz_results + quiz_completions + quizzes ──
+    // Firestore 배치 커밋 완료 후 비동기 실행 (실패해도 재채점 자체는 성공)
+    (async () => {
+      try {
+        for (const { firestoreId, patch } of supabaseResultUpdates) {
+          await supabaseDualUpdateQuizResult(firestoreId, patch);
+        }
+        for (const { firestoreQuizId, userId: uid, bestScore } of supabaseCompletionUpdates) {
+          await supabaseDualUpsertCompletion(firestoreQuizId, uid, {
+            bestScore,
+            completedAt: new Date(),
+          });
+        }
+        if (Object.keys(newUserScores).length > 0) {
+          await supabaseDualUpdateQuizPartial(quizId, {
+            user_scores: newUserScores,
+            average_score: newAverageScore,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn("[Supabase regrade dual-write] 실패:", e);
+      }
+    })();
 
     console.log(
       `재채점 완료: quizId=${quizId}, ` +

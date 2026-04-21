@@ -14,9 +14,24 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { incrementShard } from "./utils/shardedCounter";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpsertCompletion,
+  supabaseDualUpdateQuizPartial,
+} from "./utils/supabase";
 
 export const initCreatorStats = onCall(
-  { region: "asia-northeast3", memory: "256MiB" },
+  {
+    region: "asia-northeast3",
+    memory: "256MiB",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     const userId = request.auth?.uid;
     if (!userId) {
@@ -76,5 +91,16 @@ export const initCreatorStats = onCall(
       averageScore: score,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // Supabase dual-write: quiz_completions + quizzes 통계
+    supabaseDualUpsertCompletion(quizId, userId, {
+      bestScore: score,
+      completedAt: new Date(),
+    }).catch(() => {});
+    supabaseDualUpdateQuizPartial(quizId, {
+      participant_count: 1,
+      average_score: score,
+      updated_at: new Date().toISOString(),
+    }).catch(() => {});
   }
 );

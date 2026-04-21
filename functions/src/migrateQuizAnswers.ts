@@ -10,6 +10,12 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpdateQuizPartial,
+} from "./utils/supabase";
 
 /**
  * 객관식 answer가 1-indexed인지 판별하고 수정
@@ -45,6 +51,11 @@ export const migrateQuizAnswersTo0Indexed = onCall(
     region: "asia-northeast3",
     timeoutSeconds: 300,
     memory: "512MiB",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (request) => {
     if (!request.auth) {
@@ -96,6 +107,11 @@ export const migrateQuizAnswersTo0Indexed = onCall(
       if (changed) {
         try {
           await quizDoc.ref.update({ questions: updatedQuestions });
+          // Supabase dual-write: questions jsonb 만 교체 (onQuizSync 트리거로도 동기화되지만, 즉시 반영)
+          supabaseDualUpdateQuizPartial(quizDoc.id, {
+            questions: updatedQuestions,
+            updated_at: new Date().toISOString(),
+          }).catch(() => {});
           migratedCount++;
         } catch (err) {
           console.error(`마이그레이션 실패: ${quizDoc.id}`, err);
@@ -113,7 +129,7 @@ export const migrateQuizAnswersTo0Indexed = onCall(
       fixedQuestions: fixedQuestionCount,
     };
 
-    console.log(`퀴즈 답안 마이그레이션 완료:`, result);
+    console.log("퀴즈 답안 마이그레이션 완료:", result);
     return result;
   }
 );

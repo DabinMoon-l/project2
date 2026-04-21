@@ -8,6 +8,12 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteQuizResult,
+} from "./utils/supabase";
 
 const db = getFirestore();
 
@@ -30,7 +36,14 @@ interface RecordReviewPracticeInput {
  * - EXP 25 지급 (addExpInTransaction)
  */
 export const recordReviewPractice = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     // 인증 확인
     if (!request.auth) {
@@ -101,6 +114,9 @@ export const recordReviewPractice = onCall(
     // ── 트랜잭션: quizResults 생성 + EXP 지급 ──
     const expReward = alreadyRewarded ? 0 : EXP_REWARDS.REVIEW_PRACTICE;
 
+    // 트랜잭션 밖에서 id 사전 할당 → Supabase dual-write 에 동일 id 사용
+    const resultRef = db.collection("quizResults").doc();
+
     await db.runTransaction(async (transaction) => {
       // reads-before-writes: EXP 지급이 필요한 경우에만 읽기
       let userDoc: FirebaseFirestore.DocumentSnapshot | null = null;
@@ -109,7 +125,6 @@ export const recordReviewPractice = onCall(
       }
 
       // quizResults 문서 생성
-      const resultRef = db.collection("quizResults").doc();
       transaction.set(resultRef, {
         userId,
         quizId,
@@ -139,6 +154,19 @@ export const recordReviewPractice = onCall(
 
     // 락 해제
     await lockRef.delete().catch(() => {});
+
+    // Supabase dual-write (quiz_results) — isReviewPractice 플래그는 metadata 대신 attempt_key 로 구분
+    supabaseDualWriteQuizResult({
+      firestoreId: resultRef.id,
+      firestoreQuizId: quizId,
+      userId,
+      score,
+      correctCount,
+      totalCount,
+      attemptNo: 1,
+      attemptKey: `review_practice_${resultRef.id}`,
+      createdAt: new Date(),
+    }).catch((e) => console.warn("[Supabase review_practice dual-write] 실패:", e));
 
     console.log(`복습 연습 기록 완료: userId=${userId}, quizId=${quizId}`, {
       score,

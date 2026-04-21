@@ -25,7 +25,7 @@ initializeApp();
 // ============================================
 // 퀴즈 관련 Functions
 // ============================================
-export { onQuizComplete, updateQuizStatistics, onQuizCreate, onQuizMakePublic } from "./quiz";
+export { onQuizComplete, updateQuizStatistics, onQuizCreate, onQuizMakePublic, onQuizSync } from "./quiz";
 
 // ============================================
 // 퀴즈 제출 (서버 채점 + 분산 쓰기)

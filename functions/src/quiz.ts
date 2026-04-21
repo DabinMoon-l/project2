@@ -6,6 +6,13 @@ import {
   addExpInTransaction,
   EXP_REWARDS,
 } from "./utils/gold";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteQuiz,
+  supabaseDualDeleteQuiz,
+} from "./utils/supabase";
 
 /**
  * 퀴즈 결과 문서 타입
@@ -446,5 +453,41 @@ export const onQuizMakePublic = onDocumentWritten(
     } catch (error) {
       console.error("퀴즈 공개 전환 보상 실패:", error);
     }
+  }
+);
+
+/**
+ * 퀴즈 Supabase 동기화 (create / update / delete)
+ *
+ * Firestore 트리거: quizzes/{quizId} onDocumentWritten
+ * - !before && after : 신규 → full upsert
+ * - before && after  : 변경 → full upsert (idempotent)
+ * - before && !after : 삭제 → delete (CASCADE)
+ *
+ * onQuizCreate / onQuizMakePublic 의 rewarded 업데이트도 이 트리거가 흡수.
+ */
+export const onQuizSync = onDocumentWritten(
+  {
+    document: "quizzes/{quizId}",
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
+  async (event) => {
+    const quizId = event.params.quizId;
+    const after = event.data?.after.data();
+    const beforeExists = event.data?.before.exists;
+
+    if (!after) {
+      if (beforeExists) {
+        await supabaseDualDeleteQuiz(quizId);
+      }
+      return;
+    }
+
+    await supabaseDualWriteQuiz(quizId, after);
   }
 );
