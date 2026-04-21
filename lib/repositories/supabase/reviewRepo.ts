@@ -102,6 +102,19 @@ async function resolveQuizUuid(firestoreQuizId: string): Promise<string | null> 
 // Row → Firestore 호환 Doc 변환
 // ============================================================
 
+/** Firestore Timestamp 호환 shim — toDate/toMillis 양쪽 제공 */
+function tsLike(iso: string | null | undefined) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const ms = d.getTime();
+  return {
+    toDate: () => d,
+    toMillis: () => ms,
+    seconds: Math.floor(ms / 1000),
+    nanoseconds: (ms % 1000) * 1e6,
+  };
+}
+
 interface ReviewRow {
   id: string;
   org_id: string;
@@ -158,9 +171,9 @@ function reviewRowToDoc(row: ReviewRow): ReviewDoc {
     reviewType: row.review_type,
     folderId: row.folder_id,
     courseId: courseCode,
-    lastReviewedAt: row.last_reviewed_at ? { toDate: () => new Date(row.last_reviewed_at as string) } : null,
-    createdAt: { toDate: () => new Date(row.created_at) },
-    updatedAt: { toDate: () => new Date(row.updated_at) },
+    lastReviewedAt: tsLike(row.last_reviewed_at as string | null),
+    createdAt: tsLike(row.created_at),
+    updatedAt: tsLike(row.updated_at),
     // metadata 평탄화 (quizTitle, quizCreatorId, quizUpdatedAt 등)
     ...metadata,
     // question_data 평탄화 (question, type, options, correctAnswer, userAnswer, explanation, ...)
@@ -177,8 +190,8 @@ function folderRowToDoc(row: FolderRow): ReviewDoc {
     name: row.name,
     sortOrder: row.sort_order,
     questions: row.questions || [],
-    createdAt: { toDate: () => new Date(row.created_at) },
-    updatedAt: { toDate: () => new Date(row.updated_at) },
+    createdAt: tsLike(row.created_at),
+    updatedAt: tsLike(row.updated_at),
   };
 }
 

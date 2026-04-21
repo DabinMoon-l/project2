@@ -56,6 +56,19 @@ async function buildUuidToCodeMap(): Promise<void> {
   }
 }
 
+/** Firestore Timestamp 호환 shim — toDate/toMillis 양쪽 제공 */
+function tsLike(iso: string | null | undefined) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const ms = d.getTime();
+  return {
+    toDate: () => d,
+    toMillis: () => ms,
+    seconds: Math.floor(ms / 1000),
+    nanoseconds: (ms % 1000) * 1e6,
+  };
+}
+
 interface RabbitRow {
   id: string;
   course_id: string;
@@ -93,20 +106,19 @@ function rabbitRowToDoc(row: RabbitRow): Record<string, unknown> {
     firstDiscovererName: row.first_discoverer_name,
     discovererCount: row.discoverer_count,
     discoverers: row.discoverers || [],
-    createdAt: { toDate: () => new Date(row.created_at) },
-    updatedAt: { toDate: () => new Date(row.updated_at) },
+    createdAt: tsLike(row.created_at),
+    updatedAt: tsLike(row.updated_at),
   };
 }
 
 function holdingRowToDoc(row: HoldingRow): Record<string, unknown> {
   const courseCode = _uuidToCodeCache.get(row.course_id) || row.course_id;
-  const discoveredAt = row.discovered_at ? new Date(row.discovered_at) : new Date(row.created_at);
   return {
     id: `${courseCode}_${row.rabbit_id}`,
     rabbitId: row.rabbit_id,
     courseId: courseCode,
     discoveryOrder: row.discovery_order ?? 1,
-    discoveredAt: { toDate: () => discoveredAt },
+    discoveredAt: tsLike(row.discovered_at || row.created_at),
     level: row.level ?? 1,
     stats: row.stats || {},
   };
