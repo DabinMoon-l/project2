@@ -9,7 +9,25 @@
 /test-results/
 /tests/e2e/report/
 /tests/load/tokens.json
+/tests/load/prof-tokens.json
 /tests/load/results/
+/tests/screenshots/
+
+# Firebase emulator / CF 빌드 산출물
+/functions/.next/
+/functions/lib/
+database-debug.log
+firestore-debug.log
+firebase-debug.log
+pglite-debug.log
+ui-debug.log
+
+# JVM 크래시 (Android 에뮬레이터 등)
+hs_err_pid*.log
+replay_pid*.log
+
+# Claude Code worktree
+/.claude/worktrees/
 
 # next.js
 /.next/
