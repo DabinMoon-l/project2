@@ -11,19 +11,13 @@
 
 import { useCallback } from 'react';
 import {
-  collection,
-  query,
-  where,
   doc,
-  deleteDoc,
-  updateDoc,
-  addDoc,
+  getDoc,
+  db,
   increment,
   serverTimestamp,
-  getDoc,
-  getDocs,
-  writeBatch,
-  db,
+  reviewRepo,
+  quizRepo,
   type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
@@ -140,7 +134,7 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      await deleteDoc(doc(db, 'reviews', reviewId));
+      await reviewRepo.deleteReview(reviewId);
     } catch (err) {
       console.error('복습 문제 삭제 실패:', err);
       throw new Error('문제 삭제에 실패했습니다.');
@@ -154,69 +148,51 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 퀴즈 제목 가져오기
+      // 퀴즈 제목
       let quizTitle = '퀴즈';
       try {
-        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-        if (quizDoc.exists()) {
-          quizTitle = quizDoc.data()?.title || '퀴즈';
+        const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+        if (quizData) {
+          quizTitle = (quizData.title as string) || '퀴즈';
         }
       } catch (e) {
         console.error('퀴즈 제목 로드 실패:', e);
       }
 
-      // 해당 퀴즈의 모든 solved 리뷰 가져오기
-      const solvedQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId),
-        where('reviewType', '==', 'solved')
-      );
-      const solvedDocs = await getDocs(solvedQuery);
+      // solved + wrong 리뷰 병렬 조회
+      const [solvedDocs, wrongDocs] = await Promise.all([
+        reviewRepo.fetchReviewsByQuiz(user.uid, quizId, { reviewType: 'solved' }),
+        reviewRepo.fetchReviewsByQuiz(user.uid, quizId, { reviewType: 'wrong' }),
+      ]);
 
       // 휴지통에 저장 (복원 데이터 포함)
-      const restoreData = {
-        solvedReviews: solvedDocs.docs.map(d => ({ id: d.id, ...d.data() })),
-      };
-
-      await addDoc(collection(db, 'deletedReviewItems'), {
+      await reviewRepo.addDeletedItem({
         userId: user.uid,
         courseId: userCourseId || null,
         type: 'solved',
         originalId: quizId,
         title: quizTitle,
-        questionCount: solvedDocs.size,
-        deletedAt: serverTimestamp(),
-        restoreData,
+        questionCount: solvedDocs.length,
+        restoreData: {
+          solvedReviews: solvedDocs,
+        },
       });
 
-      // 해당 퀴즈의 모든 wrong 리뷰 + quizResults도 병렬 조회
-      const [wrongDocs, resultsDocs] = await Promise.all([
-        getDocs(query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', quizId),
-          where('reviewType', '==', 'wrong')
-        )),
-        getDocs(query(
-          collection(db, 'quizResults'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', quizId)
-        )),
-      ]);
-
-      // writeBatch로 일괄 삭제 (순차 deleteDoc → 단일 배치)
-      const allDocs = [...solvedDocs.docs, ...wrongDocs.docs, ...resultsDocs.docs];
-      for (let i = 0; i < allDocs.length; i += 500) {
-        const batch = writeBatch(db);
-        allDocs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-        await batch.commit();
+      // 리뷰 일괄 삭제 (repo 경유)
+      const reviewIdsToDelete = [
+        ...solvedDocs.map(d => d.id),
+        ...wrongDocs.map(d => d.id),
+      ];
+      if (reviewIdsToDelete.length > 0) {
+        await reviewRepo.batchDeleteReviews(reviewIdsToDelete);
       }
+
+      // quizResults 삭제
+      await quizRepo.deleteQuizResultsByUserAndQuiz(user.uid, quizId);
 
       // quiz_completions에서 완료 기록 삭제
       try {
-        const completionDocId = `${quizId}_${user.uid}`;
-        await deleteDoc(doc(db, 'quiz_completions', completionDocId));
+        await quizRepo.deleteQuizCompletion(quizId, user.uid);
       } catch (updateErr) {
         console.error('quiz_completions 삭제 실패:', updateErr);
       }
@@ -240,12 +216,12 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 퀴즈 제목 가져오기
+      // 퀴즈 제목 (quiz 도메인 — repo 미적용 유지)
       let quizTitle = '퀴즈';
       try {
-        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-        if (quizDoc.exists()) {
-          quizTitle = quizDoc.data()?.title || '퀴즈';
+        const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+        if (quizData) {
+          quizTitle = (quizData.title as string) || '퀴즈';
         } else {
           const privateQuizDoc = await getDoc(doc(db, 'privateQuizzes', quizId));
           if (privateQuizDoc.exists()) {
@@ -256,35 +232,21 @@ export const useReview = (): UseReviewReturn => {
         console.error('퀴즈 제목 로드 실패:', e);
       }
 
-      // 해당 챕터의 오답만 가져오기
-      let wrongQuery;
-      if (chapterId) {
-        wrongQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', quizId),
-          where('chapterId', '==', chapterId),
-          where('reviewType', '==', 'wrong')
-        );
-      } else {
-        // 미분류 (chapterId가 null 또는 없음)
-        wrongQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', quizId),
-          where('reviewType', '==', 'wrong')
-        );
-        // chapterId가 없는 문서만 필터링
-      }
-      const wrongDocs = await getDocs(wrongQuery);
+      // 해당 챕터의 오답만 가져오기 (chapterId null이면 repo 호출 후 클라이언트 필터)
+      const wrongDocs = chapterId
+        ? await reviewRepo.fetchReviewsByQuiz(user.uid, quizId, {
+            reviewType: 'wrong',
+            chapterId,
+          })
+        : await reviewRepo.fetchReviewsByQuiz(user.uid, quizId, {
+            reviewType: 'wrong',
+          });
 
-      // chapterId가 null인 경우 추가 필터링
-      let filteredDocs = wrongDocs.docs;
-      if (!chapterId) {
-        filteredDocs = wrongDocs.docs.filter(d => !d.data().chapterId);
-      }
+      // chapterId null이면 chapterId가 없는 문서만 필터
+      const filteredDocs = chapterId
+        ? wrongDocs
+        : wrongDocs.filter(d => !(d as { chapterId?: unknown }).chapterId);
 
-      // 0문제면 삭제할 것이 없음
       if (filteredDocs.length === 0) {
         return;
       }
@@ -294,11 +256,7 @@ export const useReview = (): UseReviewReturn => {
         ? `${chapterName} · ${quizTitle}`
         : `미분류 · ${quizTitle}`;
 
-      const restoreData = {
-        wrongReviews: filteredDocs.map(d => ({ id: d.id, ...d.data() })),
-      };
-
-      await addDoc(collection(db, 'deletedReviewItems'), {
+      await reviewRepo.addDeletedItem({
         userId: user.uid,
         courseId: userCourseId || null,
         type: 'wrong',
@@ -306,16 +264,12 @@ export const useReview = (): UseReviewReturn => {
         chapterId: chapterId || null,
         title: displayTitle,
         questionCount: filteredDocs.length,
-        deletedAt: serverTimestamp(),
-        restoreData,
+        restoreData: {
+          wrongReviews: filteredDocs,
+        },
       });
 
-      // writeBatch로 일괄 삭제
-      for (let i = 0; i < filteredDocs.length; i += 500) {
-        const batch = writeBatch(db);
-        filteredDocs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
+      await reviewRepo.batchDeleteReviews(filteredDocs.map(d => d.id));
     } catch (err) {
       console.error('오답 폴더 삭제 실패:', err);
       throw new Error('삭제에 실패했습니다.');
@@ -329,15 +283,13 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 퀴즈 제목 가져오기 (공개 퀴즈 또는 비공개 퀴즈)
+      // 퀴즈 제목 (quiz 도메인 — repo 미적용 유지)
       let quizTitle = '퀴즈';
       try {
-        // 먼저 공개 퀴즈에서 찾기
-        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-        if (quizDoc.exists()) {
-          quizTitle = quizDoc.data()?.title || '퀴즈';
+        const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+        if (quizData) {
+          quizTitle = (quizData.title as string) || '퀴즈';
         } else {
-          // 비공개 퀴즈에서 찾기
           const privateQuizDoc = await getDoc(doc(db, 'privateQuizzes', quizId));
           if (privateQuizDoc.exists()) {
             quizTitle = privateQuizDoc.data()?.title || '퀴즈';
@@ -347,36 +299,24 @@ export const useReview = (): UseReviewReturn => {
         console.error('퀴즈 제목 로드 실패:', e);
       }
 
-      // 해당 퀴즈의 모든 wrong 리뷰 가져오기
-      const wrongQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId),
-        where('reviewType', '==', 'wrong')
-      );
-      const wrongDocs = await getDocs(wrongQuery);
+      const wrongDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, quizId, {
+        reviewType: 'wrong',
+      });
 
-      // 휴지통에 저장
-      const restoreData = {
-        wrongReviews: wrongDocs.docs.map(d => ({ id: d.id, ...d.data() })),
-      };
-
-      await addDoc(collection(db, 'deletedReviewItems'), {
+      await reviewRepo.addDeletedItem({
         userId: user.uid,
         courseId: userCourseId || null,
         type: 'wrong',
         originalId: quizId,
         title: quizTitle,
-        questionCount: wrongDocs.size,
-        deletedAt: serverTimestamp(),
-        restoreData,
+        questionCount: wrongDocs.length,
+        restoreData: {
+          wrongReviews: wrongDocs,
+        },
       });
 
-      // writeBatch로 일괄 삭제
-      for (let i = 0; i < wrongDocs.docs.length; i += 500) {
-        const batch = writeBatch(db);
-        wrongDocs.docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-        await batch.commit();
+      if (wrongDocs.length > 0) {
+        await reviewRepo.batchDeleteReviews(wrongDocs.map(d => d.id));
       }
     } catch (err) {
       console.error('오답 폴더 삭제 실패:', err);
@@ -391,66 +331,50 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 퀴즈 제목 가져오기
+      // 퀴즈 제목
       let quizTitle = '퀴즈';
       try {
-        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-        if (quizDoc.exists()) {
-          quizTitle = quizDoc.data()?.title || '퀴즈';
+        const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+        if (quizData) {
+          quizTitle = (quizData.title as string) || '퀴즈';
         }
       } catch (e) {
         console.error('퀴즈 제목 로드 실패:', e);
       }
 
-      // 해당 퀴즈의 bookmark 전용 리뷰 가져오기
-      const bookmarkQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId),
-        where('reviewType', '==', 'bookmark')
-      );
-      const bookmarkDocs = await getDocs(bookmarkQuery);
+      // bookmark 전용 리뷰 + 플래그된 다른 타입 리뷰 병렬 조회
+      const [bookmarkDocs, flaggedDocs] = await Promise.all([
+        reviewRepo.fetchReviewsByQuiz(user.uid, quizId, { reviewType: 'bookmark' }),
+        reviewRepo.fetchReviewsByQuiz(user.uid, quizId, { flaggedOnly: true }),
+      ]);
 
-      // 다른 타입(solved/wrong)에서 isBookmarked=true인 리뷰도 가져오기
-      const flaggedQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId),
-        where('isBookmarked', '==', true)
+      const nonBookmarkFlagged = flaggedDocs.filter(
+        d => (d as { reviewType?: string }).reviewType !== 'bookmark'
       );
-      const flaggedDocs = await getDocs(flaggedQuery);
-      // bookmark 타입이 아닌 문서만 필터
-      const nonBookmarkFlagged = flaggedDocs.docs.filter(d => d.data().reviewType !== 'bookmark');
 
       // 휴지통에 저장 (복원용 review ID 목록)
-      const restoreData = {
-        bookmarkedReviewIds: bookmarkDocs.docs.map(d => d.id),
-        flaggedReviewIds: nonBookmarkFlagged.map(d => d.id),
-      };
-
-      await addDoc(collection(db, 'deletedReviewItems'), {
+      await reviewRepo.addDeletedItem({
         userId: user.uid,
         courseId: userCourseId || null,
         type: 'bookmark',
         originalId: quizId,
         title: quizTitle,
-        questionCount: bookmarkDocs.size,
-        deletedAt: serverTimestamp(),
-        restoreData,
+        questionCount: bookmarkDocs.length,
+        restoreData: {
+          bookmarkedReviewIds: bookmarkDocs.map(d => d.id),
+          flaggedReviewIds: nonBookmarkFlagged.map(d => d.id),
+        },
       });
 
-      // writeBatch로 일괄 처리 (삭제 + 플래그 해제)
-      const allBatchDocs = [...bookmarkDocs.docs, ...nonBookmarkFlagged];
-      for (let i = 0; i < allBatchDocs.length; i += 500) {
-        const batch = writeBatch(db);
-        allBatchDocs.slice(i, i + 500).forEach(d => {
-          if (bookmarkDocs.docs.includes(d)) {
-            batch.delete(d.ref);
-          } else {
-            batch.update(d.ref, { isBookmarked: false });
-          }
-        });
-        await batch.commit();
+      // bookmark 타입은 삭제, 다른 타입의 isBookmarked=true 는 플래그만 해제
+      if (bookmarkDocs.length > 0) {
+        await reviewRepo.batchDeleteReviews(bookmarkDocs.map(d => d.id));
+      }
+      if (nonBookmarkFlagged.length > 0) {
+        await reviewRepo.batchUpdateReviews(
+          nonBookmarkFlagged.map(d => d.id),
+          { isBookmarked: false },
+        );
       }
     } catch (err) {
       console.error('찜한 문제 폴더 삭제 실패:', err);
@@ -465,7 +389,7 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      await updateDoc(doc(db, 'reviews', reviewId), {
+      await reviewRepo.updateReview(reviewId, {
         reviewCount: increment(1),
         lastReviewedAt: serverTimestamp(),
       });
@@ -483,41 +407,23 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 퀴즈 데이터 가져오기
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-      if (!quizDoc.exists()) return;
+      // 퀴즈 데이터
+      const quizData = await quizRepo.getQuiz<DocumentData>(quizId);
+      if (!quizData) return;
 
-      const quizData = quizDoc.data();
       const questions = quizData.questions || [];
       const quizTitle = quizData.title || '퀴즈';
       const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
 
       // 해당 퀴즈의 기존 review 항목들 가져오기
-      const existingReviewsQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId)
-      );
-      const existingReviews = await getDocs(existingReviewsQuery);
+      const existingReviews = await reviewRepo.fetchReviewsByQuiz(user.uid, quizId);
 
       // 기존 리뷰를 questionId+reviewType 키로 매핑
       const existingReviewMap = new Map<string, { docId: string; data: DocumentData }>();
-      existingReviews.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
+      existingReviews.forEach((r) => {
+        const data = r as DocumentData;
         const key = `${data.questionId}-${data.reviewType}`;
-        existingReviewMap.set(key, { docId: docSnapshot.id, data });
-      });
-
-      // 새 퀴즈의 questionId 집합
-      const newQuestionIds = new Set<string>();
-      questions.forEach((q: DocumentData, i: number) => {
-        newQuestionIds.add(q.id || `q${i}`);
-      });
-
-      // 인덱스 기반 매핑을 위해 기존 리뷰의 questionId 추출
-      const existingQuestionIds = new Set<string>();
-      existingReviews.forEach((docSnapshot) => {
-        existingQuestionIds.add(docSnapshot.data().questionId);
+        existingReviewMap.set(key, { docId: r.id, data });
       });
 
       // 각 문제에 대해 업데이트 또는 생성
@@ -531,13 +437,12 @@ export const useReview = (): UseReviewReturn => {
 
         // 이 문제에 대한 기존 리뷰 타입들 찾기
         const existingTypesForQuestion: string[] = [];
-        existingReviewMap.forEach((value, key) => {
+        existingReviewMap.forEach((_value, key) => {
           if (key.startsWith(`${questionId}-`)) {
             existingTypesForQuestion.push(key.split('-')[1]);
           }
         });
 
-        // 기존 타입이 없으면 'solved'만 생성
         const typesToProcess = existingTypesForQuestion.length > 0
           ? existingTypesForQuestion
           : ['solved'];
@@ -547,8 +452,7 @@ export const useReview = (): UseReviewReturn => {
           const existing = existingReviewMap.get(key);
 
           if (existing) {
-            // 기존 리뷰 업데이트 - 문제 내용만 업데이트하고 userAnswer, isCorrect 등은 유지
-            await updateDoc(doc(db, 'reviews', existing.docId), {
+            await reviewRepo.updateReview(existing.docId, {
               quizTitle,
               question: q.text || q.question || '',
               type: normalizedType,
@@ -557,11 +461,9 @@ export const useReview = (): UseReviewReturn => {
               explanation: q.explanation || '',
               quizUpdatedAt,
             });
-            // 처리됨 표시
             existingReviewMap.delete(key);
           } else {
-            // 새 리뷰 생성
-            await addDoc(collection(db, 'reviews'), {
+            await reviewRepo.addReview({
               userId: user.uid,
               quizId,
               quizTitle,
@@ -579,15 +481,12 @@ export const useReview = (): UseReviewReturn => {
               lastReviewedAt: null,
               quizUpdatedAt,
               courseId: userCourseId || null,
-              createdAt: serverTimestamp(),
             });
           }
         }
       }
 
       // 남은 기존 리뷰들 (새 퀴즈에 없는 문제들)은 삭제하지 않고 유지
-
-      // 업데이트 정보 리셋 (refreshKey 변경으로 useReviewUpdateCheck 재실행)
       refresh();
 
     } catch (err) {
@@ -604,26 +503,24 @@ export const useReview = (): UseReviewReturn => {
 
     try {
       if (item.isBookmarked) {
-        // 이미 찜한 문제면 bookmark 리뷰 삭제
-        const bookmarkQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', item.quizId),
-          where('questionId', '==', item.questionId),
-          where('reviewType', '==', 'bookmark')
+        // 이미 찜한 문제면 bookmark 리뷰 삭제 (questionId 매칭은 클라 필터)
+        const bookmarkDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, item.quizId, {
+          reviewType: 'bookmark',
+        });
+        const matched = bookmarkDocs.filter(
+          d => (d as { questionId?: string }).questionId === item.questionId
         );
-        const bookmarkDocs = await getDocs(bookmarkQuery);
-        for (const docSnap of bookmarkDocs.docs) {
-          await deleteDoc(docSnap.ref);
+        for (const d of matched) {
+          await reviewRepo.deleteReview(d.id);
         }
 
         // 원본 리뷰의 isBookmarked 플래그 업데이트
         if (item.reviewType !== 'bookmark') {
-          await updateDoc(doc(db, 'reviews', item.id), { isBookmarked: false });
+          await reviewRepo.updateReview(item.id, { isBookmarked: false });
         }
       } else {
         // 찜 안한 문제면 bookmark 리뷰 생성
-        await addDoc(collection(db, 'reviews'), {
+        await reviewRepo.addReview({
           userId: user.uid,
           quizId: item.quizId,
           quizTitle: item.quizTitle || '',
@@ -665,12 +562,11 @@ export const useReview = (): UseReviewReturn => {
           ...(item.passagePrompt && { passagePrompt: item.passagePrompt }),
           ...(item.bogiQuestionText && { bogiQuestionText: item.bogiQuestionText }),
           ...(item.bogi && { bogi: item.bogi }),
-          createdAt: serverTimestamp(),
         });
 
         // 원본 리뷰의 isBookmarked 플래그 업데이트
         if (item.reviewType !== 'bookmark') {
-          await updateDoc(doc(db, 'reviews', item.id), { isBookmarked: true });
+          await reviewRepo.updateReview(item.id, { isBookmarked: true });
         }
       }
     } catch (err) {

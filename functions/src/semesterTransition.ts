@@ -10,6 +10,13 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
 import { getAuth, Auth } from "firebase-admin/auth";
+import {
+  DEFAULT_ORG_ID_SECRET,
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  supabaseDualDeleteReviewsByUser,
+  supabaseDualDeleteFoldersByUser,
+} from "./utils/supabase";
 
 // 과목 ID 상수
 const COURSE_IDS = {
@@ -70,6 +77,9 @@ async function resetStudentData(
     await reviewBatch.commit();
   }
 
+  // Supabase 듀얼 삭제
+  await supabaseDualDeleteReviewsByUser(userId);
+
   // 3. 퀴즈 결과 삭제 (quizResults)
   const resultsSnapshot = await db
     .collection("quizResults")
@@ -97,6 +107,9 @@ async function resetStudentData(
     }
     await foldersBatch.commit();
   }
+
+  // Supabase 듀얼 삭제
+  await supabaseDualDeleteFoldersByUser(userId);
 
   // 5. 퀴즈 북마크 삭제 (quizBookmarks)
   const bookmarksSnapshot = await db
@@ -163,6 +176,10 @@ async function deleteStudentAccount(
     }
   }
 
+  // Supabase 듀얼 삭제
+  await supabaseDualDeleteReviewsByUser(userId);
+  await supabaseDualDeleteFoldersByUser(userId);
+
   // 2. 경험치 히스토리 삭제 (서브컬렉션)
   const expHistorySnapshot = await db
     .collection("users")
@@ -202,6 +219,11 @@ export const februaryTransition = onSchedule(
     schedule: "0 0 22 2 *", // 매년 2월 22일 0시 (자정)
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async () => {
     console.log("=== 2월 22일 학기 전환 시작 ===");
@@ -270,6 +292,11 @@ export const augustTransition = onSchedule(
     schedule: "0 0 22 8 *", // 매년 8월 22일 0시 (자정)
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async () => {
     console.log("=== 8월 22일 학기 전환 시작 ===");

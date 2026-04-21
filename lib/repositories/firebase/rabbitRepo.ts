@@ -44,6 +44,28 @@ export function subscribeHoldings(
 // 토끼 도감
 // ============================================================
 
+/** 특정 토끼 문서 실시간 구독 */
+export function subscribeRabbitDoc(
+  courseId: string,
+  rabbitId: number,
+  callback: (rabbit: Record<string, unknown> | null) => void,
+  onError?: ErrorCallback,
+): Unsubscribe {
+  const docId = `${courseId}_${rabbitId}`;
+  const ref = doc(db, 'rabbits', docId);
+  return onSnapshot(
+    ref,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        callback(null);
+      }
+    },
+    onError ? (err) => onError(err as Error) : undefined,
+  );
+}
+
 /** 과목별 토끼 도감 구독 */
 export function subscribeRabbitsForCourse(
   courseId: string,

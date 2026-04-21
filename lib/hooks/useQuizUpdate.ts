@@ -10,14 +10,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
   Timestamp,
-  db,
+  quizRepo,
   type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
@@ -137,17 +131,10 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
 
     try {
       // 1. 사용자의 퀴즈 결과 가져오기
-      const resultsQuery = query(
-        collection(db, 'quizResults'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId)
-      );
-      const resultsSnapshot = await getDocs(resultsQuery);
+      const allResults = await quizRepo.fetchQuizResultsByUserAndQuiz<DocumentData>(user.uid, quizId);
 
       // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
-      const firstResults = resultsSnapshot.docs.filter(
-        (doc) => !doc.data().isUpdate
-      );
+      const firstResults = allResults.filter((data) => !data.isUpdate);
 
       if (firstResults.length === 0) {
         // 결과가 없으면 (아직 안 푼 퀴즈) null 반환
@@ -155,17 +142,15 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       }
 
       // 가장 최근 결과 사용
-      const resultDoc = firstResults[0];
-      const resultData = resultDoc.data();
+      const resultData = firstResults[0];
       const questionScores = resultData.questionScores || {};
 
       // 2. 퀴즈 데이터 가져오기
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-      if (!quizDoc.exists()) {
+      const quizData = await quizRepo.getQuiz<DocumentData>(quizId);
+      if (!quizData) {
         return null;
       }
 
-      const quizData = quizDoc.data();
       const questions = quizData.questions || [];
 
       // 3. 수정된 문제 찾기
@@ -287,7 +272,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
         hasUpdate: updatedQuestions.length > 0,
         updatedQuestionCount: updatedQuestions.length,
         updatedQuestions,
-        originalResultId: resultDoc.id,
+        originalResultId: resultData.id,
         originalQuestionScores: questionScores,
       };
 
@@ -310,25 +295,13 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       setError(null);
 
       // 1. 사용자의 모든 퀴즈 결과 1회 조회
-      const resultsQuery = userCourseId
-        ? query(
-            collection(db, 'quizResults'),
-            where('userId', '==', user.uid),
-            where('courseId', '==', userCourseId)
-          )
-        : query(
-            collection(db, 'quizResults'),
-            where('userId', '==', user.uid)
-          );
-
-      const resultsSnapshot = await getDocs(resultsQuery);
+      const allResults = await quizRepo.fetchQuizResultsByUser<DocumentData>(user.uid, { courseId: userCourseId });
 
       // quizId별로 그룹핑 (isUpdate가 아닌 첫 번째 결과만)
       const resultsByQuiz = new Map<string, { docId: string; data: DocumentData }>();
-      resultsSnapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
+      allResults.forEach((data) => {
         if (!data.isUpdate && !resultsByQuiz.has(data.quizId)) {
-          resultsByQuiz.set(data.quizId, { docId: docSnapshot.id, data });
+          resultsByQuiz.set(data.quizId, { docId: data.id, data });
         }
       });
 
@@ -337,21 +310,19 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
         return;
       }
 
-      // 2. 퀴즈 문서만 배치 조회 (quizResults 재조회 없음)
+      // 2. 퀴즈 문서 배치 조회
       const quizIds = Array.from(resultsByQuiz.keys());
-      const quizDocPromises = quizIds.map(qid => getDoc(doc(db, 'quizzes', qid)));
-      const quizDocs = await Promise.all(quizDocPromises);
+      const quizDocs = await quizRepo.fetchQuizzesByIds<DocumentData>(quizIds);
+      const quizDataMap = new Map(quizDocs.map((q) => [q.id, q]));
 
       // 3. 클라이언트에서 업데이트 판별
       const newUpdatedQuizzes = new Map<string, QuizUpdateInfo>();
 
-      for (let i = 0; i < quizIds.length; i++) {
-        const quizId = quizIds[i];
-        const quizDoc = quizDocs[i];
-        if (!quizDoc.exists()) continue;
+      for (const quizId of quizIds) {
+        const quizData = quizDataMap.get(quizId);
+        if (!quizData) continue;
 
         const result = resultsByQuiz.get(quizId)!;
-        const quizData = quizDoc.data();
         const questions = quizData.questions || [];
         const questionScores = result.data.questionScores || {};
 

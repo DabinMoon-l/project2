@@ -3,14 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  increment,
-  serverTimestamp,
-  db,
-} from '@/lib/repositories';
+import { reviewRepo } from '@/lib/repositories';
 import { useUser } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useHideNav } from '@/lib/hooks/useHideNav';
@@ -65,19 +58,16 @@ export default function RandomReviewPage() {
         const loadedQuestions: ReviewQuestion[] = [];
 
         for (const id of ids) {
-          const docRef = doc(db, 'reviews', id);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
+          const data = await reviewRepo.getReview(id);
+          if (data) {
             loadedQuestions.push({
-              id: docSnap.id,
-              questionId: data.questionId,
-              question: data.question || data.questionText || '',
-              type: data.type || data.questionType || 'multiple',
-              options: data.options || data.choices || [],
-              correctAnswer: data.correctAnswer || '',
-              explanation: data.explanation || '',
+              id: data.id,
+              questionId: (data.questionId as string),
+              question: (data.question as string) || (data.questionText as string) || '',
+              type: (data.type as string) || (data.questionType as string) || 'multiple',
+              options: (data.options as string[]) || (data.choices as string[]) || [],
+              correctAnswer: (data.correctAnswer as string) || '',
+              explanation: (data.explanation as string) || '',
             });
           }
         }
@@ -146,10 +136,7 @@ export default function RandomReviewPage() {
   const markAllAsReviewed = async () => {
     for (const q of questions) {
       try {
-        await updateDoc(doc(db, 'reviews', q.id), {
-          reviewCount: increment(1),
-          lastReviewedAt: serverTimestamp(),
-        });
+        await reviewRepo.incrementReviewCount(q.id);
       } catch (err) {
         console.error('markAsReviewed 실패:', q.id, err);
       }

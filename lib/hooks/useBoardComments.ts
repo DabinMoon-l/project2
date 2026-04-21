@@ -8,20 +8,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection,
   doc,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
   getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   serverTimestamp,
-  onSnapshot,
   db,
+  postRepo,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import type {
@@ -64,23 +55,17 @@ export const useComments = (postId: string): UseCommentsReturn => {
     setLoading(true);
     setError(null);
 
-    const commentsQuery = query(
-      collection(db, 'comments'),
-      where('postId', '==', postId),
-      orderBy('createdAt', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(
-      commentsQuery,
-      (snapshot) => {
-        setComments(snapshot.docs.map(docToComment));
+    const unsubscribe = postRepo.subscribeComments(
+      postId,
+      (docs) => {
+        setComments(docs.map((d) => docToComment(d)));
         setLoading(false);
       },
       (err) => {
         console.error('댓글 실시간 구독 실패:', err);
         setError('댓글을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -144,7 +129,6 @@ export const useCreateComment = (): UseCreateCommentReturn => {
           content: data.content,
           imageUrls: data.imageUrls || [],
           isAnonymous: false, // 익명 기능 사용 안 함
-          createdAt: serverTimestamp(),
         };
 
         // 대댓글인 경우 parentId 추가
@@ -152,14 +136,14 @@ export const useCreateComment = (): UseCreateCommentReturn => {
           commentData.parentId = data.parentId;
         }
 
-        const docRef = await addDoc(collection(db, 'comments'), commentData);
+        const newCommentId = await postRepo.createComment(commentData);
 
         // commentCount 증가는 CF(onCommentCreate)에서 서버사이드 처리
 
         // 작성 시간 기록
         recordCommentTime();
 
-        return docRef.id;
+        return newCommentId;
       } catch (err) {
         console.error('댓글 작성 실패:', err);
         setError('댓글 작성에 실패했습니다.');
@@ -200,21 +184,18 @@ export const useDeleteComment = (): UseDeleteCommentReturn => {
         setError(null);
 
         // 댓글 작성자 확인
-        const commentRef = doc(db, 'comments', commentId);
-        const commentSnap = await getDoc(commentRef);
-
-        if (!commentSnap.exists()) {
+        const commentData = await postRepo.getComment(commentId);
+        if (!commentData) {
           setError('댓글을 찾을 수 없습니다.');
           return false;
         }
-
-        if (commentSnap.data().authorId !== user.uid) {
+        if (commentData.authorId !== user.uid) {
           setError('삭제 권한이 없습니다.');
           return false;
         }
 
         // 댓글 삭제 → CF(onCommentDeleted)에서 commentCount 서버사이드 감소
-        await deleteDoc(commentRef);
+        await postRepo.deleteComment(commentId);
 
         return true;
       } catch (err) {
@@ -257,14 +238,9 @@ export const useMyComments = (skip = false): UseMyCommentsReturn => {
       setError(null);
 
       // 내가 쓴 댓글 조회 (인덱스 없이 조회 후 클라이언트에서 정렬)
-      const myCommentsQuery = query(
-        collection(db, 'comments'),
-        where('authorId', '==', user.uid),
-        limit(50)
-      );
-
-      const snapshot = await getDocs(myCommentsQuery);
-      const myComments = snapshot.docs.map(docToComment)
+      const rawComments = await postRepo.fetchCommentsByAuthor(user.uid, 50);
+      const myComments = rawComments
+        .map((d) => docToComment(d))
         // 클라이언트 측에서 최신순 정렬
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -274,8 +250,8 @@ export const useMyComments = (skip = false): UseMyCommentsReturn => {
 
       await Promise.all(postIds.map(async (postId) => {
         try {
-          const postDoc = await getDoc(doc(db, 'posts', postId));
-          postTitles.set(postId, postDoc.exists() ? (postDoc.data().title || '삭제된 게시글') : '삭제된 게시글');
+          const post = await postRepo.getPost(postId);
+          postTitles.set(postId, post ? ((post.title as string) || '삭제된 게시글') : '삭제된 게시글');
         } catch {
           postTitles.set(postId, '삭제된 게시글');
         }
@@ -333,15 +309,12 @@ export const useUpdateComment = (): UseUpdateCommentReturn => {
         setError(null);
 
         // 댓글 작성자 확인
-        const commentRef = doc(db, 'comments', commentId);
-        const commentSnap = await getDoc(commentRef);
-
-        if (!commentSnap.exists()) {
+        const commentData = await postRepo.getComment(commentId);
+        if (!commentData) {
           setError('댓글을 찾을 수 없습니다.');
           return false;
         }
-
-        if (commentSnap.data().authorId !== user.uid) {
+        if (commentData.authorId !== user.uid) {
           setError('수정 권한이 없습니다.');
           return false;
         }
@@ -354,7 +327,7 @@ export const useUpdateComment = (): UseUpdateCommentReturn => {
           updateData.imageUrls = imageUrls;
         }
 
-        await updateDoc(commentRef, updateData);
+        await postRepo.updateComment(commentId, updateData);
 
         return true;
       } catch (err) {

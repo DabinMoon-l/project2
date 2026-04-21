@@ -5,6 +5,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getDatabase } from "firebase-admin/database";
 import {
+  DEFAULT_ORG_ID_SECRET,
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+} from "../utils/supabase";
+import {
   calcDamage,
   BATTLE_CONFIG,
   MUTUAL_DAMAGE,
@@ -136,7 +141,16 @@ async function scoreRound(
 // scored transaction lock으로 이중 채점 방지
 // ============================================
 export const submitAnswer = onCall(
-  { region: "asia-northeast3", memory: "512MiB", minInstances: 1 },
+  {
+    region: "asia-northeast3",
+    memory: "512MiB",
+    minInstances: 1,
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -274,7 +288,14 @@ export const submitAnswer = onCall(
 // scored transaction lock으로 이중 채점 방지
 // ============================================
 export const submitTimeout = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");

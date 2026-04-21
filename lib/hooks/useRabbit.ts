@@ -9,16 +9,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  collection,
-  doc,
-  query,
-  where,
-  onSnapshot,
-  orderBy,
-  db,
-  Timestamp,
-} from '@/lib/repositories';
+import { rabbitRepo, Timestamp } from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의
@@ -185,22 +176,16 @@ export function useRabbitHoldings(userId: string | undefined) {
       return;
     }
 
-    const holdingsRef = collection(db, 'users', userId, 'rabbitHoldings');
-
-    const unsubscribe = onSnapshot(
-      holdingsRef,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as RabbitHolding[];
-        setHoldings(data);
+    const unsubscribe = rabbitRepo.subscribeHoldings(
+      userId,
+      (rows) => {
+        setHoldings(rows as unknown as RabbitHolding[]);
         setLoading(false);
       },
       (err) => {
         console.error('토끼 보유 목록 구독 에러:', err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -224,23 +209,17 @@ export function useRabbitDoc(courseId: string | undefined | null, rabbitId: numb
       return;
     }
 
-    const docId = `${courseId}_${rabbitId}`;
-    const rabbitRef = doc(db, 'rabbits', docId);
-
-    const unsubscribe = onSnapshot(
-      rabbitRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setRabbit({ id: docSnap.id, ...docSnap.data() } as RabbitDoc);
-        } else {
-          setRabbit(null);
-        }
+    const unsubscribe = rabbitRepo.subscribeRabbitDoc(
+      courseId,
+      rabbitId,
+      (row) => {
+        setRabbit(row as unknown as RabbitDoc | null);
         setLoading(false);
       },
       (err) => {
         console.error('토끼 문서 구독 에러:', err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -264,26 +243,16 @@ export function useRabbitsForCourse(courseId: string | undefined) {
       return;
     }
 
-    const q = query(
-      collection(db, 'rabbits'),
-      where('courseId', '==', courseId),
-      orderBy('rabbitId', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as RabbitDoc[];
-        setRabbits(data);
+    const unsubscribe = rabbitRepo.subscribeRabbitsForCourse(
+      courseId,
+      (rows) => {
+        setRabbits(rows as unknown as RabbitDoc[]);
         setLoading(false);
       },
       (err) => {
         console.error('도감 구독 에러:', err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();

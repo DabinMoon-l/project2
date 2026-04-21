@@ -3,25 +3,18 @@
  *
  * deletedReviewItems 컬렉션에서 삭제된 항목을 로드하고,
  * 복원 및 영구 삭제 기능을 제공한다.
+ *
+ * 주의: deletedReviewItems 는 Phase 2 Supabase 이관 대상에서 제외됨 (Firebase 전용).
+ * 휴지통은 삭제 스냅샷의 일시 저장소라 전환 가치가 낮다.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  doc,
-  deleteDoc,
-  addDoc,
-  setDoc,
-  getDoc,
-  getDocs,
-  writeBatch,
   serverTimestamp,
-  db,
+  reviewRepo,
+  quizRepo,
 } from '@/lib/repositories';
 import type { DeletedItem } from './useReviewTypes';
 
@@ -65,34 +58,20 @@ export function useReviewTrash(
 
     let isMounted = true;
 
-    const deletedQuery = userCourseId
-      ? query(
-          collection(db, 'deletedReviewItems'),
-          where('userId', '==', userId),
-          where('courseId', '==', userCourseId),
-          orderBy('deletedAt', 'desc')
-        )
-      : query(
-          collection(db, 'deletedReviewItems'),
-          where('userId', '==', userId),
-          orderBy('deletedAt', 'desc')
-        );
-
-    getDocs(deletedQuery).then((snapshot) => {
-      const items: DeletedItem[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        items.push({
-          id: docSnap.id,
-          userId: data.userId,
-          courseId: data.courseId,
-          type: data.type,
-          originalId: data.originalId,
-          title: data.title,
-          questionCount: data.questionCount || 0,
-          deletedAt: data.deletedAt,
-          restoreData: data.restoreData,
-        });
+    reviewRepo.fetchDeletedItems(userId, userCourseId).then((docs) => {
+      const items: DeletedItem[] = docs.map((d) => {
+        const data = d as Record<string, unknown>;
+        return {
+          id: d.id,
+          userId: data.userId as string,
+          courseId: data.courseId as string | null,
+          type: data.type as DeletedItem['type'],
+          originalId: data.originalId as string,
+          title: data.title as string,
+          questionCount: (data.questionCount as number) || 0,
+          deletedAt: data.deletedAt as DeletedItem['deletedAt'],
+          restoreData: data.restoreData as DeletedItem['restoreData'],
+        };
       });
       if (isMounted) setDeletedItems(items);
     }).catch((err) => {
@@ -109,71 +88,51 @@ export function useReviewTrash(
     if (!userId) return;
 
     try {
-      const deletedRef = doc(db, 'deletedReviewItems', deletedItemId);
-      const deletedDoc = await getDoc(deletedRef);
-
-      if (!deletedDoc.exists()) {
+      const deletedData = await reviewRepo.getDeletedItem(deletedItemId);
+      if (!deletedData) {
         throw new Error('삭제된 항목을 찾을 수 없습니다.');
       }
 
-      const data = deletedDoc.data();
-      const restoreData = data.restoreData;
+      const data = deletedData as Record<string, unknown>;
+      const restoreData = data.restoreData as Record<string, unknown> | undefined;
 
-      // 타입에 따라 복원 (writeBatch로 일괄 처리)
+      // 타입에 따라 복원
       if (data.type === 'solved' && restoreData?.solvedReviews) {
-        // 푼 문제 복원
-        for (let i = 0; i < restoreData.solvedReviews.length; i += 500) {
-          const batch = writeBatch(db);
-          restoreData.solvedReviews.slice(i, i + 500).forEach((review: Record<string, unknown>) => {
-            const { id, ...reviewData } = review;
-            const newRef = doc(collection(db, 'reviews'));
-            batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });
-          });
-          await batch.commit();
-        }
+        const solvedReviews = restoreData.solvedReviews as Record<string, unknown>[];
+        const toInsert = solvedReviews.map((review) => {
+          const { id: _id, ...reviewData } = review;
+          return reviewData;
+        });
+        await reviewRepo.batchAddReviews(toInsert);
+
         // quiz_completions 복원
         try {
-          const completionDocId = `${data.originalId}_${userId}`;
-          await setDoc(doc(db, 'quiz_completions', completionDocId), {
+          await quizRepo.mergeQuizCompletion(data.originalId as string, userId, {
             quizId: data.originalId,
             userId: userId,
             completedAt: serverTimestamp(),
-          }, { merge: true });
+          });
         } catch (e) {
           console.error('quiz_completions 복원 실패:', e);
         }
       } else if (data.type === 'wrong' && restoreData?.wrongReviews) {
-        // 오답 복원
-        for (let i = 0; i < restoreData.wrongReviews.length; i += 500) {
-          const batch = writeBatch(db);
-          restoreData.wrongReviews.slice(i, i + 500).forEach((review: Record<string, unknown>) => {
-            const { id, ...reviewData } = review;
-            const newRef = doc(collection(db, 'reviews'));
-            batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });
-          });
-          await batch.commit();
-        }
-      } else if (data.type === 'bookmark' && restoreData?.bookmarkedReviewIds) {
-        // 찜 복원
-        const reviewIds = restoreData.bookmarkedReviewIds as string[];
-        for (let i = 0; i < reviewIds.length; i += 500) {
-          const batch = writeBatch(db);
-          reviewIds.slice(i, i + 500).forEach((reviewId: string) => {
-            batch.update(doc(db, 'reviews', reviewId), { isBookmarked: true });
-          });
-          await batch.commit();
-        }
-      } else if (data.type === 'custom' && restoreData?.folderData) {
-        // 커스텀 폴더 복원
-        const { id, ...folderData } = restoreData.folderData;
-        await addDoc(collection(db, 'customFolders'), {
-          ...folderData,
-          createdAt: serverTimestamp(),
+        const wrongReviews = restoreData.wrongReviews as Record<string, unknown>[];
+        const toInsert = wrongReviews.map((review) => {
+          const { id: _id, ...reviewData } = review;
+          return reviewData;
         });
+        await reviewRepo.batchAddReviews(toInsert);
+      } else if (data.type === 'bookmark' && restoreData?.bookmarkedReviewIds) {
+        const reviewIds = restoreData.bookmarkedReviewIds as string[];
+        await reviewRepo.batchUpdateReviews(reviewIds, { isBookmarked: true });
+      } else if (data.type === 'custom' && restoreData?.folderData) {
+        const folderData = restoreData.folderData as Record<string, unknown>;
+        const { id: _id, ...rest } = folderData;
+        await reviewRepo.addFolder(rest);
       }
 
       // 휴지통에서 삭제
-      await deleteDoc(deletedRef);
+      await reviewRepo.deleteDeletedItem(deletedItemId);
     } catch (err) {
       console.error('항목 복원 실패:', err);
       throw new Error('복원에 실패했습니다.');
@@ -185,7 +144,7 @@ export function useReviewTrash(
     if (!userId) return;
 
     try {
-      await deleteDoc(doc(db, 'deletedReviewItems', deletedItemId));
+      await reviewRepo.deleteDeletedItem(deletedItemId);
     } catch (err) {
       console.error('영구 삭제 실패:', err);
       throw new Error('영구 삭제에 실패했습니다.');

@@ -4,8 +4,13 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getDatabase } from "firebase-admin/database";
-import { calcBaseDamage } from "../utils/tekkenDamage";
+import { calcMashBonusDamage } from "../utils/tekkenDamage";
 import { processRoundEnd } from "./tekkenRound";
+import {
+  DEFAULT_ORG_ID_SECRET,
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+} from "../utils/supabase";
 
 // ============================================
 // swapRabbit
@@ -61,7 +66,14 @@ export const swapRabbit = onCall(
 // Transaction으로 이중 처리 방지
 // ============================================
 export const submitMashResult = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -138,12 +150,10 @@ export const submitMashResult = onCall(
     const mashWinnerId = myTaps > opTaps ? userId : myTaps < opTaps ? opponentId : userId;
     const mashLoserId = mashWinnerId === userId ? opponentId : userId;
 
-    // 스탯 기반 연타 데미지
-    const winner = players[mashWinnerId];
+    // 레벨 무시 크리티컬 — 패자 maxHp의 35% (레벨 차이 커도 유효타 보장)
     const loser = players[mashLoserId];
-    const winnerRabbit = winner.rabbits[winner.activeRabbitIndex];
     const loserRabbit = loser.rabbits[loser.activeRabbitIndex];
-    const bonusDamage = calcBaseDamage(winnerRabbit.atk, loserRabbit.def);
+    const bonusDamage = calcMashBonusDamage(loserRabbit.maxHp);
 
     // 패자에게 보너스 데미지 — result + HP + 라운드 결과를 원자적으로 기록
     // 이미 로드된 loserRabbit.currentHp 사용 (별도 RTDB 읽기 불필요)

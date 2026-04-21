@@ -6,6 +6,18 @@ import fetch from "node-fetch";
 import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
 import { loadScopeForAI, inferChaptersFromText } from "./courseScope";
+import {
+  DEFAULT_ORG_ID_SECRET,
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  supabaseDualUpsertPost,
+  supabaseDualUpdatePostPartial,
+  supabaseDualDeletePost,
+  supabaseDualUpsertComment,
+  supabaseDualUpdateCommentPartial,
+  supabaseDualDeleteComment,
+  supabaseDualAcceptComment,
+} from "./utils/supabase";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -77,7 +89,12 @@ export const onPostCreate = onDocumentCreated(
   {
     document: "posts/{postId}",
     region: "asia-northeast3",
-    secrets: [GEMINI_API_KEY],
+    secrets: [
+      GEMINI_API_KEY,
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const snapshot = event.data;
@@ -163,6 +180,31 @@ export const onPostCreate = onDocumentCreated(
         }
       }
 
+      // Supabase 듀얼 라이트 (AI 답변/교수 알림 전에 선행 — comments FK 매핑에 필요)
+      await supabaseDualUpsertPost({
+        firestoreId: postId,
+        courseCode: post.courseId || null,
+        authorId: userId,
+        authorNickname: post.authorNickname || post.userName || null,
+        authorClassType: post.authorClassType || post.userClass || null,
+        title,
+        content,
+        category: post.category || null,
+        tag: post.tag || null,
+        isAnonymous: false,
+        isNotice: false,
+        isPrivate: !!post.isPrivate,
+        toProfessor: !!post.toProfessor,
+        imageUrls: post.imageUrls || [],
+        likes: post.likes || 0,
+        likeCount: post.likeCount || 0,
+        commentCount: post.commentCount || 0,
+        rewarded: true,
+        rewardedAt: new Date(),
+        expRewarded: skipExp ? 0 : EXP_REWARDS.POST_CREATE,
+        createdAt: post.createdAt?.toDate?.() || new Date(),
+      });
+
       // 학술 태그 또는 비공개 글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
       if (post.tag === "학술" || post.isPrivate) {
         try {
@@ -240,18 +282,41 @@ export const onPostUpdate = onDocumentWritten(
   {
     document: "posts/{postId}",
     region: "asia-northeast3",
-    secrets: [GEMINI_API_KEY],
+    secrets: [
+      GEMINI_API_KEY,
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const before = event.data?.before?.data() as Post | undefined;
     const after = event.data?.after?.data() as Post | undefined;
+    const postId = event.params.postId;
+
+    // 삭제 이벤트 (after 없음) — Supabase 도 삭제
+    if (!after && before) {
+      await supabaseDualDeletePost(postId);
+      return;
+    }
     if (!before || !after) return;
+
+    // Supabase 동기화 (변경된 필드만 patch)
+    const patch: Record<string, unknown> = {};
+    if (before.title !== after.title) patch.title = after.title;
+    if (before.content !== after.content) patch.content = after.content;
+    if (before.tag !== after.tag) patch.tag = after.tag || null;
+    if ((before.likeCount || 0) !== (after.likeCount || 0)) patch.like_count = after.likeCount || 0;
+    if ((before.likes || 0) !== (after.likes || 0)) patch.likes = after.likes || 0;
+    if ((before.commentCount || 0) !== (after.commentCount || 0)) patch.comment_count = after.commentCount || 0;
+    // likedBy, isPinned 등은 onLikeReceived / pinPost 훅 에서 별도 처리
+    if (Object.keys(patch).length > 0) {
+      await supabaseDualUpdatePostPartial(postId, patch);
+    }
 
     // 태그가 학술로 변경된 경우에만 트리거
     if (before.tag === after.tag) return;
     if (after.tag !== "학술") return;
-
-    const postId = event.params.postId;
 
     // 이미 콩콩이 댓글이 있으면 스킵
     const existingAI = await getFirestore().collection("comments")
@@ -291,7 +356,12 @@ export const onCommentCreate = onDocumentCreated(
   {
     document: "comments/{commentId}",
     region: "asia-northeast3",
-    secrets: [GEMINI_API_KEY],
+    secrets: [
+      GEMINI_API_KEY,
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const snapshot = event.data;
@@ -311,6 +381,20 @@ export const onCommentCreate = onDocumentCreated(
         await db.collection("posts").doc(comment.postId).update({
           commentCount: FieldValue.increment(1),
         }).catch((e) => console.warn("AI 댓글 commentCount 증가 실패:", e));
+
+        // Supabase 듀얼 라이트: AI 댓글 + 게시글 comment_count 증가
+        await supabaseDualUpsertComment({
+          firestoreId: commentId,
+          firestorePostId: comment.postId,
+          firestoreParentId: comment.parentId || null,
+          authorId: "gemini-ai",
+          authorNickname: comment.authorNickname || "콩콩이",
+          content: comment.content,
+          imageUrls: comment.imageUrls || [],
+          isAiReply: true,
+          createdAt: comment.createdAt?.toDate?.() || new Date(),
+        });
+        // post.comment_count 동기화는 onPostUpdate 트리거가 처리
       }
       return;
     }
@@ -376,6 +460,23 @@ export const onCommentCreate = onDocumentCreated(
       await db.collection("posts").doc(postId).update({
         commentCount: FieldValue.increment(1),
       }).catch((e) => console.warn("commentCount 증가 실패:", e));
+
+      // Supabase 듀얼 라이트 (일반 유저 댓글)
+      await supabaseDualUpsertComment({
+        firestoreId: commentId,
+        firestorePostId: postId,
+        firestoreParentId: comment.parentId || null,
+        authorId: userId,
+        authorNickname: comment.authorNickname || comment.userName || null,
+        authorClassType: comment.userClass || null,
+        content,
+        imageUrls: comment.imageUrls || [],
+        isAnonymous: false,
+        rewarded: true,
+        rewardedAt: new Date(),
+        expRewarded: expReward,
+        createdAt: comment.createdAt?.toDate?.() || new Date(),
+      });
 
       console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward, isPrivate });
 
@@ -509,6 +610,11 @@ export const onLikeReceived = onDocumentCreated(
   {
     document: "likes/{likeId}",
     region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const snapshot = event.data;
@@ -538,6 +644,16 @@ export const onLikeReceived = onDocumentCreated(
           likes: FieldValue.increment(1),
           likedBy: FieldValue.arrayUnion(userId),
         });
+        // Supabase 듀얼 라이트: 최신 likedBy 값 반영
+        const fresh = await postRef.get();
+        const fdata = fresh.data();
+        if (fdata) {
+          await supabaseDualUpdatePostPartial(targetId, {
+            likes: fdata.likes || 0,
+            like_count: fdata.likeCount || 0,
+            liked_by: fdata.likedBy || [],
+          });
+        }
       } else if (targetType === "comment") {
         const commentRef = db.collection("comments").doc(targetId);
         await commentRef.update({
@@ -545,6 +661,15 @@ export const onLikeReceived = onDocumentCreated(
           likes: FieldValue.increment(1),
           likedBy: FieldValue.arrayUnion(userId),
         });
+        const fresh = await commentRef.get();
+        const fdata = fresh.data();
+        if (fdata) {
+          await supabaseDualUpdateCommentPartial(targetId, {
+            likes: fdata.likes || 0,
+            like_count: fdata.likeCount || 0,
+            liked_by: fdata.likedBy || [],
+          });
+        }
       }
 
       console.log("좋아요 처리 완료:", { likeId, targetType, targetId });
@@ -575,6 +700,11 @@ export const onLikeRemoved = onDocumentWritten(
   {
     document: "likes/{likeId}",
     region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     // 삭제인 경우만 처리
@@ -598,6 +728,15 @@ export const onLikeRemoved = onDocumentWritten(
           likes: FieldValue.increment(-1),
           ...(userId ? { likedBy: FieldValue.arrayRemove(userId) } : {}),
         });
+        const fresh = await postRef.get();
+        const fdata = fresh.data();
+        if (fdata) {
+          await supabaseDualUpdatePostPartial(targetId, {
+            likes: fdata.likes || 0,
+            like_count: fdata.likeCount || 0,
+            liked_by: fdata.likedBy || [],
+          });
+        }
       } else if (targetType === "comment") {
         const commentRef = db.collection("comments").doc(targetId);
         await commentRef.update({
@@ -605,6 +744,15 @@ export const onLikeRemoved = onDocumentWritten(
           likes: FieldValue.increment(-1),
           ...(userId ? { likedBy: FieldValue.arrayRemove(userId) } : {}),
         });
+        const fresh = await commentRef.get();
+        const fdata = fresh.data();
+        if (fdata) {
+          await supabaseDualUpdateCommentPartial(targetId, {
+            likes: fdata.likes || 0,
+            like_count: fdata.likeCount || 0,
+            liked_by: fdata.likedBy || [],
+          });
+        }
       }
 
       console.log("좋아요 취소 처리 완료:", { targetType, targetId });
@@ -621,6 +769,11 @@ export const onCommentDeleted = onDocumentDeleted(
   {
     document: "comments/{commentId}",
     region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
   },
   async (event) => {
     const snapshot = event.data;
@@ -628,6 +781,10 @@ export const onCommentDeleted = onDocumentDeleted(
 
     const comment = snapshot.data() as Comment;
     const { postId } = comment;
+    const commentId = event.params.commentId;
+
+    // Supabase 듀얼 삭제
+    await supabaseDualDeleteComment(commentId);
 
     if (!postId) return;
 
@@ -1233,12 +1390,14 @@ async function generateAIReplyToComment(
   }
 
   // Scope 참조 (대댓글에도 과목 범위 제공)
+  // 비공개 콩콩이는 12,000자, 공개 대댓글은 8,000자
+  const replyScopeMax = post.isPrivate ? 12000 : 8000;
   if (post.courseId) {
     try {
       const scope = await loadScopeForAI(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
-        5000 // 대댓글은 대화 기록도 있어 scope 짧게
+        replyScopeMax,
       );
       if (scope && scope.content) {
         courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래 교과서 내용에 나오는 구체적인 용어, 물질명, 메커니즘을 답변에 반드시 반영해.\n\n${scope.content}`;
@@ -1458,7 +1617,14 @@ ${conversationHistory}`;
  * - 채택 시 댓글 작성자에게 추가 EXP 지급
  */
 export const acceptComment = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1553,6 +1719,9 @@ export const acceptComment = onCall(
       createdAt: FieldValue.serverTimestamp(),
     });
 
+    // Supabase 듀얼 라이트: posts.accepted_comment_id + comments.is_accepted
+    await supabaseDualAcceptComment(postId, commentId);
+
     console.log(`댓글 채택 완료: postId=${postId}, commentId=${commentId}, author=${commentAuthorId}`);
 
     return { success: true, expReward };
@@ -1569,7 +1738,14 @@ export const acceptComment = onCall(
  * Admin SDK로 글 + 모든 댓글을 서버에서 삭제
  */
 export const deletePost = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -1612,6 +1788,9 @@ export const deletePost = onCall(
       allRefs.slice(i, i + 500).forEach(ref => batch.delete(ref));
       await batch.commit();
     }
+
+    // Supabase 듀얼 삭제 (CASCADE 로 comments 자동 삭제됨)
+    await supabaseDualDeletePost(postId);
 
     console.log(`게시글 삭제 완료: postId=${postId}, 댓글 ${commentsSnap.size}개 포함`);
     return { success: true, deletedComments: commentsSnap.size };

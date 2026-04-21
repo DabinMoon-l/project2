@@ -9,23 +9,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  collection,
   doc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
   getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   serverTimestamp,
-  onSnapshot,
-  deleteField,
   db,
-  type QueryDocumentSnapshot,
+  postRepo,
+  type PostPageCursor,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import type {
@@ -71,23 +60,14 @@ export const usePosts = (category: BoardCategory, courseId?: string): UsePostsRe
     setLoading(true);
     setError(null);
 
-    // 공지+일반 통합 쿼리 (isNotice 필터 제거, 클라이언트에서 분리)
-    const constraints = [
-      ...(courseId ? [where('courseId', '==', courseId)] : []),
-      ...(category !== 'all' ? [where('category', '==', category)] : []),
-      orderBy('createdAt', 'desc'),
-      limit(pageCount * PAGE_SIZE + 20), // 공지 여유분 (+20)
-    ];
-
-    const postsQuery = query(collection(db, 'posts'), ...constraints);
-
-    const unsub = onSnapshot(
-      postsQuery,
-      (snapshot) => {
-        const allDocs = snapshot.docs.map(docToPost);
-        // 공지는 상단, 일반은 하단 (원래와 동일한 결과)
-        const notices = allDocs.filter(p => p.isNotice);
-        const normalPosts = allDocs.filter(p => !p.isNotice).slice(0, pageCount * PAGE_SIZE);
+    const listLimit = pageCount * PAGE_SIZE + 20; // 공지 여유분 (+20)
+    const unsub = postRepo.subscribePostsFeed(
+      { courseId: courseId ?? null, category: category !== 'all' ? category : null },
+      listLimit,
+      (allDocs) => {
+        const mapped = allDocs.map((d) => docToPost(d));
+        const notices = mapped.filter((p) => p.isNotice);
+        const normalPosts = mapped.filter((p) => !p.isNotice).slice(0, pageCount * PAGE_SIZE);
         setPosts([...notices, ...normalPosts]);
         setHasMore(normalPosts.length === pageCount * PAGE_SIZE);
         setLoading(false);
@@ -96,7 +76,7 @@ export const usePosts = (category: BoardCategory, courseId?: string): UsePostsRe
         console.error('게시글 실시간 구독 실패:', err);
         setError('게시글을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsub();
@@ -141,7 +121,7 @@ export const useMyPosts = (skip = false): UseMyPostsReturn => {
   const [loading, setLoading] = useState(!skip);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [cursor, setCursor] = useState<PostPageCursor | null>(null);
 
   // 초기 로드
   const loadPosts = useCallback(async () => {
@@ -154,19 +134,10 @@ export const useMyPosts = (skip = false): UseMyPostsReturn => {
       setLoading(true);
       setError(null);
 
-      const myPostsQuery = query(
-        collection(db, 'posts'),
-        where('authorId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE)
-      );
-
-      const snapshot = await getDocs(myPostsQuery);
-      const myPosts = snapshot.docs.map(docToPost);
-
-      setPosts(myPosts);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      const result = await postRepo.fetchMyPostsPage(user.uid, PAGE_SIZE);
+      setPosts(result.items.map((d) => docToPost(d)));
+      setHasMore(result.hasMore);
+      setCursor(result.nextCursor);
     } catch (err) {
       console.error('내 게시글 로드 실패:', err);
       setError('게시글을 불러오는데 실패했습니다.');
@@ -177,36 +148,25 @@ export const useMyPosts = (skip = false): UseMyPostsReturn => {
 
   // 추가 로드 (무한 스크롤)
   const loadMore = useCallback(async () => {
-    if (!hasMore || loading || !lastDoc || !user || skip) return;
+    if (!hasMore || loading || !cursor || !user || skip) return;
 
     try {
       setLoading(true);
-
-      const moreQuery = query(
-        collection(db, 'posts'),
-        where('authorId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        startAfter(lastDoc),
-        limit(PAGE_SIZE)
-      );
-
-      const snapshot = await getDocs(moreQuery);
-      const morePosts = snapshot.docs.map(docToPost);
-
-      setPosts((prev) => [...prev, ...morePosts]);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      const result = await postRepo.fetchMyPostsPage(user.uid, PAGE_SIZE, cursor);
+      setPosts((prev) => [...prev, ...result.items.map((d) => docToPost(d))]);
+      setHasMore(result.hasMore);
+      setCursor(result.nextCursor);
     } catch (err) {
       console.error('추가 게시글 로드 실패:', err);
       setError('추가 게시글을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  }, [user, hasMore, loading, lastDoc]);
+  }, [user, skip, hasMore, loading, cursor]);
 
   // 새로고침
   const refresh = useCallback(async () => {
-    setLastDoc(null);
+    setCursor(null);
     setHasMore(true);
     await loadPosts();
   }, [loadPosts]);
@@ -244,12 +204,11 @@ export const usePost = (postId: string): UsePostReturn => {
     setLoading(true);
     setError(null);
 
-    const docRef = doc(db, 'posts', postId);
-    const unsubscribe = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setPost(docToPost(docSnap));
+    const unsubscribe = postRepo.subscribePost(
+      postId,
+      (p) => {
+        if (p) {
+          setPost(docToPost(p));
         } else {
           setError('게시글을 찾을 수 없습니다.');
           setPost(null);
@@ -260,7 +219,7 @@ export const usePost = (postId: string): UsePostReturn => {
         console.error('게시글 실시간 구독 실패:', err);
         setError('게시글을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -318,12 +277,8 @@ export const useCreatePost = (): UseCreatePostReturn => {
 
         // 비공개 글 중복 체크 (서버 사이드 안전장치)
         if (data.isPrivate) {
-          const existingPrivate = await getDocs(query(
-            collection(db, 'posts'),
-            where('authorId', '==', user.uid),
-            where('isPrivate', '==', true),
-          ));
-          if (!existingPrivate.empty) {
+          const hasPrivate = await postRepo.hasPrivatePost(user.uid);
+          if (hasPrivate) {
             setError('이미 비공개 글이 있습니다. 삭제 후 다시 작성해주세요.');
             return null;
           }
@@ -351,15 +306,14 @@ export const useCreatePost = (): UseCreatePostReturn => {
           ...(data.aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
           ...(data.isPrivate ? { isPrivate: true } : {}),
           viewCount: 0,
-          createdAt: serverTimestamp(),
         };
 
-        const docRef = await addDoc(collection(db, 'posts'), postData);
+        const newPostId = await postRepo.createPost(postData);
 
         // 작성 시간 기록
         recordPostTime();
 
-        return docRef.id;
+        return newPostId;
       } catch (err) {
         console.error('글 작성 실패:', err);
         setError('글 작성에 실패했습니다.');
@@ -400,20 +354,17 @@ export const useUpdatePost = (): UseUpdatePostReturn => {
         setError(null);
 
         // 글 작성자 확인
-        const postRef = doc(db, 'posts', postId);
-        const postSnap = await getDoc(postRef);
-
-        if (!postSnap.exists()) {
+        const post = await postRepo.getPost(postId);
+        if (!post) {
           setError('게시글을 찾을 수 없습니다.');
           return false;
         }
-
-        if (postSnap.data().authorId !== user.uid) {
+        if (post.authorId !== user.uid) {
           setError('수정 권한이 없습니다.');
           return false;
         }
 
-        await updateDoc(postRef, {
+        await postRepo.updatePost(postId, {
           ...data,
           updatedAt: serverTimestamp(),
         });
@@ -499,26 +450,11 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     setLoading(true);
     setError(null);
 
-    let pinnedQuery;
-    if (courseId) {
-      pinnedQuery = query(
-        collection(db, 'posts'),
-        where('courseId', '==', courseId),
-        where('isPinned', '==', true),
-        limit(10)
-      );
-    } else {
-      pinnedQuery = query(
-        collection(db, 'posts'),
-        where('isPinned', '==', true),
-        limit(10)
-      );
-    }
-
-    const unsubscribe = onSnapshot(
-      pinnedQuery,
-      (snapshot) => {
-        const pinned = snapshot.docs.map(docToPost)
+    const unsubscribe = postRepo.subscribePostsFeed(
+      { courseId: courseId ?? null, isPinned: true },
+      10,
+      (docs) => {
+        const pinned = docs.map((d) => docToPost(d))
           .sort((a, b) => {
             const aPinnedAt = a.pinnedAt?.getTime() || 0;
             const bPinnedAt = b.pinnedAt?.getTime() || 0;
@@ -531,7 +467,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
         console.error('고정 글 실시간 구독 실패:', err);
         setError('고정된 글을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -545,12 +481,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     }
 
     try {
-      const postRef = doc(db, 'posts', postId);
-      await updateDoc(postRef, {
-        isPinned: true,
-        pinnedAt: serverTimestamp(),
-        pinnedBy: user.uid,
-      });
+      await postRepo.pinPost(postId, user.uid);
       return true;
     } catch (err: unknown) {
       console.error('게시글 고정 실패:', err);
@@ -572,12 +503,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     }
 
     try {
-      const postRef = doc(db, 'posts', postId);
-      await updateDoc(postRef, {
-        isPinned: false,
-        pinnedAt: deleteField(),
-        pinnedBy: deleteField(),
-      });
+      await postRepo.unpinPost(postId);
       // onSnapshot이 자동으로 상태 업데이트
       return true;
     } catch (err: unknown) {
@@ -617,26 +543,18 @@ export const useToProfessorPosts = (courseId?: string): UseToProfessorPostsRetur
     setLoading(true);
     setError(null);
 
-    const constraints = [
-      ...(courseId ? [where('courseId', '==', courseId)] : []),
-      where('toProfessor', '==', true),
-      orderBy('createdAt', 'desc'),
-      limit(50),
-    ];
-
-    const postsQuery = query(collection(db, 'posts'), ...constraints);
-
-    const unsubscribe = onSnapshot(
-      postsQuery,
-      (snapshot) => {
-        setPosts(snapshot.docs.map(docToPost));
+    const unsubscribe = postRepo.subscribePostsFeed(
+      { courseId: courseId ?? null, toProfessor: true },
+      50,
+      (docs) => {
+        setPosts(docs.map((d) => docToPost(d)));
         setLoading(false);
       },
       (err) => {
         console.error('교수님께 전달된 글 실시간 구독 실패:', err);
         setError('글을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -672,46 +590,8 @@ export const usePostsByClass = (
       setLoading(true);
       setError(null);
 
-      // 반별 글 조회
-      let postsQuery;
-
-      if (courseId && classType) {
-        // 과목 + 반 필터링
-        postsQuery = query(
-          collection(db, 'posts'),
-          where('courseId', '==', courseId),
-          where('authorClassType', '==', classType),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-      } else if (courseId) {
-        // 과목만 필터링
-        postsQuery = query(
-          collection(db, 'posts'),
-          where('courseId', '==', courseId),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-      } else if (classType) {
-        // 반만 필터링
-        postsQuery = query(
-          collection(db, 'posts'),
-          where('authorClassType', '==', classType),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-      } else {
-        // 전체 조회
-        postsQuery = query(
-          collection(db, 'posts'),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-      }
-
-      const snapshot = await getDocs(postsQuery);
-      const loadedPosts = snapshot.docs.map(docToPost);
-      setPosts(loadedPosts);
+      const docs = await postRepo.fetchPostsByClass(courseId, classType, 50);
+      setPosts(docs.map((d) => docToPost(d)));
     } catch (err) {
       console.error('반별 글 로드 실패:', err);
       setError('글을 불러오는데 실패했습니다.');
@@ -767,15 +647,9 @@ export const useAllPostsForCourse = (courseId?: string): UseAllPostsForCourseRet
     let cancelled = false;
     const loadPosts = async () => {
       try {
-        const allQuery = query(
-          collection(db, 'posts'),
-          where('courseId', '==', courseId),
-          orderBy('createdAt', 'desc'),
-          limit(200)
-        );
-        const snapshot = await getDocs(allQuery);
+        const docs = await postRepo.fetchAllPostsForCourse(courseId, 200);
         if (!cancelled) {
-          setPosts(snapshot.docs.map(docToPost));
+          setPosts(docs.map((d) => docToPost(d)));
           setLoading(false);
         }
       } catch (err) {
@@ -813,27 +687,16 @@ export const useMyPrivatePost = (): { privatePost: Post | null; loading: boolean
       return;
     }
 
-    const privateQuery = query(
-      collection(db, 'posts'),
-      where('authorId', '==', user.uid),
-      where('isPrivate', '==', true),
-      limit(1)
-    );
-
-    const unsub = onSnapshot(
-      privateQuery,
-      (snapshot) => {
-        if (snapshot.empty) {
-          setPrivatePost(null);
-        } else {
-          setPrivatePost(docToPost(snapshot.docs[0]));
-        }
+    const unsub = postRepo.subscribeMyPrivatePost(
+      user.uid,
+      (p) => {
+        setPrivatePost(p ? docToPost(p) : null);
         setLoading(false);
       },
       (err) => {
         console.error('비공개 글 구독 실패:', err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsub();

@@ -3,7 +3,7 @@
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, onSnapshot, db } from '@/lib/repositories';
+import { collection, query, where, onSnapshot, db, postRepo } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -50,35 +50,25 @@ export function AcademicArchiveSection({ posts, courseId, onPostClick }: { posts
     const loadComments = async () => {
       setLoading(true);
       const postIds = sortedPosts.map(p => p.id);
-      const chunks: string[][] = [];
-      for (let i = 0; i < postIds.length; i += 30) {
-        chunks.push(postIds.slice(i, i + 30));
-      }
 
       const allComments: Record<string, ArchiveComment[]> = {};
-      for (const chunk of chunks) {
-        try {
-          const q = query(
-            collection(db, 'comments'),
-            where('postId', 'in', chunk)
-          );
-          const snap = await getDocs(q);
-          snap.docs.forEach(d => {
-            const data = d.data();
-            const postId = data.postId as string;
-            if (!allComments[postId]) allComments[postId] = [];
-            allComments[postId].push({
-              id: d.id,
-              content: data.content || '',
-              authorNickname: data.authorNickname || '익명',
-              isAIReply: data.isAIReply || false,
-              isAccepted: data.isAccepted || false,
-              createdAt: data.createdAt?.toDate?.() || new Date(),
-            });
+      try {
+        const docs = await postRepo.fetchCommentsByPostIds(postIds);
+        for (const d of docs) {
+          const data = d as Record<string, unknown>;
+          const postId = data.postId as string;
+          if (!allComments[postId]) allComments[postId] = [];
+          allComments[postId].push({
+            id: d.id,
+            content: (data.content as string) || '',
+            authorNickname: (data.authorNickname as string) || '익명',
+            isAIReply: (data.isAIReply as boolean) || false,
+            isAccepted: (data.isAccepted as boolean) || false,
+            createdAt: (data.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date(),
           });
-        } catch (e) {
-          // 조회 실패 무시
         }
+      } catch {
+        // 조회 실패 무시
       }
 
       if (cancelled) return;
@@ -552,31 +542,17 @@ export function ActivitySection({ posts, courseId, onPostClick }: { posts: Post[
 
     let cancelled = false;
     const loadComments = async () => {
-      const chunks: string[][] = [];
-      for (let i = 0; i < postIds.length; i += 30) {
-        chunks.push(postIds.slice(i, i + 30));
-      }
-
-      const results = await Promise.all(
-        chunks.map(chunk =>
-          getDocs(query(collection(db, 'comments'), where('postId', 'in', chunk)))
-        )
-      );
-
+      const docs = await postRepo.fetchCommentsByPostIds(postIds);
       if (cancelled) return;
-
-      const allComments: ActivityComment[] = [];
-      results.forEach(snap => {
-        snap.docs.forEach(d => {
-          const data = d.data();
-          allComments.push({
-            authorId: data.authorId || '',
-            authorNickname: data.authorNickname,
-            authorClassType: data.authorClassType,
-            postId: data.postId || '',
-            createdAt: data.createdAt?.toDate() || new Date(),
-          });
-        });
+      const allComments: ActivityComment[] = docs.map((d) => {
+        const data = d as Record<string, unknown>;
+        return {
+          authorId: (data.authorId as string) || '',
+          authorNickname: data.authorNickname as string | undefined,
+          authorClassType: data.authorClassType as ActivityComment['authorClassType'],
+          postId: (data.postId as string) || '',
+          createdAt: (data.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || new Date(),
+        };
       });
       setComments(allComments);
     };

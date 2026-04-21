@@ -14,6 +14,10 @@ import { getBaseStats } from "../utils/rabbitStats";
 import { drawQuestionsFromPool } from "../tekkenQuestionPool";
 import { getEmergencyQuestions } from "./tekkenQuestions";
 import type { GeneratedQuestion, PregenCache, PlayerSetup, BotPlayerSetup, BattleData, BattleRoundData, BattlePlayer } from "./tekkenTypes";
+import {
+  supabaseDualBatchUpsertReviews,
+  type SupabaseReviewInput,
+} from "../utils/supabase";
 
 /**
  * 플레이어 스탯 조회
@@ -466,6 +470,7 @@ async function saveBattleWrongAnswers(
 
   const writeBatch = db.batch();
   let count = 0;
+  const supabaseInputs: SupabaseReviewInput[] = [];
 
   for (const uid of humanPlayerIds) {
     for (const [roundIdxStr, round] of Object.entries(rounds)) {
@@ -523,7 +528,34 @@ async function saveBattleWrongAnswers(
         reviewDoc.chapterId = chId;
       }
 
-      writeBatch.set(db.collection("reviews").doc(), reviewDoc);
+      const reviewRef = db.collection("reviews").doc();
+      writeBatch.set(reviewRef, reviewDoc);
+
+      // Supabase dual-write 입력 수집
+      // tekken 배틀은 Supabase quizzes 에 없으므로 quiz_id = null + metadata.originalQuizId 저장
+      supabaseInputs.push({
+        firestoreId: reviewRef.id,
+        userId: uid,
+        firestoreQuizId: null,
+        originalFirestoreQuizId: quizId,
+        courseCode: courseId,
+        questionId: `tekken_r${roundIdx}`,
+        chapterId: (reviewDoc.chapterId as string | undefined) ?? null,
+        reviewType: "wrong",
+        isCorrect: false,
+        isBookmarked: false,
+        reviewCount: 0,
+        questionData: {
+          question: questionData.text,
+          type: "multiple",
+          options: questionData.choices,
+          correctAnswer: String(correctAnswer),
+          userAnswer: userAnswer !== undefined && userAnswer !== null ? String(userAnswer) : "",
+          explanation: questionData.explanation ?? null,
+          choiceExplanations: questionData.choiceExplanations ?? null,
+        },
+        metadata: { quizTitle, source: "tekken" },
+      });
       count++;
     }
   }
@@ -531,6 +563,10 @@ async function saveBattleWrongAnswers(
   if (count > 0) {
     await writeBatch.commit();
     console.log(`[배틀 오답] ${battleId}: ${count}개 오답 → reviews 저장`);
+    // Supabase 듀얼 라이트 (실패해도 Firestore 영향 없음)
+    await supabaseDualBatchUpsertReviews(supabaseInputs).catch((err) => {
+      console.error("[배틀 오답] Supabase dual-write 실패 (무시):", err);
+    });
   }
 }
 

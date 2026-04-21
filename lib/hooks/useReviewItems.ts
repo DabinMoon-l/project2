@@ -1,39 +1,32 @@
 /**
  * 복습 아이템 로딩 + 페이지네이션 훅
  *
- * Firestore에서 오답/찜/푼 문제를 일회성 조회하고,
+ * reviewRepo 경유로 오답/찜/푼 문제를 페이지 조회하고,
  * 퀴즈 풀이 기록 및 비공개 퀴즈 목록도 함께 로드한다.
- * 페이지네이션(loadMore)과 퀴즈별/챕터별 그룹핑도 포함.
+ * 페이지네이션(loadMore)과 퀴즈별/챕터별 그룹핑 포함.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  doc,
-  limit,
-  startAfter,
-  getDoc,
-  getDocs,
-  db,
+  reviewRepo,
+  quizRepo,
   type DocumentData,
 } from '@/lib/repositories';
+import type { ReviewPageCursor, ReviewDoc } from '@/lib/repositories/firebase/reviewRepo';
 import type { ReviewItem, QuizAttempt, PrivateQuiz, GroupedReviewItems, ChapterGroupedWrongItems } from './useReviewTypes';
 import { groupByQuiz, groupByChapterAndQuiz } from './useReviewUtils';
 
 // ============================================================
-// 내부 헬퍼: 문서 → ReviewItem 변환
+// 내부 헬퍼: ReviewDoc → ReviewItem 변환
 // ============================================================
 
-/** Firestore 스냅샷 문서를 ReviewItem으로 변환 */
-function mapDocToReviewItem(docSnapshot: { id: string; data: () => unknown }): ReviewItem {
-  const data = docSnapshot.data() as DocumentData;
+/** repo에서 받은 raw ReviewDoc을 ReviewItem으로 변환 */
+function mapReviewDocToItem(d: ReviewDoc): ReviewItem {
+  const data = d as ReviewDoc & DocumentData;
   return {
-    id: docSnapshot.id,
+    id: d.id,
     userId: data.userId,
     quizId: data.quizId,
     quizTitle: data.quizTitle,
@@ -90,9 +83,9 @@ async function fetchQuizTitle(quizId: string): Promise<string> {
   }
 
   try {
-    const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-    if (quizDoc.exists()) {
-      const title = quizDoc.data()?.title || '퀴즈';
+    const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+    if (quizData) {
+      const title = (quizData.title as string) || '퀴즈';
       quizTitlesCache[quizId] = title;
       return title;
     }
@@ -173,6 +166,10 @@ export interface UseReviewItemsReturn {
 // useReviewItems 훅
 // ============================================================
 
+const WRONG_PAGE_SIZE = 100;
+const BOOKMARK_PAGE_SIZE = 100;
+const SOLVED_PAGE_SIZE = 50;
+
 /**
  * 복습 아이템 로딩 + 페이지네이션 + 그룹핑
  *
@@ -190,20 +187,17 @@ export function useReviewItems(
   const [hasMoreSolved, setHasMoreSolved] = useState(false);
   const [hasMoreWrong, setHasMoreWrong] = useState(false);
   const [hasMoreBookmark, setHasMoreBookmark] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
-  const solvedLastDocRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
-  const wrongLastDocRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
-  const bookmarkLastDocRef = useRef<any>(null);
-  const solvedQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
-  const wrongQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
-  const bookmarkQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
+  const solvedCursorRef = useRef<ReviewPageCursor | null>(null);
+  const wrongCursorRef = useRef<ReviewPageCursor | null>(null);
+  const bookmarkCursorRef = useRef<ReviewPageCursor | null>(null);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [privateQuizzes, setPrivateQuizzes] = useState<PrivateQuiz[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  // 다음 호출 때 넘길 (userId, courseId) 파라미터 — loadMore용 스냅샷
+  const pageParamsRef = useRef<{ userId: string; courseId: string | null }>({ userId: '', courseId: null });
 
   // ──────────────────────────────────────────────
   // 데이터 로딩 (오답/찜/푼문제/풀이기록/비공개퀴즈)
@@ -219,6 +213,7 @@ export function useReviewItems(
 
     setLoading(true);
     setError(null);
+    pageParamsRef.current = { userId, courseId: userCourseId };
 
     // 초기 로딩 카운터: 핵심 3개(wrong, bookmark, solved) 응답 후 로딩 해제
     let loadedCount = 0;
@@ -232,57 +227,21 @@ export function useReviewItems(
       }
     };
 
-    // 오답/찜 페이지네이션 크기
-    const REVIEW_PAGE_SIZE = 100;
-
     // ── 오답 문제 조회 ──
-    const wrongQuery = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'wrong'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc'),
-          limit(REVIEW_PAGE_SIZE + 1)
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'wrong'),
-          orderBy('createdAt', 'desc'),
-          limit(REVIEW_PAGE_SIZE + 1)
-        );
-
-    wrongQueryBaseRef.current = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'wrong'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc')
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'wrong'),
-          orderBy('createdAt', 'desc')
-        );
-
-    getDocs(wrongQuery).then(async (snapshot) => {
+    reviewRepo.fetchReviewsPage({
+      userId,
+      reviewType: 'wrong',
+      courseId: userCourseId,
+      pageSize: WRONG_PAGE_SIZE,
+    }).then(async (result) => {
       try {
-        const docs = snapshot.docs;
-        const hasMore = docs.length > REVIEW_PAGE_SIZE;
-        const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
-
-        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        const items: ReviewItem[] = result.items.map(mapReviewDocToItem);
         await fillQuizTitles(items);
 
         if (isMounted) {
           setWrongItems(items);
-          setHasMoreWrong(hasMore);
-          wrongLastDocRef.current = pageDocs.length > 0
-            ? pageDocs[pageDocs.length - 1]
-            : null;
+          setHasMoreWrong(result.hasMore);
+          wrongCursorRef.current = result.nextCursor;
         }
       } catch (e) {
         console.error('오답 처리 실패:', e);
@@ -298,53 +257,20 @@ export function useReviewItems(
     });
 
     // ── 찜한 문제 조회 ──
-    const bookmarkQuery = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'bookmark'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc'),
-          limit(REVIEW_PAGE_SIZE + 1)
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'bookmark'),
-          orderBy('createdAt', 'desc'),
-          limit(REVIEW_PAGE_SIZE + 1)
-        );
-
-    bookmarkQueryBaseRef.current = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'bookmark'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc')
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'bookmark'),
-          orderBy('createdAt', 'desc')
-        );
-
-    getDocs(bookmarkQuery).then(async (snapshot) => {
+    reviewRepo.fetchReviewsPage({
+      userId,
+      reviewType: 'bookmark',
+      courseId: userCourseId,
+      pageSize: BOOKMARK_PAGE_SIZE,
+    }).then(async (result) => {
       try {
-        const docs = snapshot.docs;
-        const hasMore = docs.length > REVIEW_PAGE_SIZE;
-        const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
-
-        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        const items: ReviewItem[] = result.items.map(mapReviewDocToItem);
         await fillQuizTitles(items);
 
         if (isMounted) {
           setBookmarkedItems(items);
-          setHasMoreBookmark(hasMore);
-          bookmarkLastDocRef.current = pageDocs.length > 0
-            ? pageDocs[pageDocs.length - 1]
-            : null;
+          setHasMoreBookmark(result.hasMore);
+          bookmarkCursorRef.current = result.nextCursor;
         }
       } catch (e) {
         console.error('찜한 문제 처리 실패:', e);
@@ -357,54 +283,20 @@ export function useReviewItems(
     });
 
     // ── 푼 문제 조회 ──
-    const SOLVED_PAGE_SIZE = 50;
-    const solvedBaseQuery = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'solved'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc'),
-          limit(SOLVED_PAGE_SIZE + 1)
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'solved'),
-          orderBy('createdAt', 'desc'),
-          limit(SOLVED_PAGE_SIZE + 1)
-        );
-
-    solvedQueryBaseRef.current = userCourseId
-      ? query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'solved'),
-          where('courseId', '==', userCourseId),
-          orderBy('createdAt', 'desc')
-        )
-      : query(
-          collection(db, 'reviews'),
-          where('userId', '==', userId),
-          where('reviewType', '==', 'solved'),
-          orderBy('createdAt', 'desc')
-        );
-
-    getDocs(solvedBaseQuery).then(async (snapshot) => {
+    reviewRepo.fetchReviewsPage({
+      userId,
+      reviewType: 'solved',
+      courseId: userCourseId,
+      pageSize: SOLVED_PAGE_SIZE,
+    }).then(async (result) => {
       try {
-        const docs = snapshot.docs;
-        const hasMore = docs.length > SOLVED_PAGE_SIZE;
-        const pageDocs = hasMore ? docs.slice(0, SOLVED_PAGE_SIZE) : docs;
-
-        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        const items: ReviewItem[] = result.items.map(mapReviewDocToItem);
         await fillQuizTitles(items);
 
         if (isMounted) {
           setSolvedItems(items);
-          setHasMoreSolved(hasMore);
-          solvedLastDocRef.current = pageDocs.length > 0
-            ? pageDocs[pageDocs.length - 1]
-            : null;
+          setHasMoreSolved(result.hasMore);
+          solvedCursorRef.current = result.nextCursor;
         }
       } catch (e) {
         console.error('푼 문제 처리 실패:', e);
@@ -417,34 +309,19 @@ export function useReviewItems(
     });
 
     // ── 퀴즈 풀이 기록 (1회 조회) ──
-    const attemptsQuery = userCourseId
-      ? query(
-          collection(db, 'quizResults'),
-          where('userId', '==', userId),
-          where('courseId', '==', userCourseId)
-        )
-      : query(
-          collection(db, 'quizResults'),
-          where('userId', '==', userId)
-        );
-
-    getDocs(attemptsQuery).then(async (snapshot) => {
+    quizRepo.fetchQuizResultsByUser<DocumentData>(userId, { courseId: userCourseId }).then(async (results) => {
       try {
-        const attempts: QuizAttempt[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          attempts.push({
-            id: docSnap.id,
-            quizId: data.quizId,
-            quizTitle: '',
-            correctCount: data.correctCount || 0,
-            totalCount: data.totalCount || 0,
-            earnedGold: data.earnedGold || 0,
-            earnedExp: data.earnedExp || 0,
-            timeSpentSeconds: data.timeSpentSeconds || 0,
-            completedAt: data.createdAt,
-          });
-        });
+        const attempts: QuizAttempt[] = results.map((data) => ({
+          id: data.id,
+          quizId: data.quizId,
+          quizTitle: '',
+          correctCount: data.correctCount || 0,
+          totalCount: data.totalCount || 0,
+          earnedGold: data.earnedGold || 0,
+          earnedExp: data.earnedExp || 0,
+          timeSpentSeconds: data.timeSpentSeconds || 0,
+          completedAt: data.createdAt,
+        }));
         await fillQuizTitles(attempts);
         attempts.sort((a, b) => (b.completedAt?.toMillis?.() || 0) - (a.completedAt?.toMillis?.() || 0));
         if (isMounted) setQuizAttempts(attempts);
@@ -456,30 +333,16 @@ export function useReviewItems(
     });
 
     // ── 비공개 퀴즈 (1회 조회) ──
-    const privateQuizzesQuery = userCourseId
-      ? query(
-          collection(db, 'quizzes'),
-          where('creatorId', '==', userId),
-          where('isPublic', '==', false),
-          where('courseId', '==', userCourseId)
-        )
-      : query(
-          collection(db, 'quizzes'),
-          where('creatorId', '==', userId),
-          where('isPublic', '==', false)
-        );
-
-    getDocs(privateQuizzesQuery).then((snapshot) => {
-      const quizzes: PrivateQuiz[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        quizzes.push({
-          id: docSnap.id,
-          title: data.title || '퀴즈',
-          questionCount: data.questions?.length || 0,
-          createdAt: data.createdAt,
-        });
-      });
+    quizRepo.fetchQuizzesByCreator<DocumentData>(userId, {
+      courseId: userCourseId,
+      isPublic: false,
+    }).then((docs) => {
+      const quizzes: PrivateQuiz[] = docs.map((data) => ({
+        id: data.id,
+        title: data.title || '퀴즈',
+        questionCount: data.questions?.length || 0,
+        createdAt: data.createdAt,
+      }));
 
       quizzes.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || 0;
@@ -504,80 +367,68 @@ export function useReviewItems(
 
   /** 푼 문제 추가 로드 */
   const loadMoreSolved = useCallback(async () => {
-    if (!hasMoreSolved || !solvedLastDocRef.current || !solvedQueryBaseRef.current) return;
+    if (!hasMoreSolved || !solvedCursorRef.current) return;
+    const { userId: uid, courseId } = pageParamsRef.current;
+    if (!uid) return;
 
-    const PAGE_SIZE = 50;
-    const nextQuery = query(
-      solvedQueryBaseRef.current,
-      startAfter(solvedLastDocRef.current),
-      limit(PAGE_SIZE + 1)
-    );
+    const result = await reviewRepo.fetchReviewsPage({
+      userId: uid,
+      reviewType: 'solved',
+      courseId,
+      pageSize: SOLVED_PAGE_SIZE,
+      cursor: solvedCursorRef.current,
+    });
 
-    const snapshot = await getDocs(nextQuery);
-    const docs = snapshot.docs;
-    const hasMore = docs.length > PAGE_SIZE;
-    const pageDocs = hasMore ? docs.slice(0, PAGE_SIZE) : docs;
-
-    const newItems: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+    const newItems: ReviewItem[] = result.items.map(mapReviewDocToItem);
     await fillQuizTitles(newItems);
 
     setSolvedItems(prev => [...prev, ...newItems]);
-    setHasMoreSolved(hasMore);
-    solvedLastDocRef.current = pageDocs.length > 0
-      ? pageDocs[pageDocs.length - 1]
-      : null;
+    setHasMoreSolved(result.hasMore);
+    solvedCursorRef.current = result.nextCursor;
   }, [hasMoreSolved]);
 
   /** 오답 추가 로드 */
   const loadMoreWrong = useCallback(async () => {
-    if (!hasMoreWrong || !wrongLastDocRef.current || !wrongQueryBaseRef.current) return;
+    if (!hasMoreWrong || !wrongCursorRef.current) return;
+    const { userId: uid, courseId } = pageParamsRef.current;
+    if (!uid) return;
 
-    const PAGE_SIZE = 100;
-    const nextQuery = query(
-      wrongQueryBaseRef.current,
-      startAfter(wrongLastDocRef.current),
-      limit(PAGE_SIZE + 1)
-    );
+    const result = await reviewRepo.fetchReviewsPage({
+      userId: uid,
+      reviewType: 'wrong',
+      courseId,
+      pageSize: WRONG_PAGE_SIZE,
+      cursor: wrongCursorRef.current,
+    });
 
-    const snapshot = await getDocs(nextQuery);
-    const docs = snapshot.docs;
-    const hasMore = docs.length > PAGE_SIZE;
-    const pageDocs = hasMore ? docs.slice(0, PAGE_SIZE) : docs;
-
-    const newItems: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+    const newItems: ReviewItem[] = result.items.map(mapReviewDocToItem);
     await fillQuizTitles(newItems);
 
     setWrongItems(prev => [...prev, ...newItems]);
-    setHasMoreWrong(hasMore);
-    wrongLastDocRef.current = pageDocs.length > 0
-      ? pageDocs[pageDocs.length - 1]
-      : null;
+    setHasMoreWrong(result.hasMore);
+    wrongCursorRef.current = result.nextCursor;
   }, [hasMoreWrong]);
 
   /** 찜한 문제 추가 로드 */
   const loadMoreBookmark = useCallback(async () => {
-    if (!hasMoreBookmark || !bookmarkLastDocRef.current || !bookmarkQueryBaseRef.current) return;
+    if (!hasMoreBookmark || !bookmarkCursorRef.current) return;
+    const { userId: uid, courseId } = pageParamsRef.current;
+    if (!uid) return;
 
-    const PAGE_SIZE = 100;
-    const nextQuery = query(
-      bookmarkQueryBaseRef.current,
-      startAfter(bookmarkLastDocRef.current),
-      limit(PAGE_SIZE + 1)
-    );
+    const result = await reviewRepo.fetchReviewsPage({
+      userId: uid,
+      reviewType: 'bookmark',
+      courseId,
+      pageSize: BOOKMARK_PAGE_SIZE,
+      cursor: bookmarkCursorRef.current,
+    });
 
-    const snapshot = await getDocs(nextQuery);
-    const docs = snapshot.docs;
-    const hasMore = docs.length > PAGE_SIZE;
-    const pageDocs = hasMore ? docs.slice(0, PAGE_SIZE) : docs;
-
-    const newItems: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+    const newItems: ReviewItem[] = result.items.map(mapReviewDocToItem);
     await fillQuizTitles(newItems);
 
     setBookmarkedItems(prev => [...prev, ...newItems]);
-    setHasMoreBookmark(hasMore);
-    bookmarkLastDocRef.current = pageDocs.length > 0
-      ? pageDocs[pageDocs.length - 1]
-      : null;
+    setHasMoreBookmark(result.hasMore);
+    bookmarkCursorRef.current = result.nextCursor;
   }, [hasMoreBookmark]);
 
   // ──────────────────────────────────────────────

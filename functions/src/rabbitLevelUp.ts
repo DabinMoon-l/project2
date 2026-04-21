@@ -7,9 +7,22 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getBaseStats, generateStatIncreases } from "./utils/rabbitStats";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualWriteRabbitHolding,
+} from "./utils/supabase";
 
 export const levelUpRabbit = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [
+      SUPABASE_URL_SECRET,
+      SUPABASE_SERVICE_ROLE_SECRET,
+      DEFAULT_ORG_ID_SECRET,
+    ],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -112,6 +125,12 @@ export const levelUpRabbit = onCall(
         statIncreases: increases,
         totalPoints,
       };
+    });
+
+    // Supabase dual-write (트랜잭션 성공 후)
+    await supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
+      level: result.newLevel,
+      stats: result.newStats,
     });
 
     return result;

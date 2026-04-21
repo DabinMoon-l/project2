@@ -7,19 +7,8 @@
  * 클라이언트에서 type 필터링 (복합 인덱스 최소화).
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  updateDoc,
-  serverTimestamp,
-  db,
-} from '@/lib/repositories';
+import { useState, useEffect, useCallback } from 'react';
+import { quizRepo } from '@/lib/repositories';
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 
@@ -53,24 +42,18 @@ export function useProfessorAiQuizzes() {
 
     // creatorUid + courseId + createdAt desc 인덱스 활용
     // (수동 생성 퀴즈는 creatorId 없이 creatorUid만 있으므로 creatorUid 사용)
-    const q = query(
-      collection(db, 'quizzes'),
-      where('creatorUid', '==', profile.uid),
-      where('courseId', '==', userCourseId),
-      orderBy('createdAt', 'desc')
+    const unsub = quizRepo.subscribeQuizzesForProfessor(
+      profile.uid,
+      userCourseId,
+      (items) => {
+        setAllQuizzes(items as unknown as ProfessorAiQuiz[]);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[useProfessorAiQuizzes] 쿼리 오류:', err);
+        setLoading(false);
+      },
     );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      const items: ProfessorAiQuiz[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as ProfessorAiQuiz[];
-      setAllQuizzes(items);
-      setLoading(false);
-    }, (err) => {
-      console.error('[useProfessorAiQuizzes] 쿼리 오류:', err);
-      setLoading(false);
-    });
 
     return unsub;
   }, [profile?.uid, userCourseId]);
@@ -81,7 +64,7 @@ export function useProfessorAiQuizzes() {
   // 퀴즈 삭제
   const deleteQuiz = useCallback(async (quizId: string) => {
     try {
-      await deleteDoc(doc(db, 'quizzes', quizId));
+      await quizRepo.deleteQuiz(quizId);
     } catch (err: unknown) {
       console.error('[deleteQuiz] 삭제 실패:', err);
       alert('퀴즈 삭제에 실패했습니다: ' + (((err as Error)?.message) || ''));
@@ -98,7 +81,6 @@ export function useProfessorAiQuizzes() {
         isPublished: true,
         isPublic: true,
         wasPublished: true, // 한 번이라도 공개되면 영구 마킹 (Stats 활성 조건)
-        updatedAt: serverTimestamp(),
       };
       // 기출 타입일 경우 년도/시험유형 추가
       if (publishType === 'past' && pastExamInfo) {
@@ -110,7 +92,7 @@ export function useProfessorAiQuizzes() {
         updateData.creatorUid = profile.uid;
         updateData.creatorId = profile.uid;
       }
-      await updateDoc(doc(db, 'quizzes', quizId), updateData);
+      await quizRepo.updateQuiz(quizId, updateData);
     } catch (err: unknown) {
       console.error('[publishQuiz] 공개 실패:', err);
       alert('퀴즈 공개에 실패했습니다: ' + (((err as Error)?.message) || ''));
@@ -121,11 +103,10 @@ export function useProfessorAiQuizzes() {
   // 퀴즈 비공개 전환
   const unpublishQuiz = useCallback(async (quizId: string) => {
     try {
-      await updateDoc(doc(db, 'quizzes', quizId), {
+      await quizRepo.updateQuiz(quizId, {
         isPublished: false,
         isPublic: false,
         type: 'professor', // type 초기화 → 캐러셀에서 제거
-        updatedAt: serverTimestamp(),
       });
     } catch (err: unknown) {
       console.error('[unpublishQuiz] 비공개 전환 실패:', err);
@@ -136,10 +117,7 @@ export function useProfessorAiQuizzes() {
 
   // 퀴즈 제목 수정
   const updateTitle = useCallback(async (quizId: string, newTitle: string) => {
-    await updateDoc(doc(db, 'quizzes', quizId), {
-      title: newTitle,
-      updatedAt: serverTimestamp(),
-    });
+    await quizRepo.updateQuiz(quizId, { title: newTitle });
   }, []);
 
   // 퀴즈 문제 수정 (questions 배열 전체 교체 + questionCount 동기화)
@@ -149,10 +127,9 @@ export function useProfessorAiQuizzes() {
       if (q.id) return q;
       return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
     });
-    await updateDoc(doc(db, 'quizzes', quizId), {
+    await quizRepo.updateQuiz(quizId, {
       questions: questionsWithIds,
       questionCount: questionsWithIds.length,
-      updatedAt: serverTimestamp(),
     });
   }, []);
 
@@ -163,12 +140,12 @@ export function useProfessorAiQuizzes() {
     type?: string;
     difficulty?: string;
   }) => {
-    const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
+    const data: Record<string, unknown> = {};
     if (meta.description !== undefined) data.description = meta.description;
     if (meta.tags !== undefined) data.tags = meta.tags;
     if (meta.type !== undefined) data.type = meta.type;
     if (meta.difficulty !== undefined) data.difficulty = meta.difficulty;
-    await updateDoc(doc(db, 'quizzes', quizId), data);
+    await quizRepo.updateQuiz(quizId, data);
   }, []);
 
   return { quizzes, loading, deleteQuiz, publishQuiz, unpublishQuiz, updateTitle, updateQuestions, updateMeta };

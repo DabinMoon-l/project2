@@ -18,6 +18,7 @@ import {
   Timestamp,
   limit,
   db,
+  reviewRepo,
   type DocumentData,
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
@@ -415,29 +416,23 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         quizGroups.set(q.quizId, ids);
       }
 
-      // quizId별로 병렬 일괄 쿼리 (in 쿼리 최대 30개씩)
+      // quizId별로 병렬 일괄 쿼리 (repo에서 in 30개씩 배치 처리)
       const batchPromises: Promise<ReviewItem[]>[] = [];
       for (const [quizId, questionIds] of quizGroups) {
-        for (let i = 0; i < questionIds.length; i += 30) {
-          const batch = questionIds.slice(i, i + 30);
-          batchPromises.push((async () => {
-            const snap = await getDocs(query(
-              collection(db, 'reviews'),
-              where('userId', '==', user.uid),
-              where('quizId', '==', quizId),
-              where('questionId', 'in', batch),
-              where('reviewType', '==', 'solved')
-            ));
-            return snap.docs.map(d => {
-              const data = d.data();
-              return {
-                id: d.id,
-                ...data,
-                reviewCount: data.reviewCount || 0,
-              } as ReviewItem;
-            });
-          })());
-        }
+        batchPromises.push(
+          reviewRepo
+            .fetchReviewsByQuestionIds(user.uid, quizId, questionIds, { reviewType: 'solved' })
+            .then((docs) =>
+              docs.map((d) => {
+                const data = d as Record<string, unknown>;
+                return {
+                  ...data,
+                  id: d.id,
+                  reviewCount: (data.reviewCount as number) || 0,
+                } as ReviewItem;
+              }),
+            ),
+        );
       }
 
       const results = await Promise.all(batchPromises);
@@ -482,64 +477,60 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
         // 삭제된 퀴즈: reviews 컬렉션에서 폴백 로드 (solved만 — wrong은 중복)
         if (!quizDoc.exists()) {
-          const reviewFallbackQuery = query(
-            collection(db, 'reviews'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', folderId),
-            where('reviewType', '==', 'solved')
-          );
-          const reviewFallbackDocs = await getDocs(reviewFallbackQuery);
-          if (reviewFallbackDocs.empty) {
+          const reviewFallbackDocs = await reviewRepo.fetchReviewsByQuiz(user.uid, folderId, {
+            reviewType: 'solved',
+          });
+          if (reviewFallbackDocs.length === 0) {
             setLibraryQuestions([]);
             setLibraryQuizTitle('퀴즈');
             setLibraryLoading(false);
             return;
           }
           // reviews에서 퀴즈 제목 추출
-          const firstReview = reviewFallbackDocs.docs[0].data();
-          setLibraryQuizTitle(firstReview.quizTitle || '퀴즈');
+          const firstReview = reviewFallbackDocs[0] as Record<string, unknown>;
+          setLibraryQuizTitle((firstReview.quizTitle as string) || '퀴즈');
           // reviews를 ReviewItem으로 변환
-          const fallbackItems: ReviewItem[] = reviewFallbackDocs.docs.map(d => {
-            const data = d.data();
+          const fallbackItems: ReviewItem[] = reviewFallbackDocs.map(d => {
+            const data = d as Record<string, unknown>;
             return {
               id: d.id,
               reviewId: d.id,
               userId: user.uid,
               quizId: folderId,
-              quizTitle: data.quizTitle || '퀴즈',
-              questionId: data.questionId || '',
-              question: data.question || '',
-              type: data.type || 'multiple',
-              options: data.options || [],
-              correctAnswer: data.correctAnswer || '',
-              userAnswer: data.userAnswer || '',
-              explanation: data.explanation || '',
-              choiceExplanations: data.choiceExplanations || undefined,
-              reviewType: data.reviewType || 'solved',
-              isBookmarked: data.isBookmarked || false,
-              isCorrect: data.isCorrect,
-              reviewCount: data.reviewCount || 0,
-              lastReviewedAt: data.lastReviewedAt || null,
-              createdAt: data.createdAt,
-              image: data.image || undefined,
-              imageUrl: data.imageUrl || undefined,
-              passage: data.passage || undefined,
-              passageType: data.passageType || undefined,
-              passageImage: data.passageImage || undefined,
-              koreanAbcItems: data.koreanAbcItems || undefined,
-              passageMixedExamples: data.passageMixedExamples || undefined,
-              commonQuestion: data.commonQuestion || undefined,
-              mixedExamples: data.passageBlocks || data.mixedExamples || undefined,
-              bogi: data.bogi || undefined,
-              subQuestionOptions: data.subQuestionOptions || undefined,
-              subQuestionOptionsType: data.subQuestionOptionsType || undefined,
-              subQuestionImage: data.subQuestionImage || undefined,
-              passagePrompt: data.passagePrompt || undefined,
-              bogiQuestionText: data.bogiQuestionText || undefined,
-              combinedGroupId: data.combinedGroupId || undefined,
-              combinedIndex: data.combinedIndex,
-              combinedTotal: data.combinedTotal,
-              quizCreatorId: data.quizCreatorId || undefined,
+              quizTitle: (data.quizTitle as string) || '퀴즈',
+              questionId: (data.questionId as string) || '',
+              question: (data.question as string) || '',
+              type: (data.type as string) || 'multiple',
+              options: (data.options as string[]) || [],
+              correctAnswer: (data.correctAnswer as string) || '',
+              userAnswer: (data.userAnswer as string) || '',
+              explanation: (data.explanation as string) || '',
+              choiceExplanations: (data.choiceExplanations as string[]) || undefined,
+              reviewType: (data.reviewType as ReviewItem['reviewType']) || 'solved',
+              isBookmarked: (data.isBookmarked as boolean) || false,
+              isCorrect: data.isCorrect as boolean | undefined,
+              reviewCount: (data.reviewCount as number) || 0,
+              lastReviewedAt: (data.lastReviewedAt as ReviewItem['lastReviewedAt']) || null,
+              createdAt: data.createdAt as ReviewItem['createdAt'],
+              image: (data.image as string) || undefined,
+              imageUrl: (data.imageUrl as string) || undefined,
+              passage: (data.passage as string) || undefined,
+              passageType: (data.passageType as ReviewItem['passageType']) || undefined,
+              passageImage: (data.passageImage as string) || undefined,
+              koreanAbcItems: (data.koreanAbcItems as ReviewItem['koreanAbcItems']) || undefined,
+              passageMixedExamples: (data.passageMixedExamples as ReviewItem['passageMixedExamples']) || undefined,
+              commonQuestion: (data.commonQuestion as string) || undefined,
+              mixedExamples: (data.passageBlocks as ReviewItem['mixedExamples']) || (data.mixedExamples as ReviewItem['mixedExamples']) || undefined,
+              bogi: (data.bogi as ReviewItem['bogi']) || undefined,
+              subQuestionOptions: (data.subQuestionOptions as string[]) || undefined,
+              subQuestionOptionsType: (data.subQuestionOptionsType as ReviewItem['subQuestionOptionsType']) || undefined,
+              subQuestionImage: (data.subQuestionImage as string) || undefined,
+              passagePrompt: (data.passagePrompt as string) || undefined,
+              bogiQuestionText: (data.bogiQuestionText as string) || undefined,
+              combinedGroupId: (data.combinedGroupId as string) || undefined,
+              combinedIndex: data.combinedIndex as number | undefined,
+              combinedTotal: data.combinedTotal as number | undefined,
+              quizCreatorId: (data.quizCreatorId as string) || undefined,
             };
           });
           setLibraryQuestions(sortByQuestionId(fallbackItems));
@@ -551,18 +542,15 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         setLibraryQuizTitle(quizData.title || '퀴즈');
 
         // reviews 컬렉션에서 choiceExplanations 가져오기 (퀴즈 문서에 없을 수 있음)
-        const reviewQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', folderId),
-          where('reviewType', '==', 'solved')
-        );
-        const reviewDocs = await getDocs(reviewQuery);
+        const reviewDocsList = await reviewRepo.fetchReviewsByQuiz(user.uid, folderId, {
+          reviewType: 'solved',
+        });
         const reviewChoiceExplanationsMap: Record<string, string[]> = {};
-        reviewDocs.docs.forEach(d => {
-          const data = d.data();
-          if (data.choiceExplanations && Array.isArray(data.choiceExplanations) && data.choiceExplanations.length > 0) {
-            reviewChoiceExplanationsMap[data.questionId] = data.choiceExplanations;
+        reviewDocsList.forEach(d => {
+          const data = d as Record<string, unknown>;
+          const exps = data.choiceExplanations as string[] | undefined;
+          if (exps && Array.isArray(exps) && exps.length > 0) {
+            reviewChoiceExplanationsMap[data.questionId as string] = exps;
           }
         });
         // questions 배열을 ReviewItem 형식으로 변환
@@ -1536,15 +1524,9 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
       if (quizData) {
         try {
           const currentQuizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
-          const reviewsQuery = query(
-            collection(db, 'reviews'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', folderId)
-          );
-          const reviewsSnapshot = await getDocs(reviewsQuery);
-          for (const reviewDoc of reviewsSnapshot.docs) {
-            await updateDoc(reviewDoc.ref, { quizUpdatedAt: currentQuizUpdatedAt });
-          }
+          const reviewsList = await reviewRepo.fetchReviewsByQuiz(user.uid, folderId);
+          const reviewIds = reviewsList.map((r) => r.id);
+          await reviewRepo.batchUpdateReviews(reviewIds, { quizUpdatedAt: currentQuizUpdatedAt });
         } catch (err) {
           console.error('리뷰 뱃지 업데이트 실패:', err);
         }
@@ -1572,17 +1554,13 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
         // 4-2. reviews가 없으면 생성 (오답 탭 분류용)
         try {
-          const existingSolvedReviews = await getDocs(query(
-            collection(db, 'reviews'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', folderId),
-            where('reviewType', '==', 'solved'),
-            limit(1)
-          ));
+          const existingSolvedReviews = await reviewRepo.fetchReviewsByQuiz(user.uid, folderId, {
+            reviewType: 'solved',
+          });
 
-          if (existingSolvedReviews.empty && questions.length > 0) {
+          if (existingSolvedReviews.length === 0 && questions.length > 0) {
             const courseId = userCourse?.id || quizData.courseId || null;
-            const reviewsRef = collection(db, 'reviews');
+            const reviewsToAdd: Record<string, unknown>[] = [];
 
             for (const result of results) {
               const item = questions.find(q => q.questionId === result.questionId);
@@ -1607,7 +1585,6 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                 isCorrect: result.isCorrect,
                 reviewCount: 0,
                 lastReviewedAt: null,
-                createdAt: serverTimestamp(),
                 quizUpdatedAt: serverTimestamp(),
                 chapterId: item.chapterId || null,
                 chapterDetailId: item.chapterDetailId || null,
@@ -1619,13 +1596,14 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                 reviewType: 'solved' as const,
               };
 
-              // 모든 문제를 solved로 저장
-              await addDoc(reviewsRef, reviewData);
-
-              // 오답은 wrong으로도 저장 (오답 탭 분류)
+              reviewsToAdd.push(reviewData);
               if (!result.isCorrect) {
-                await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' as const });
+                reviewsToAdd.push({ ...reviewData, reviewType: 'wrong' as const });
               }
+            }
+
+            if (reviewsToAdd.length > 0) {
+              await reviewRepo.batchAddReviews(reviewsToAdd);
             }
           }
         } catch (err) {

@@ -8,21 +8,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  updateDoc,
-  addDoc,
-  getDoc,
-  getDocs,
-  serverTimestamp,
-  Timestamp,
-  db,
-} from '@/lib/repositories';
+import { reviewRepo, Timestamp } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
 
@@ -88,30 +74,19 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
 
     setLoading(true);
 
-    const foldersQuery = userCourseId
-      ? query(
-          collection(db, 'customFolders'),
-          where('userId', '==', user.uid),
-          where('courseId', '==', userCourseId)
-        )
-      : query(
-          collection(db, 'customFolders'),
-          where('userId', '==', user.uid)
-        );
-
-    const unsubscribe = onSnapshot(
-      foldersQuery,
-      (snapshot) => {
-        const folders: CustomFolder[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          folders.push({
-            id: docSnap.id,
-            name: data.name,
-            createdAt: data.createdAt,
-            questions: data.questions || [],
-            categories: data.categories || [],
-          });
+    const unsubscribe = reviewRepo.subscribeCustomFolders(
+      user.uid,
+      userCourseId,
+      (docs) => {
+        const folders: CustomFolder[] = docs.map((d) => {
+          const data = d as Record<string, unknown>;
+          return {
+            id: d.id,
+            name: data.name as string,
+            createdAt: data.createdAt as Timestamp,
+            questions: (data.questions as CustomFolderQuestion[]) || [],
+            categories: (data.categories as FolderCategory[]) || [],
+          };
         });
 
         folders.sort((a, b) => {
@@ -126,7 +101,7 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
       (err) => {
         console.error('커스텀 폴더 로드 실패:', err);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -137,14 +112,13 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return null;
 
     try {
-      const docRef = await addDoc(collection(db, 'customFolders'), {
+      const id = await reviewRepo.addFolder({
         userId: user.uid,
         name,
         questions: [],
         courseId: userCourseId || null,
-        createdAt: serverTimestamp(),
       });
-      return docRef.id;
+      return id;
     } catch (err: unknown) {
       console.error('커스텀 폴더 생성 실패:', err);
       return null;
@@ -156,30 +130,25 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const folderData = folderDoc.data();
-
       // 휴지통에 저장
-      await addDoc(collection(db, 'deletedReviewItems'), {
+      await reviewRepo.addDeletedItem({
         userId: user.uid,
         courseId: userCourseId || null,
         type: 'custom',
         originalId: folderId,
-        title: folderData.name || '폴더',
-        questionCount: folderData.questions?.length || 0,
-        deletedAt: serverTimestamp(),
+        title: (folderData.name as string) || '폴더',
+        questionCount: (folderData.questions as unknown[])?.length || 0,
         restoreData: {
           folderData: { ...folderData, id: folderId },
         },
       });
 
-      await deleteDoc(folderRef);
+      await reviewRepo.deleteFolder(folderId);
     } catch (err) {
       console.error('커스텀 폴더 삭제 실패:', err);
       throw new Error('폴더 삭제에 실패했습니다.');
@@ -194,14 +163,12 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const currentQuestions = folderDoc.data().questions || [];
+      const currentQuestions = (folderData.questions as CustomFolderQuestion[]) || [];
       const newQuestions = [...currentQuestions];
 
       for (const q of questions) {
@@ -212,7 +179,7 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
         }
       }
 
-      await updateDoc(folderRef, { questions: newQuestions });
+      await reviewRepo.updateFolder(folderId, { questions: newQuestions });
     } catch (err) {
       console.error('문제 추가 실패:', err);
       throw new Error('문제 추가에 실패했습니다.');
@@ -227,19 +194,17 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const currentQuestions = folderDoc.data().questions || [];
+      const currentQuestions = (folderData.questions as CustomFolderQuestion[]) || [];
       const newQuestions = currentQuestions.filter(
-        (q: { questionId: string }) => q.questionId !== questionId
+        (q) => q.questionId !== questionId
       );
 
-      await updateDoc(folderRef, { questions: newQuestions });
+      await reviewRepo.updateFolder(folderId, { questions: newQuestions });
     } catch (err) {
       console.error('문제 제거 실패:', err);
       throw new Error('문제 제거에 실패했습니다.');
@@ -254,21 +219,19 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return null;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const currentCategories = folderDoc.data().categories || [];
+      const currentCategories = (folderData.categories as FolderCategory[]) || [];
       const newCategoryId = `cat_${Date.now()}`;
       const newCategory: FolderCategory = {
         id: newCategoryId,
         name: categoryName,
       };
 
-      await updateDoc(folderRef, {
+      await reviewRepo.updateFolder(folderId, {
         categories: [...currentCategories, newCategory],
       });
 
@@ -287,27 +250,24 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const data = folderDoc.data();
-      const currentCategories = data.categories || [];
-      const currentQuestions = data.questions || [];
+      const currentCategories = (folderData.categories as FolderCategory[]) || [];
+      const currentQuestions = (folderData.questions as CustomFolderQuestion[]) || [];
 
       const newCategories = currentCategories.filter(
-        (cat: FolderCategory) => cat.id !== categoryId
+        (cat) => cat.id !== categoryId
       );
 
-      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => ({
+      const newQuestions = currentQuestions.map((q) => ({
         ...q,
         categoryId: q.categoryId === categoryId ? undefined : q.categoryId,
       }));
 
-      await updateDoc(folderRef, {
+      await reviewRepo.updateFolder(folderId, {
         categories: newCategories,
         questions: newQuestions,
       });
@@ -326,22 +286,20 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const currentQuestions = folderDoc.data().questions || [];
-      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => {
+      const currentQuestions = (folderData.questions as CustomFolderQuestion[]) || [];
+      const newQuestions = currentQuestions.map((q) => {
         if (q.questionId === questionId) {
           return { ...q, categoryId: categoryId || undefined };
         }
         return q;
       });
 
-      await updateDoc(folderRef, { questions: newQuestions });
+      await reviewRepo.updateFolder(folderId, { questions: newQuestions });
     } catch (err) {
       console.error('문제 카테고리 배정 실패:', err);
       throw new Error('카테고리 배정에 실패했습니다.');
@@ -357,22 +315,20 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
     if (!user) return;
 
     try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
+      const folderData = await reviewRepo.getFolder(folderId);
+      if (!folderData) {
         throw new Error('폴더를 찾을 수 없습니다.');
       }
 
-      const currentCategories = folderDoc.data().categories || [];
-      const newCategories = currentCategories.map((cat: FolderCategory) => {
+      const currentCategories = (folderData.categories as FolderCategory[]) || [];
+      const newCategories = currentCategories.map((cat) => {
         if (cat.id === categoryId) {
           return { ...cat, name: newName };
         }
         return cat;
       });
 
-      await updateDoc(folderRef, { categories: newCategories });
+      await reviewRepo.updateFolder(folderId, { categories: newCategories });
     } catch (err) {
       console.error('카테고리 이름 수정 실패:', err);
       throw new Error('카테고리 수정에 실패했습니다.');

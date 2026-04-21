@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, getDoc, db, Timestamp } from '@/lib/repositories';
+import { quizRepo, Timestamp } from '@/lib/repositories';
 import type { GroupedReviewItems, QuizUpdateInfo } from './useReviewTypes';
 import type { CustomFolder } from './useReviewTypes';
 
@@ -31,11 +31,11 @@ export function useReviewUpdateCheck(
     if (!savedQuizUpdatedAt) return false;
 
     try {
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-      if (!quizDoc.exists()) return false;
+      const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+      if (!quizData) return false;
 
-      const quizData = quizDoc.data();
-      const questions = quizData?.questions || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const questions: any[] = (quizData.questions as any[]) || [];
       const savedTime = savedQuizUpdatedAt.toMillis ? savedQuizUpdatedAt.toMillis() : 0;
 
       for (const q of questions) {
@@ -136,11 +136,11 @@ export function useReviewUpdateCheck(
         let hasAnyUpdate = false;
         for (const [quizId, questionIds] of quizGroups) {
           try {
-            const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-            if (!quizDoc.exists()) continue;
+            const quizData = await quizRepo.getQuiz<Record<string, unknown>>(quizId);
+            if (!quizData) continue;
 
-            const quizData = quizDoc.data();
-            const questions = quizData?.questions || [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const questions: any[] = (quizData.questions as any[]) || [];
 
             for (const q of questions) {
               if (!questionIds.includes(q.id)) continue;

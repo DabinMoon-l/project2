@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, Timestamp } from '@/lib/repositories';
+import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, postRepo, Timestamp } from '@/lib/repositories';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHomeScale } from './useHomeScale';
 
@@ -252,9 +252,9 @@ export default function StudentActivityPanel({
       const epArr = Array.from(expPostIds);
       for (let i = 0; i < epArr.length; i += 10) {
         const batch = epArr.slice(i, i + 10);
-        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'posts', id))));
-        snaps.forEach((snap, idx) => {
-          if (snap.exists()) expPostTitles[batch[idx]] = snap.data()?.title || '';
+        const results = await Promise.all(batch.map(id => postRepo.getPost(id)));
+        results.forEach((post, idx) => {
+          if (post) expPostTitles[batch[idx]] = (post.title as string) || '';
         });
       }
 
@@ -349,9 +349,9 @@ export default function StudentActivityPanel({
       const pArr = Array.from(postIds);
       for (let i = 0; i < pArr.length; i += 10) {
         const batch = pArr.slice(i, i + 10);
-        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'posts', id))));
-        snaps.forEach((snap, idx) => {
-          if (snap.exists()) postTitles[batch[idx]] = snap.data()?.title || '';
+        const results = await Promise.all(batch.map(id => postRepo.getPost(id)));
+        results.forEach((post, idx) => {
+          if (post) postTitles[batch[idx]] = (post.title as string) || '';
         });
       }
       // 추가 퀴즈 제목 조회 (expHistory에서 못 가져온 것)

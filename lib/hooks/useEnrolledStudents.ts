@@ -5,10 +5,12 @@
  *
  * 교수님 관리 시트에서 사용: 등록 학생 목록, 가입률, 미가입 학생 등
  * 변경 빈도가 낮으므로 getDocs + 수동 refresh로 전환 (onSnapshot 제거)
+ *
+ * Phase 2 Step 3: enrollmentRepo 경유로 전환 — Feature flag 로 Firestore/Supabase 선택.
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { collection, getDocs, query, db } from '@/lib/repositories';
+import { enrollmentRepo } from '@/lib/repositories';
 
 export interface EnrolledStudent {
   studentId: string;
@@ -54,18 +56,28 @@ export function useEnrolledStudents(courseId: string | null): UseEnrolledStudent
 
     setLoading(true);
     try {
-      const q = query(collection(db, 'enrolledStudents', cid, 'students'));
-      const snapshot = await getDocs(q);
+      const rows = await enrollmentRepo.getEnrolledStudents(cid);
 
-      const students: EnrolledStudent[] = snapshot.docs.map(doc => {
-        const data = doc.data();
+      const students: EnrolledStudent[] = rows.map((row) => {
+        const r = row as Record<string, unknown> & {
+          enrolledAt?: { toDate?: () => Date } | Date;
+        };
+        const enrolledAtRaw = r.enrolledAt;
+        let enrolledAt: Date;
+        if (enrolledAtRaw instanceof Date) {
+          enrolledAt = enrolledAtRaw;
+        } else if (enrolledAtRaw && typeof enrolledAtRaw.toDate === 'function') {
+          enrolledAt = enrolledAtRaw.toDate();
+        } else {
+          enrolledAt = new Date();
+        }
         return {
-          studentId: doc.id,
-          name: data.name || '',
-          classId: data.classId,
-          isRegistered: !!data.isRegistered,
-          registeredUid: data.registeredUid,
-          enrolledAt: data.enrolledAt?.toDate?.() || new Date(),
+          studentId: (r.studentId as string) || (r.id as string) || '',
+          name: (r.name as string) || '',
+          classId: r.classId as string | undefined,
+          isRegistered: !!r.isRegistered,
+          registeredUid: r.registeredUid as string | undefined,
+          enrolledAt,
         };
       });
 

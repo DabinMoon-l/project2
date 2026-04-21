@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, getDocs, collection, query, where, updateDoc, limit, db, type DocumentData } from '@/lib/repositories';
+import { doc, getDoc, updateDoc, db, reviewRepo, type DocumentData } from '@/lib/repositories';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import dynamic from 'next/dynamic';
 import type { PracticeResult } from '@/components/review/ReviewPractice';
@@ -548,17 +548,12 @@ function ReviewPageContent() {
               items.push(solvedItem);
             } else if (user?.uid) {
               try {
-                const reviewSnap = await getDocs(query(
-                  collection(db, 'reviews'),
-                  where('userId', '==', user.uid),
-                  where('quizId', '==', q.quizId),
-                  where('questionId', '==', q.questionId),
-                  limit(1)
-                ));
-                if (!reviewSnap.empty) {
-                  const data = reviewSnap.docs[0].data();
+                const matches = await reviewRepo.fetchReviewsByQuiz(user.uid, q.quizId, {
+                  questionId: q.questionId,
+                });
+                if (matches.length > 0) {
                   seenQuestions.add(dedupKey);
-                  items.push({ id: reviewSnap.docs[0].id, ...data } as ReviewItem);
+                  items.push(matches[0] as unknown as ReviewItem);
                 }
               } catch (err) {
                 console.error('커스텀 폴더 폴백 조회 실패:', err);
