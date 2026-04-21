@@ -411,7 +411,76 @@ export interface CloudFunctionMap {
   };
   voteOnPoll: {
     input: { announcementId: string; pollIdx: number; optIndices: number[] };
-    output: void;
+    output: { success: boolean };
+  };
+  submitPollTextResponse: {
+    input: { announcementId: string; pollIdx: number; text: string };
+    output: { success: boolean };
+  };
+  submitPollSurvey: {
+    input: {
+      announcementId: string;
+      choices?: Record<string, number[]>;
+      texts?: Record<string, string>;
+    };
+    output: { success: boolean };
+  };
+  getPollResponses: {
+    input: { announcementId: string; pollIdx: number };
+    output:
+      | {
+          type: 'choice';
+          totalVoters: number;
+          options: Array<{
+            optIdx: number;
+            option: string;
+            voters: Array<{ uid: string; name: string; studentNumber: string; nickname?: string }>;
+          }>;
+        }
+      | {
+          type: 'text';
+          responseCount: number;
+          responses: Array<{
+            uid: string;
+            name: string;
+            studentNumber: string;
+            nickname?: string;
+            text: string;
+            createdAt: number | null;
+            updatedAt: number | null;
+          }>;
+        };
+  };
+  getPollResponsesBatch: {
+    input: { announcementId: string };
+    output: {
+      items: Array<
+        | {
+            pollIdx: number;
+            type: 'choice';
+            totalVoters: number;
+            options: Array<{
+              optIdx: number;
+              option: string;
+              voters: Array<{ uid: string; name: string; studentNumber: string; nickname?: string }>;
+            }>;
+          }
+        | {
+            pollIdx: number;
+            type: 'text';
+            responseCount: number;
+            responses: Array<{
+              uid: string;
+              name: string;
+              studentNumber: string;
+              nickname?: string;
+              text: string;
+              createdAt: number | null;
+              updatedAt: number | null;
+            }>;
+          }
+      >;
+    };
   };
 
   // ── 게시판 ──
