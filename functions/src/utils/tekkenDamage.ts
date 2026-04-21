@@ -40,6 +40,15 @@ export function calcCriticalDamage(baseDamage: number): number {
 }
 
 /**
+ * 연타 승리 보너스 데미지 — 패자 maxHp의 35% (레벨 무시 크리티컬)
+ * 스탯 대신 상대 maxHp 비례로 계산해 레벨 차이 있어도 유효타 보장.
+ */
+export const MASH_BONUS_HP_RATIO = 0.35;
+export function calcMashBonusDamage(loserMaxHp: number): number {
+  return Math.max(Math.ceil(loserMaxHp * MASH_BONUS_HP_RATIO), 10);
+}
+
+/**
  * 크리티컬 여부
  */
 export function isCritical(answeredAt: number, startedAt: number): boolean {
