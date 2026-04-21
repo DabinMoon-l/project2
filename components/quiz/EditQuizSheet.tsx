@@ -26,6 +26,7 @@ interface RawQuestion {
   choices?: string[];
   answer?: number | number[] | string;
   explanation?: string;
+  choiceExplanations?: string[];
   imageUrl?: string;
   examples?: unknown;
   mixedExamples?: unknown;
@@ -224,6 +225,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
                 isMultipleAnswer: isMultipleAnswer || undefined,
                 answerText: sqAnswerText,
                 explanation: sq.explanation || undefined,
+                choiceExplanations: Array.isArray(sq.choiceExplanations) ? [...sq.choiceExplanations] : undefined,
                 mixedExamples: (sq.mixedExamples || sq.examples || undefined) as MixedExampleBlock[] | undefined,
                 image: sq.imageUrl || undefined,
                 passagePrompt: sq.passagePrompt || undefined,
@@ -314,6 +316,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
               isMultipleAnswer: isMultipleAnswer || undefined,
               answerText,
               explanation: q.explanation || '',
+              choiceExplanations: Array.isArray(q.choiceExplanations) ? [...q.choiceExplanations] : undefined,
               imageUrl: q.imageUrl || null,
               examples: (q.examples || null) as QuestionData['examples'],
               mixedExamples: (q.mixedExamples || null) as QuestionData['mixedExamples'],
@@ -412,6 +415,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
       }
     }
     if ((original.explanation || '') !== (current.explanation || '')) return true;
+    if (JSON.stringify(original.choiceExplanations || []) !== JSON.stringify(current.choiceExplanations || [])) return true;
     if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
     if ((original.chapterId || '') !== (current.chapterId || '')) return true;
     if ((original.chapterDetailId || '') !== (current.chapterDetailId || '')) return true;
@@ -451,6 +455,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
       }
     }
     if ((original.explanation || '') !== (current.explanation || '')) return true;
+    if (JSON.stringify(original.choiceExplanations || []) !== JSON.stringify(current.choiceExplanations || [])) return true;
     if ((original.imageUrl || null) !== (current.image || null)) return true;
     return false;
   };
@@ -530,6 +535,9 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
               choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : null,
               answer,
               explanation: sq.explanation || null,
+              choiceExplanations: sq.type === 'multiple' && sq.choiceExplanations && sq.choiceExplanations.some((e) => e && e.trim())
+                ? sq.choiceExplanations.slice(0, (sq.choices || []).filter((c) => c.trim()).length)
+                : null,
               imageUrl: sq.image || null,
               examples: sq.mixedExamples || null,
               mixedExamples: sq.mixedExamples || null,
@@ -585,6 +593,9 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
             choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
             answer,
             explanation: q.explanation || null,
+            choiceExplanations: q.type === 'multiple' && q.choiceExplanations && q.choiceExplanations.some((e) => e && e.trim())
+              ? q.choiceExplanations.slice(0, q.choices.filter((c) => c.trim()).length)
+              : null,
             imageUrl: q.imageUrl || null,
             examples: q.examples || null,
             mixedExamples: q.mixedExamples || null,

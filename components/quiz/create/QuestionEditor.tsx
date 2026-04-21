@@ -1557,6 +1557,52 @@ export default function QuestionEditor({
           </div>
         )}
 
+        {/* 선지별 해설 (객관식 전용, 선택) */}
+        {question.type === 'multiple' && (
+          <div>
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
+              선지별 해설 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+            </label>
+            <div className="space-y-1.5">
+              {question.choices.map((choice, idx) => {
+                const currentExps = question.choiceExplanations || [];
+                const value = currentExps[idx] || '';
+                const label = String.fromCharCode(9312 + idx); // ①②③④⑤⑥⑦⑧
+                return (
+                  <div
+                    key={`choice-exp-${idx}`}
+                    className="border-2 border-[#D4CFC4] bg-[#FDFBF7]"
+                  >
+                    <div className="flex items-center gap-2 px-2 py-1 bg-[#EDEAE4] border-b border-[#D4CFC4]">
+                      <span className="text-xs font-bold text-[#1A1A1A] shrink-0">
+                        {label}
+                      </span>
+                      <span className="text-[11px] text-[#5C5C5C] truncate flex-1">
+                        {choice.trim() || <em className="text-[#8C8C8C]">(선지 비어있음)</em>}
+                      </span>
+                    </div>
+                    <textarea
+                      value={value}
+                      onChange={(e) => {
+                        const next = [...currentExps];
+                        while (next.length < question.choices.length) next.push('');
+                        next[idx] = e.target.value;
+                        setQuestion((prev) => ({ ...prev, choiceExplanations: next }));
+                      }}
+                      placeholder={`${label} 선지에 대한 해설 (선택)`}
+                      rows={2}
+                      className="
+                        w-full px-2 py-1.5 text-xs bg-[#FDFBF7]
+                        resize-none focus:outline-none
+                      "
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 액션 버튼 */}
         <div className="flex gap-2 pt-2">
           <motion.button
