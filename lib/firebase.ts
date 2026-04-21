@@ -8,11 +8,11 @@
  */
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
-import { initializeFirestore, getFirestore, Firestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import { getFunctions, Functions } from 'firebase/functions';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getDatabase, Database } from 'firebase/database';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
+import { initializeFirestore, getFirestore, Firestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
+import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database';
 
 // Firebase 설정 객체
 // 환경 변수에서 Firebase 프로젝트 설정값을 가져옵니다
@@ -83,8 +83,56 @@ let _rtdb: Database | null = null;
 export function getRtdb(): Database {
   if (!_rtdb) {
     _rtdb = getDatabase(app);
+    maybeConnectRtdbEmulator(_rtdb);
   }
   return _rtdb;
+}
+
+/**
+ * 로컬 에뮬레이터 연결
+ *
+ * NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true 일 때만 연결.
+ * 브라우저 HMR로 중복 연결되지 않도록 window 플래그 가드.
+ * `firebase emulators:start` 실행 후 `npm run dev`로 띄우면 됨.
+ */
+if (
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true'
+) {
+  const w = window as unknown as { __rabbitory_emulator_connected?: boolean };
+  if (!w.__rabbitory_emulator_connected) {
+    w.__rabbitory_emulator_connected = true;
+    try {
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      connectFirestoreEmulator(db, '127.0.0.1', 8080);
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+      connectStorageEmulator(storage, '127.0.0.1', 9199);
+      // eslint-disable-next-line no-console
+      console.info('[Firebase] 에뮬레이터 연결됨 (auth:9099, firestore:8080, functions:5001, storage:9199)');
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[Firebase] 에뮬레이터 연결 실패:', err);
+    }
+  }
+}
+
+/** RTDB 에뮬레이터 연결 (지연 초기화라서 getRtdb 내부에서 처리) */
+function maybeConnectRtdbEmulator(database: Database) {
+  if (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true'
+  ) {
+    const w = window as unknown as { __rabbitory_rtdb_emulator_connected?: boolean };
+    if (!w.__rabbitory_rtdb_emulator_connected) {
+      w.__rabbitory_rtdb_emulator_connected = true;
+      try {
+        connectDatabaseEmulator(database, '127.0.0.1', 9000);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[Firebase] RTDB 에뮬레이터 연결 실패:', err);
+      }
+    }
+  }
 }
 
 // 각 서비스 인스턴스를 내보냅니다
