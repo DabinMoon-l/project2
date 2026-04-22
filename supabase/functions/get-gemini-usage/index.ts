@@ -7,7 +7,7 @@
 // Firestore 경로: geminiUsage/users/{userId}/{YYYY-MM-DD}.count
 // Supabase 경로:  ai_usage_logs (org_id, user_id, date, count)
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, handleCorsPreflight } from "../_shared/cors.ts";
 import { verifyFirebaseIdToken, uidOf } from "../_shared/auth.ts";
 

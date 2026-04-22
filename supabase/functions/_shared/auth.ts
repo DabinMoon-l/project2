@@ -7,7 +7,7 @@
 //   const uid = await verifyFirebaseIdToken(req);
 //   if (!uid) return new Response("unauthorized", { status: 401 });
 
-import { jwtVerify, importX509, JWTPayload } from "jose";
+import { jwtVerify, importX509, JWTPayload } from "npm:jose@5";
 
 const GOOGLE_JWKS_URL =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";

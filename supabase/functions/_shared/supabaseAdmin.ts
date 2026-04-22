@@ -4,7 +4,7 @@
 // - 기본 org_id 는 env DEFAULT_ORG_ID (Phase 6 멀티테넌트 전 까지는 rabbitory-pilot 단일)
 // - 프론트 Firebase Auth uid 를 user_id 로 그대로 사용 (Wave 1 기준)
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export const DEFAULT_ORG_ID =
   Deno.env.get("DEFAULT_ORG_ID") ?? "13430b1a-0213-403c-9dd4-687bea914ec4";
