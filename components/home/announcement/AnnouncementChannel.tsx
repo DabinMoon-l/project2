@@ -1198,20 +1198,30 @@ export default function AnnouncementChannel({
                                     주관식
                                   </button>
                                 </div>
-                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
-                                  className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                <textarea
+                                  value={cur.question}
+                                  onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))}
+                                  onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                                  rows={1}
+                                  placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
+                                  className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none resize-none leading-snug break-words"
+                                  style={{ overflowWrap: 'anywhere' }}
+                                />
                                 {cur.type !== 'text' && cur.options.map((o, idx) => (
-                                  <div key={`opt-${idx}`} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
-                                    <input value={o}
+                                  <div key={`opt-${idx}`} className="flex items-start w-full border border-white/15 bg-white/10 rounded-lg">
+                                    <textarea value={o}
                                       onChange={(e) => updateCur((p) => {
                                         const opts = [...p.options]; opts[idx] = e.target.value; return { ...p, options: opts };
                                       })}
+                                      onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                                      rows={1}
                                       placeholder={`선택지 ${idx + 1}`}
-                                      className="flex-1 min-w-0 p-1.5 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                      className="flex-1 min-w-0 p-1.5 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none resize-none leading-snug break-words"
+                                      style={{ overflowWrap: 'anywhere' }} />
                                     {cur.options.length > 2 && (
                                       <button
                                         onClick={() => updateCur((p) => ({ ...p, options: p.options.filter((_, i) => i !== idx) }))}
-                                        className="px-1.5 shrink-0 text-white/30 hover:text-white/70 transition-colors"
+                                        className="px-1.5 py-1.5 shrink-0 text-white/30 hover:text-white/70 transition-colors"
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1892,20 +1902,30 @@ export default function AnnouncementChannel({
                                     주관식
                                   </button>
                                 </div>
-                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
-                                  className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                <textarea
+                                  value={cur.question}
+                                  onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))}
+                                  onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                                  rows={1}
+                                  placeholder={cur.type === 'text' ? '질문 (주관식)' : '투표 질문'}
+                                  className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none resize-none leading-snug break-words"
+                                  style={{ overflowWrap: 'anywhere' }}
+                                />
                                 {cur.type !== 'text' && cur.options.map((o, idx) => (
-                                  <div key={`opt-${idx}`} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
-                                    <input value={o}
+                                  <div key={`opt-${idx}`} className="flex items-start w-full border border-white/15 bg-white/10 rounded-lg">
+                                    <textarea value={o}
                                       onChange={(e) => updateCur((p) => {
                                         const opts = [...p.options]; opts[idx] = e.target.value; return { ...p, options: opts };
                                       })}
+                                      onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                                      rows={1}
                                       placeholder={`선택지 ${idx + 1}`}
-                                      className="flex-1 min-w-0 p-1.5 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                      className="flex-1 min-w-0 p-1.5 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none resize-none leading-snug break-words"
+                                      style={{ overflowWrap: 'anywhere' }} />
                                     {cur.options.length > 2 && (
                                       <button
                                         onClick={() => updateCur((p) => ({ ...p, options: p.options.filter((_, i) => i !== idx) }))}
-                                        className="px-1.5 shrink-0 text-white/30 hover:text-white/70 transition-colors"
+                                        className="px-1.5 py-1.5 shrink-0 text-white/30 hover:text-white/70 transition-colors"
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
