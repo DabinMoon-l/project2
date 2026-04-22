@@ -31,6 +31,8 @@ interface CommentItemProps {
   authorNameMap?: Map<string, string>;
   /** 교수 계정 최신 닉네임 맵 (uid → nickname) */
   authorNicknameMap?: Map<string, string>;
+  /** 작성자 role 맵 (uid → 'professor' | 'student'). authorRole 필드 없는 과거 댓글 판정용 */
+  authorRoleMap?: Map<string, 'professor' | 'student'>;
   /** 게시글 작성자 uid (글쓴이 표시용) */
   postAuthorId?: string;
   /** 이미지 업로드 함수 (수정 시 새 이미지 업로드용) */
@@ -190,15 +192,26 @@ function CommentItem({
   isProfessor = false,
   authorNameMap,
   authorNicknameMap,
+  authorRoleMap,
   postAuthorId,
   onUploadImages,
 }: CommentItemProps) {
   const { theme } = useTheme();
   const isPostAuthor = !!(postAuthorId && comment.authorId === postAuthorId);
-  // authorRole 명시 우선, 없으면 기존 역추론 (과거 댓글 호환)
-  const isProfessorComment = comment.authorRole === 'professor'
-    || (comment.authorRole === undefined && !comment.authorClassType && comment.authorId !== 'gemini-ai');
   const isAIComment = comment.authorId === 'gemini-ai';
+  // 판정 우선순위:
+  //   1) 댓글 문서의 명시적 authorRole
+  //   2) authorClassType 있으면 학생 확정
+  //   3) authorRoleMap (users 컬렉션 조회)
+  //   4) 최종 fallback 역추론 (authorClassType 없음 + AI 아님 → 교수)
+  const roleFromMap = authorRoleMap?.get(comment.authorId);
+  const isProfessorComment = !isAIComment && (
+    comment.authorRole === 'professor'
+    || (comment.authorRole === undefined && !!comment.authorClassType === false && (
+      roleFromMap === 'professor'
+      || (roleFromMap === undefined && !comment.authorClassType)
+    ))
+  );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);

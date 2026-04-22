@@ -65,6 +65,10 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const authorNicknameCacheRef = useRef<Map<string, string>>(new Map());
   const [authorNicknameMap, setAuthorNicknameMap] = useState<Map<string, string>>(new Map());
 
+  // 작성자 role 캐시 — 과거 댓글(authorRole 필드 없음) 도 정확히 판정하기 위해 users 컬렉션에서 조회
+  const authorRoleCacheRef = useRef<Map<string, 'professor' | 'student'>>(new Map());
+  const [authorRoleMap, setAuthorRoleMap] = useState<Map<string, 'professor' | 'student'>>(new Map());
+
   // 댓글 작성자 uid 목록 (교수 댓글 = authorClassType이 null)
   const commentAuthorIds = useMemo(() => {
     if (!isProfessor) return [];
@@ -75,6 +79,41 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const professorAuthorIds = useMemo(() => {
     return [...new Set(comments.filter(c => !c.authorClassType && c.authorId !== 'gemini-ai').map(c => c.authorId))];
   }, [comments]);
+
+  // role 조회 대상 — authorRole / authorClassType 둘 다 없는 과거 댓글 작성자만 (AI 제외)
+  const roleAuthorIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of comments) {
+      if (c.authorId === 'gemini-ai') continue;
+      if (c.authorRole) continue; // 이미 명시됨
+      if (c.authorClassType) continue; // classType 으로 학생 확정
+      ids.add(c.authorId);
+    }
+    return [...ids];
+  }, [comments]);
+
+  // 과거 댓글 작성자의 role 일괄 조회
+  useEffect(() => {
+    if (roleAuthorIds.length === 0) return;
+    const cache = authorRoleCacheRef.current;
+    const missing = roleAuthorIds.filter(uid => !cache.has(uid));
+    if (missing.length === 0) {
+      setAuthorRoleMap(new Map(cache));
+      return;
+    }
+    Promise.all(
+      missing.map((uid) =>
+        userRepo
+          .getRole(uid)
+          .then((role) => {
+            if (role) cache.set(uid, role);
+          })
+          .catch(() => {}),
+      ),
+    ).then(() => {
+      setAuthorRoleMap(new Map(cache));
+    });
+  }, [roleAuthorIds]);
 
   // 교수님일 때 작성자 실명 일괄 조회
   useEffect(() => {
@@ -433,45 +472,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             : '1rem',
         }}
       >
-        {/* 채택된 댓글 상단 표시 */}
-        {acceptedComment && (
-          <div
-            className="mb-4 p-3 border-[3px]"
-            style={{ borderColor: '#1A1A1A', backgroundColor: '#FDFBF7' }}
-          >
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
-                채택된 답변
-              </span>
-              <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
-                {(() => {
-                  const isProfessorComment = acceptedComment.authorRole === 'professor'
-                    || (acceptedComment.authorRole === undefined
-                      && !acceptedComment.authorClassType
-                      && acceptedComment.authorId !== 'gemini-ai');
-                  if (acceptedComment.authorClassType) {
-                    return `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`;
-                  }
-                  if (acceptedComment.authorId === 'gemini-ai') {
-                    return acceptedComment.authorNickname;
-                  }
-                  if (isProfessorComment) {
-                    const nick = authorNicknameMap.get(acceptedComment.authorId) || acceptedComment.authorNickname;
-                    return nick.includes('교수') ? nick : `${nick} 교수님`;
-                  }
-                  // 학생인데 classType 누락 — 이름만
-                  return acceptedComment.authorNickname;
-                })()}
-              </span>
-            </div>
-            <p
-              className="text-[15px] whitespace-pre-wrap leading-relaxed"
-              style={{ color: '#1A1A1A', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-            >
-              {acceptedComment.content}
-            </p>
-          </div>
-        )}
+        {/* 채택된 댓글은 CommentItem 자체가 초록 테두리로 강조 + 정렬 최상단 → 별도 박스 불필요 */}
 
         {loading && (
           <div className="space-y-3">
@@ -518,6 +519,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   isProfessor={isProfessor}
                   authorNameMap={authorNameMap}
                   authorNicknameMap={authorNicknameMap}
+                      authorRoleMap={authorRoleMap}
                   postAuthorId={postAuthorId}
                   onUploadImages={handleUploadEditImages}
                 />
@@ -541,6 +543,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       isProfessor={isProfessor}
                       authorNameMap={authorNameMap}
                       authorNicknameMap={authorNicknameMap}
+                      authorRoleMap={authorRoleMap}
                       postAuthorId={postAuthorId}
                       onUploadImages={handleUploadEditImages}
                     />

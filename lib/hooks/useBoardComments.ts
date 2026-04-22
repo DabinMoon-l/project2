@@ -108,11 +108,18 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setLoading(true);
         setError(null);
 
-        // Firestore에서 사용자 정보 가져오기 (보안 강화)
-        const [{ nickname: userNickname, classId: userClassType }, userRole] = await Promise.all([
-          userRepo.getNicknameAndClassId(user.uid),
-          userRepo.getRole(user.uid),
-        ]);
+        // Firestore 에서 사용자 정보 가져오기 (보안 강화)
+        // Promise.all 병렬 호출 시 Supabase 쪽에서 경합이 있을 수 있어 순차 호출로 변경
+        const { nickname: userNickname, classId: userClassType } =
+          await userRepo.getNicknameAndClassId(user.uid);
+        const userRole = await userRepo.getRole(user.uid);
+
+        console.log('[createComment] profile fetched', {
+          uid: user.uid,
+          userNickname,
+          userClassType,
+          userRole,
+        });
 
         const commentData: Record<string, unknown> = {
           postId: data.postId,
