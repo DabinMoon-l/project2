@@ -36,35 +36,10 @@ const POLL_INTERVAL_MS = 30_000;
 export type { UserDoc, CreatorInfo } from '../firebase/userRepo';
 
 // ============================================================
-// course UUID ↔ code 양방향 캐시
+// 참고: user_profiles.course_id 는 text 타입으로 courses.code 를
+// 그대로 저장한다 (uuid 아님). 마이그레이션 line 133 주석 참고.
+// 따라서 다른 도메인과 달리 uuid ↔ code 변환이 필요 없음.
 // ============================================================
-
-const _courseUuidCache = new Map<string, string>(); // code → uuid
-const _courseCodeCache = new Map<string, string>(); // uuid → code
-
-async function buildCourseCaches(): Promise<void> {
-  if (_courseUuidCache.size > 0) return;
-  const supabase = getSupabaseClient();
-  if (!supabase || !DEFAULT_ORG_ID) return;
-  const { data } = await supabase
-    .from('courses')
-    .select('id, code')
-    .eq('org_id', DEFAULT_ORG_ID);
-  for (const row of (data as Array<{ id: string; code: string }> | null) || []) {
-    _courseUuidCache.set(row.code, row.id);
-    _courseCodeCache.set(row.id, row.code);
-  }
-}
-
-async function resolveCourseUuid(courseCode: string): Promise<string | null> {
-  await buildCourseCaches();
-  return _courseUuidCache.get(courseCode) || null;
-}
-
-function uuidToCourseCode(uuid: string | null): string | null {
-  if (!uuid) return null;
-  return _courseCodeCache.get(uuid) || null;
-}
 
 // ============================================================
 // Row → Firestore 호환 doc 변환
@@ -99,7 +74,7 @@ interface UserProfileRow {
 /**
  * user_profiles row → Firestore-compat UserDoc.
  * - class_type → classId (Firestore 필드명 호환)
- * - course_id(uuid) → courseCode (Firestore 필드명은 courseId = courseCode 문자열)
+ * - course_id 는 이미 text code ('biology' 등) 이므로 그대로 사용
  * - snake_case → camelCase
  */
 function rowToUserDoc(row: UserProfileRow): UserDoc {
@@ -108,7 +83,7 @@ function rowToUserDoc(row: UserProfileRow): UserDoc {
     nickname: row.nickname || '',
     name: row.name || undefined,
     role: row.role || 'student',
-    courseId: uuidToCourseCode(row.course_id) || undefined,
+    courseId: row.course_id || undefined,
     classId: row.class_type || undefined,
     classType: row.class_type || undefined,
     totalExp: row.total_exp || 0,
@@ -311,15 +286,13 @@ export async function fetchUsersByCourse(
   const supabase = getSupabaseClient();
   if (!supabase || !DEFAULT_ORG_ID) return firebaseUserRepo.fetchUsersByCourse(courseId, options);
 
-  const courseUuid = await resolveCourseUuid(courseId);
-  if (!courseUuid) return firebaseUserRepo.fetchUsersByCourse(courseId, options);
-
   try {
+    // user_profiles.course_id 는 text code (예: 'biology') — uuid 변환 불필요
     let query = supabase
       .from('user_profiles')
       .select('*')
       .eq('org_id', DEFAULT_ORG_ID)
-      .eq('course_id', courseUuid);
+      .eq('course_id', courseId);
     if (options?.role) query = query.eq('role', options.role);
 
     const { data, error } = await query;
