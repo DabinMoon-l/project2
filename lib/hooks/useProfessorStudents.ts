@@ -2,7 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Unsubscribe, DocumentData } from '@/lib/repositories';
-import { rankingRepo, quizRepo, userRepo } from '@/lib/repositories';
+import { rankingRepo, quizRepo } from '@/lib/repositories';
+// 교수 학생관리는 Firestore users 문서의 quizStats 서브필드를 직접 읽어야 해서
+// Supabase userRepo 로는 불완전 (user_profiles 스키마에 quizStats 없음).
+// 따라서 이 훅은 항상 Firebase userRepo 직접 사용.
+import * as userRepo from '@/lib/repositories/firebase/userRepo';
 import { ref as rtdbRef, onValue, off as rtdbOff } from 'firebase/database';
 import { getRtdb } from '@/lib/firebase';
 import { rankPercentile } from '@/lib/utils/statistics';

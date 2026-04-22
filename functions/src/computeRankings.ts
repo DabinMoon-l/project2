@@ -396,9 +396,11 @@ async function computeRankingsForCourse(courseId: string) {
       // (legacy lastActive는 스테일이라 의미 없어 제거)
       dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id]
         : (attendedTodayUids.has(u.id) ? 0 : null),
-      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : null,
+      // 주간은 "이번 주 접속자" 판정 권위 소스가 없으므로 전원 0점 포함 (0점 학생도 목록에 표시).
+      // day 와 달리 전원 포함 정책 — 사용자 피드백: "0점 친구들도 떠야 함"
+      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : 0,
       dailyRankScore: dailyRankScore ?? (attendedTodayUids.has(u.id) ? computeRankScore(0, 0, 0) : null),
-      weeklyRankScore: weeklyRankScore,
+      weeklyRankScore: weeklyRankScore ?? computeRankScore(0, 0, 0),
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
