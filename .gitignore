@@ -85,3 +85,5 @@ firebase-adminsdk*.json
 next-env.d.ts
 
 .vercel
+
+firebase-sa.json
