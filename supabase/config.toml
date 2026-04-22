@@ -1,0 +1,12 @@
+# Supabase CLI 설정 — Phase 3 Edge Functions 스켈레톤
+#
+# 실제 DB / API / studio 설정은 Supabase Cloud(rabbitory-pilot 프로젝트)를 쓰므로
+# 여기서는 functions 섹션만 관리한다.
+#
+# 배포:
+#   supabase functions deploy get-gemini-usage --project-ref <project-ref>
+
+project_id = "rabbitory"
+
+[functions.get-gemini-usage]
+verify_jwt = true
