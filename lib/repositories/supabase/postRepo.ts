@@ -186,13 +186,61 @@ function postRowToDoc(row: PostRow): PostDoc {
   };
 }
 
-function commentRowToDoc(row: CommentRow, postFirestoreIdMap?: Map<string, string>): CommentDoc {
+/**
+ * rows 에서 comment.id(uuid) → source_firestore_id(text) 맵 구성.
+ * parent_id 를 Firestore doc id 로 변환할 때 필요 (Firestore 규약: parentId 는
+ * 부모 comment 의 문서 id 문자열).
+ * 같은 배치에 부모가 안 포함됐을 때를 대비해 fetchParentFirestoreIds 로 별도 배치 조회.
+ */
+function buildCommentUuidToFsIdMap(rows: CommentRow[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    if (r.source_firestore_id) map.set(r.id, r.source_firestore_id);
+  }
+  return map;
+}
+
+/** parent_id 중 아직 매핑 없는 uuid 들을 별도 조회해서 맵 채우기 */
+async function resolveMissingParentFsIds(
+  rows: CommentRow[],
+  uuidToFsId: Map<string, string>,
+): Promise<void> {
+  const missing = new Set<string>();
+  for (const r of rows) {
+    if (r.parent_id && !uuidToFsId.has(r.parent_id)) missing.add(r.parent_id);
+  }
+  if (missing.size === 0) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  const ids = Array.from(missing);
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    const { data } = await supabase
+      .from('comments')
+      .select('id, source_firestore_id')
+      .in('id', batch);
+    for (const row of (data as Array<{ id: string; source_firestore_id: string | null }> | null) || []) {
+      if (row.source_firestore_id) uuidToFsId.set(row.id, row.source_firestore_id);
+    }
+  }
+}
+
+function commentRowToDoc(
+  row: CommentRow,
+  postFirestoreIdMap?: Map<string, string>,
+  commentUuidToFsIdMap?: Map<string, string>,
+): CommentDoc {
   // post_id(uuid) → Firestore post id 매핑. postRowToDoc 이 로드된 상태가 아니면 uuid 그대로.
   const postFirestoreId = postFirestoreIdMap?.get(row.post_id) || row.post_id;
+  // parent_id(uuid) → Firestore doc id 매핑. 매핑 없으면 undefined (부모 없음).
+  // uuid 를 그대로 넘기면 클라가 부모를 못 찾아 대댓글이 루트로 표시됨.
+  const parentFirestoreId = row.parent_id
+    ? commentUuidToFsIdMap?.get(row.parent_id) || undefined
+    : undefined;
   return {
     id: row.source_firestore_id || row.id,
     postId: postFirestoreId,
-    parentId: row.parent_id || undefined,
+    parentId: parentFirestoreId,
     authorId: row.author_id,
     authorNickname: row.author_nickname,
     authorClassType: row.author_class_type,
@@ -681,12 +729,15 @@ export function subscribeComments(
   // post uuid → firestore id 매핑 1건 (comments.postId 복원용)
   const postIdMap = new Map<string, string>();
 
-  const emit = () => {
+  const emit = async () => {
     if (cancelled) return;
     const sorted = [...cache].sort((a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
-    callback(sorted.map((r) => commentRowToDoc(r, postIdMap)));
+    const uuidMap = buildCommentUuidToFsIdMap(sorted);
+    await resolveMissingParentFsIds(sorted, uuidMap);
+    if (cancelled) return;
+    callback(sorted.map((r) => commentRowToDoc(r, postIdMap, uuidMap)));
   };
 
   const init = async () => {
@@ -714,7 +765,7 @@ export function subscribeComments(
       }
       if (cancelled) return;
       cache = (data as CommentRow[] | null) || [];
-      emit();
+      void emit();
 
       channel = supabase
         .channel(`comments-${postUuid}-${Math.random().toString(36).slice(2)}`)
@@ -735,7 +786,7 @@ export function subscribeComments(
             } else if (payload.eventType === 'DELETE' && oldRow) {
               cache = cache.filter((r) => r.id !== oldRow.id);
             }
-            emit();
+            void emit();
           },
         )
         .subscribe();
@@ -776,7 +827,9 @@ export async function getComment(commentId: string): Promise<CommentDoc | null> 
   if (row.post?.source_firestore_id) {
     postIdMap.set(row.post_id, row.post.source_firestore_id);
   }
-  return commentRowToDoc(row as CommentRow, postIdMap);
+  const uuidMap = buildCommentUuidToFsIdMap([row as CommentRow]);
+  await resolveMissingParentFsIds([row as CommentRow], uuidMap);
+  return commentRowToDoc(row as CommentRow, postIdMap, uuidMap);
 }
 
 export async function fetchCommentsByPost(postId: string): Promise<CommentDoc[]> {
@@ -793,7 +846,10 @@ export async function fetchCommentsByPost(postId: string): Promise<CommentDoc[]>
   if (error) throw error;
   const postIdMap = new Map<string, string>();
   postIdMap.set(uuid, postId);
-  return ((data as CommentRow[] | null) || []).map((r) => commentRowToDoc(r, postIdMap));
+  const rows = (data as CommentRow[] | null) || [];
+  const uuidMap = buildCommentUuidToFsIdMap(rows);
+  await resolveMissingParentFsIds(rows, uuidMap);
+  return rows.map((r) => commentRowToDoc(r, postIdMap, uuidMap));
 }
 
 export async function fetchCommentsByAuthor(
@@ -818,7 +874,9 @@ export async function fetchCommentsByAuthor(
       postIdMap.set(row.post_id, row.post.source_firestore_id);
     }
   }
-  return rows.map((r) => commentRowToDoc(r, postIdMap));
+  const uuidMap = buildCommentUuidToFsIdMap(rows);
+  await resolveMissingParentFsIds(rows, uuidMap);
+  return rows.map((r) => commentRowToDoc(r, postIdMap, uuidMap));
 }
 
 export async function fetchCommentsByPostIds(postIds: string[]): Promise<CommentDoc[]> {
@@ -849,7 +907,9 @@ export async function fetchCommentsByPostIds(postIds: string[]): Promise<Comment
     if (error) throw error;
     results.push(...((data as CommentRow[] | null) || []));
   }
-  return results.map((r) => commentRowToDoc(r, uuidToFsId));
+  const uuidMap = buildCommentUuidToFsIdMap(results);
+  await resolveMissingParentFsIds(results, uuidMap);
+  return results.map((r) => commentRowToDoc(r, uuidToFsId, uuidMap));
 }
 
 // ============================================================
