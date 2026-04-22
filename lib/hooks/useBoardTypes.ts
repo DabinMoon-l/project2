@@ -73,6 +73,7 @@ export interface Comment {
   authorId: string;
   authorNickname: string;
   authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
+  authorRole?: 'professor' | 'student'; // 명시적 역할 (2026-04-22 추가, 과거 댓글엔 없음)
   content: string;
   imageUrls?: string[]; // 댓글 이미지
   isAnonymous: boolean;
@@ -136,9 +137,15 @@ export interface UseCommentsReturn {
   refresh: () => Promise<void>;
 }
 
+/** createPost 반환 — 생성된 postId 와 화면 즉시 렌더용 Post 객체 */
+export interface CreatedPost {
+  postId: string;
+  post: Post;
+}
+
 /** useCreatePost 훅 반환 타입 */
 export interface UseCreatePostReturn {
-  createPost: (data: CreatePostData) => Promise<string | null>;
+  createPost: (data: CreatePostData) => Promise<CreatedPost | null>;
   loading: boolean;
   error: string | null;
 }

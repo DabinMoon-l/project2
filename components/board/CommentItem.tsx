@@ -195,7 +195,9 @@ function CommentItem({
 }: CommentItemProps) {
   const { theme } = useTheme();
   const isPostAuthor = !!(postAuthorId && comment.authorId === postAuthorId);
-  const isProfessorComment = !comment.authorClassType && comment.authorId !== 'gemini-ai';
+  // authorRole 명시 우선, 없으면 기존 역추론 (과거 댓글 호환)
+  const isProfessorComment = comment.authorRole === 'professor'
+    || (comment.authorRole === undefined && !comment.authorClassType && comment.authorId !== 'gemini-ai');
   const isAIComment = comment.authorId === 'gemini-ai';
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -233,16 +235,16 @@ function CommentItem({
   // 작성자 표시: 교수님에겐 이름 닉네임·반, 학생에겐 닉네임·반
   const realName = isProfessor && authorNameMap ? authorNameMap.get(comment.authorId) : undefined;
   // 교수 계정 댓글: 최신 닉네임 사용 (닉네임 변경 반영)
-  const professorNickname = (!comment.authorClassType && comment.authorId !== 'gemini-ai')
+  const professorNickname = isProfessorComment
     ? (authorNicknameMap?.get(comment.authorId) || comment.authorNickname)
     : comment.authorNickname;
   const authorDisplay = comment.authorClassType
     ? `${realName ? `${realName} ` : ''}${comment.authorNickname}·${comment.authorClassType}반`
-    : comment.authorId === 'gemini-ai'
+    : isAIComment
       ? comment.authorNickname
-      : professorNickname.includes('교수')
-        ? professorNickname
-        : `${professorNickname} 교수님`;
+      : isProfessorComment
+        ? (professorNickname.includes('교수') ? professorNickname : `${professorNickname} 교수님`)
+        : comment.authorNickname; // 학생인데 classType 누락 시 이름만
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
@@ -355,7 +357,13 @@ function CommentItem({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`py-3 ${isReply ? 'pl-4 bg-[#EDE8DF]' : 'border-b border-dashed border-[#D4CFC4]'}`}
+      className={`py-3 ${
+        comment.isAccepted && !isReply
+          ? 'px-3 mb-3 border-[3px] border-[#2E7D32] bg-[#FDFBF7]'
+          : isReply
+            ? 'pl-4 bg-[#EDE8DF]'
+            : 'border-b border-dashed border-[#D4CFC4]'
+      }`}
     >
       {/* 댓글 헤더 — 좌: 작성자·시간 / 우: 답글·좋아요 */}
       <div className="flex items-center justify-between mb-1">

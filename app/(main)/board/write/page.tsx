@@ -159,19 +159,23 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
       courseId: userCourseId || profile?.courseId || undefined,
     };
 
-    const postId = await createPost(postData);
-    if (postId) {
+    const result = await createPost(postData);
+    if (result) {
+      const { postId, post } = result;
       localStorage.removeItem(DRAFT_KEY);
 
       if (profile?.role !== 'professor' && !postData.isPrivate) {
         showExpToast(EXP_REWARDS.POST_CREATE, '게시글 작성');
       }
       if (isPanelMode) {
-        // 패널 모드: 작성 완료 → 3쪽에 해당 글 상세 표시
+        // 패널 모드: 작성 완료 → 3쪽에 해당 글 상세를 즉시 initialPost 로 렌더
         const PostDetailPage = (await import('../[id]/page')).default;
-        setTimeout(() => replaceDetail(<PostDetailPage key={postId} panelPostId={postId} />, `/board/${postId}`), 300);
+        replaceDetail(
+          <PostDetailPage key={postId} panelPostId={postId} panelInitialPost={post} />,
+          `/board/${postId}`,
+        );
       } else {
-        setTimeout(() => router.replace(`/board/${postId}`), 300);
+        router.replace(`/board/${postId}`);
       }
     }
   }, [createPost, router, profile, userCourseId, showExpToast, isPanelMode, replaceDetail]);

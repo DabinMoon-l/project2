@@ -181,7 +181,15 @@ function ImageGallery({ images }: { images: string[] }) {
  * 게시글 상세 페이지
  * panelPostId가 전달되면 DetailPanel(3쪽) 모드로 동작 (스와이프/뒤로가기 비활성화)
  */
-export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPostId?: string; onPanelBack?: () => void } = {}) {
+export default function PostDetailPage({
+  panelPostId,
+  onPanelBack,
+  panelInitialPost,
+}: {
+  panelPostId?: string;
+  onPanelBack?: () => void;
+  panelInitialPost?: import('@/lib/hooks/useBoardTypes').Post;
+} = {}) {
   const params = useParams();
   const router = useRouter();
   const { replaceDetail, closeDetail, isLocked } = useDetailPanel();
@@ -211,7 +219,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   const { user } = useAuth();
   const { profile } = useUser();
   const isProfessor = profile?.role === 'professor';
-  const { post, loading, error, refresh } = usePost(postId);
+  const { post, loading, error, refresh } = usePost(postId, panelInitialPost);
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike } = useLike();
 
@@ -228,6 +236,43 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   }, [allComments, post?.isPrivate]);
   const [threadDeleteTarget, setThreadDeleteTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // PC 마우스 드래그 스크롤 (branch 미리보기 carousel)
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef({
+    active: false,
+    startX: 0,
+    startScroll: 0,
+    dragged: false, // 드래그 여부 — click 억제용
+  });
+
+  const handleThreadMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    dragStateRef.current.active = true;
+    dragStateRef.current.startX = e.pageX;
+    dragStateRef.current.startScroll = el.scrollLeft;
+    dragStateRef.current.dragged = false;
+    el.style.cursor = 'grabbing';
+  }, []);
+
+  const handleThreadMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current.active) return;
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const dx = e.pageX - dragStateRef.current.startX;
+    if (Math.abs(dx) > 5) {
+      dragStateRef.current.dragged = true;
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    }
+    el.scrollLeft = dragStateRef.current.startScroll - dx;
+  }, []);
+
+  const endThreadDrag = useCallback(() => {
+    dragStateRef.current.active = false;
+    const el = threadScrollRef.current;
+    if (el) el.style.cursor = 'grab';
+  }, []);
 
   // 스레드 삭제 (CF로 콩콩이 댓글도 삭제 가능)
   const handleDeleteThread = useCallback(async (rootCommentId: string) => {
@@ -652,15 +697,26 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
             </div>
           )}
 
-          {/* 비공개 글: 스레드 바로가기 (가로 스크롤) */}
+          {/* 비공개 글: 스레드 바로가기 (가로 스크롤 + PC 마우스 드래그) */}
           {post.isPrivate && threadRoots.length > 0 && (
-            <div className="mt-4 mb-2 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
+            <div
+              ref={threadScrollRef}
+              className="mt-4 mb-2 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 cursor-grab select-none"
+              onMouseDown={handleThreadMouseDown}
+              onMouseMove={handleThreadMouseMove}
+              onMouseUp={endThreadDrag}
+              onMouseLeave={endThreadDrag}
+            >
               {threadRoots.map((root, idx) => {
                 const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
                 return (
                   <button
                     key={root.id}
                     onClick={() => {
+                      if (dragStateRef.current.dragged) {
+                        dragStateRef.current.dragged = false;
+                        return;
+                      }
                       const el = document.getElementById(`comment-${root.id}`);
                       if (el) scrollToElement(el);
                     }}
@@ -669,6 +725,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
                     }}
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                    onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     className="px-3 py-1.5 text-xs border border-[#1A1A1A] text-[#1A1A1A] active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
                   >
                     <span className="font-bold text-[#1A1A1A] mr-1">#{idx + 1}</span>

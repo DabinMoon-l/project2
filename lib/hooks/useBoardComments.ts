@@ -109,14 +109,17 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setError(null);
 
         // Firestore에서 사용자 정보 가져오기 (보안 강화)
-        const { nickname: userNickname, classId: userClassType } =
-          await userRepo.getNicknameAndClassId(user.uid);
+        const [{ nickname: userNickname, classId: userClassType }, userRole] = await Promise.all([
+          userRepo.getNicknameAndClassId(user.uid),
+          userRepo.getRole(user.uid),
+        ]);
 
         const commentData: Record<string, unknown> = {
           postId: data.postId,
           authorId: user.uid,
           authorNickname: userNickname,
           authorClassType: userClassType || null,
+          authorRole: userRole || 'student', // 명시적 role 저장 (classType 역추론 대체)
           content: data.content,
           imageUrls: data.imageUrls || [],
           isAnonymous: false, // 익명 기능 사용 안 함
