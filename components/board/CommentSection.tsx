@@ -22,6 +22,7 @@ import { useUser } from '@/lib/contexts';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { useKeyboardAware, useKeyboardScrollAdjust } from '@/lib/hooks/useKeyboardAware';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { callFunction } from '@/lib/api';
 
 interface CommentSectionProps {
   postId: string;
@@ -274,6 +275,12 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     });
 
     rootComments.sort((a, b) => {
+      // 1) 채택된 댓글을 최상단으로 고정
+      const aAccepted = a.isAccepted ? 1 : 0;
+      const bAccepted = b.isAccepted ? 1 : 0;
+      if (aAccepted !== bAccepted) return bAccepted - aAccepted;
+
+      // 2) 좋아요 수 (본인 or 대댓글 중 최대값)
       const getMaxLikes = (comment: Comment): number => {
         const ownLikes = comment.likes || 0;
         const replyMaxLikes = comment.replies && comment.replies.length > 0
@@ -281,10 +288,11 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           : 0;
         return Math.max(ownLikes, replyMaxLikes);
       };
-
       const aMaxLikes = getMaxLikes(a);
       const bMaxLikes = getMaxLikes(b);
       if (bMaxLikes !== aMaxLikes) return bMaxLikes - aMaxLikes;
+
+      // 3) 최신순
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
 
@@ -338,10 +346,28 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
 
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
+
+    // 비공개 글(나만의 콩콩이) 의 루트 댓글: 대댓글(AI 답변) 포함 branch 전체 삭제
+    const target = comments.find((c) => c.id === commentId);
+    const isRoot = !!target && !target.parentId;
+    if (isPrivatePost && isRoot) {
+      try {
+        await callFunction('deleteThread', { rootCommentId: commentId, postId });
+        refresh();
+      } catch (err) {
+        console.error('branch 삭제 실패:', err);
+        // fallback: 단일 댓글만이라도 삭제
+        const success = await deleteComment(commentId, postId);
+        if (success) refresh();
+      }
+      setDeletingId(null);
+      return;
+    }
+
     const success = await deleteComment(commentId, postId);
     if (success) refresh();
     setDeletingId(null);
-  }, [deleteComment, postId, refresh]);
+  }, [deleteComment, postId, refresh, comments, isPrivatePost]);
 
   const handleEdit = useCallback(async (commentId: string, newContent: string, imageUrls?: string[]) => {
     setEditingId(commentId);
@@ -418,14 +444,24 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                 채택된 답변
               </span>
               <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
-                {acceptedComment.authorClassType
-                  ? `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`
-                  : acceptedComment.authorId === 'gemini-ai'
-                    ? acceptedComment.authorNickname
-                    : (() => {
-                        const nick = authorNicknameMap.get(acceptedComment.authorId) || acceptedComment.authorNickname;
-                        return nick.includes('교수') ? nick : `${nick} 교수님`;
-                      })()}
+                {(() => {
+                  const isProfessorComment = acceptedComment.authorRole === 'professor'
+                    || (acceptedComment.authorRole === undefined
+                      && !acceptedComment.authorClassType
+                      && acceptedComment.authorId !== 'gemini-ai');
+                  if (acceptedComment.authorClassType) {
+                    return `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`;
+                  }
+                  if (acceptedComment.authorId === 'gemini-ai') {
+                    return acceptedComment.authorNickname;
+                  }
+                  if (isProfessorComment) {
+                    const nick = authorNicknameMap.get(acceptedComment.authorId) || acceptedComment.authorNickname;
+                    return nick.includes('교수') ? nick : `${nick} 교수님`;
+                  }
+                  // 학생인데 classType 누락 — 이름만
+                  return acceptedComment.authorNickname;
+                })()}
               </span>
             </div>
             <p

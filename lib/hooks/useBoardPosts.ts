@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   serverTimestamp,
   postRepo,
@@ -187,10 +187,12 @@ export const useMyPosts = (skip = false): UseMyPostsReturn => {
  * @param postId - 게시글 ID
  * @returns 글 정보, 로딩 상태, 에러
  */
-export const usePost = (postId: string): UsePostReturn => {
-  const [post, setPost] = useState<Post | null>(null);
-  const [loading, setLoading] = useState(true);
+export const usePost = (postId: string, initialPost?: Post | null): UsePostReturn => {
+  const [post, setPost] = useState<Post | null>(initialPost ?? null);
+  const [loading, setLoading] = useState(!initialPost);
   const [error, setError] = useState<string | null>(null);
+  // initialPost 있을 때 첫 null 콜백은 Firestore 전파 지연으로 간주하여 유예
+  const firstCallbackGraceRef = useRef(!!initialPost);
 
   // onSnapshot 실시간 구독
   useEffect(() => {
@@ -199,14 +201,19 @@ export const usePost = (postId: string): UsePostReturn => {
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    // initialPost 없을 때만 loading 초기화 (있으면 이미 false)
+    if (!firstCallbackGraceRef.current) setLoading(true);
 
     const unsubscribe = postRepo.subscribePost(
       postId,
       (p) => {
         if (p) {
           setPost(docToPost(p));
+          setError(null);
+          firstCallbackGraceRef.current = false;
+        } else if (firstCallbackGraceRef.current) {
+          // 작성 직후 첫 콜백이 null 이면 서버 전파 대기 중 — 에러 대신 initialPost 유지
+          firstCallbackGraceRef.current = false;
         } else {
           setError('게시글을 찾을 수 없습니다.');
           setPost(null);
@@ -244,7 +251,7 @@ export const useCreatePost = (): UseCreatePostReturn => {
   const [error, setError] = useState<string | null>(null);
 
   const createPost = useCallback(
-    async (data: CreatePostData): Promise<string | null> => {
+    async (data: CreatePostData): Promise<import('./useBoardTypes').CreatedPost | null> => {
       if (!user) {
         setError('로그인이 필요합니다.');
         return null;
@@ -304,7 +311,36 @@ export const useCreatePost = (): UseCreatePostReturn => {
         // 작성 시간 기록
         recordPostTime();
 
-        return newPostId;
+        // 프론트 즉시 렌더용 Post 객체 (createdAt 은 실제 서버 타임스탬프로 realtime 이 덮어씀)
+        const now = new Date();
+        const post = {
+          id: newPostId,
+          title: postData.title,
+          content: postData.content,
+          imageUrl: postData.imageUrl ?? undefined,
+          imageUrls: postData.imageUrls ?? [],
+          fileUrls: postData.fileUrls ?? [],
+          authorId: postData.authorId,
+          authorNickname: postData.authorNickname,
+          authorClassType: postData.authorClassType ?? undefined,
+          isAnonymous: postData.isAnonymous,
+          category: postData.category,
+          courseId: postData.courseId ?? undefined,
+          likes: 0,
+          likedBy: [],
+          commentCount: 0,
+          isNotice: false,
+          createdAt: now,
+          updatedAt: now,
+          toProfessor: postData.toProfessor,
+          viewCount: 0,
+          tag: postData.tag ?? undefined,
+          chapterTags: data.chapterTags,
+          aiDetailedAnswer: data.aiDetailedAnswer,
+          isPrivate: data.isPrivate,
+        } as unknown as import('./useBoardTypes').Post;
+
+        return { postId: newPostId, post };
       } catch (err) {
         console.error('글 작성 실패:', err);
         setError('글 작성에 실패했습니다.');
