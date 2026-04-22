@@ -466,6 +466,7 @@ export {
   migrateExistingAccounts,
   deleteStudentAccount,
   removeEnrolledStudent,
+  updateStudentClass,
 } from "./studentAuth";
 
 // ============================================

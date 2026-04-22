@@ -268,15 +268,19 @@ export async function updateNickname(uid: string, nickname: string): Promise<voi
   });
 }
 
-/** 반 변경 */
+/**
+ * 반 변경 — CF onCall `updateStudentClass` 경유.
+ *
+ * Firestore users.classId 직접 쓰기 대신 CF 를 거쳐야 Supabase
+ * user_profiles.class_type 도 함께 sync (Phase 2 userRepo 활성화 전제).
+ * `uid` 는 현재 서버에서 auth.uid 로만 판단하므로 인자는 무시 (시그니처 호환용).
+ */
 export async function updateClassId(
-  uid: string,
+  _uid: string,
   classId: 'A' | 'B' | 'C' | 'D',
 ): Promise<void> {
-  await updateDocument('users', uid, {
-    classId,
-    updatedAt: serverTimestamp(),
-  });
+  const { callFunction } = await import('@/lib/api');
+  await callFunction('updateStudentClass', { classId });
 }
 
 /** 활동 시간 업데이트 */

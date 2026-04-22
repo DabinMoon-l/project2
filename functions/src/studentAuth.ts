@@ -1335,6 +1335,44 @@ export const removeEnrolledStudent = onCall(
   }
 );
 
+/**
+ * 학생 반 변경 (A/B/C/D).
+ * Firestore users.classId 업데이트 + Supabase user_profiles.class_type dual-write.
+ *
+ * 클라이언트에서 직접 Firestore 를 건드리지 않고 CF 를 경유해야 Supabase 와
+ * 싱크가 맞는다 (Phase 2 userRepo 활성화 전제 조건).
+ */
+export const updateStudentClass = onCall(
+  { region: "asia-northeast3", secrets: ENROLLMENT_DUAL_WRITE_SECRETS },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const uid = request.auth.uid;
+    const { classId } = request.data as { classId: string };
+
+    if (!classId || !["A", "B", "C", "D"].includes(classId)) {
+      throw new HttpsError("invalid-argument", "classId 는 A/B/C/D 중 하나여야 합니다.");
+    }
+
+    const db = getFirestore();
+
+    // Firestore 업데이트 (본인 문서만)
+    await db.collection("users").doc(uid).update({
+      classId,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Supabase dual-write — USER_FIELD_MAP 은 classType → class_type 매핑
+    supabaseDualUpdateUserPartial(uid, { classType: classId }).catch((e) =>
+      console.warn("[Supabase updateStudentClass dual-write]", e),
+    );
+
+    return { success: true };
+  },
+);
+
 // ============================================================
 // 유틸: 이메일 마스킹
 // ============================================================

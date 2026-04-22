@@ -175,6 +175,10 @@ export interface CloudFunctionMap {
     input: { recoveryEmail: string; verificationCode?: string };
     output: { needsVerification?: boolean; success?: boolean; maskedEmail: string };
   };
+  updateStudentClass: {
+    input: { classId: 'A' | 'B' | 'C' | 'D' };
+    output: { success: boolean };
+  };
   resetStudentPassword: {
     input: { studentId: string; courseId: string; newPassword: string };
     output: { success: boolean; message: string };
