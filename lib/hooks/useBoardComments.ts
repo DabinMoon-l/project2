@@ -13,6 +13,7 @@ import {
   userRepo,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
+import { useUser } from '@/lib/contexts';
 import type {
   Comment,
   CreateCommentData,
@@ -86,6 +87,7 @@ export const useComments = (postId: string): UseCommentsReturn => {
  */
 export const useCreateComment = (): UseCreateCommentReturn => {
   const { user } = useAuth();
+  const { profile } = useUser();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,14 +110,31 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setLoading(true);
         setError(null);
 
-        // Firestore 에서 사용자 정보 가져오기 (보안 강화)
-        // Promise.all 병렬 호출 시 Supabase 쪽에서 경합이 있을 수 있어 순차 호출로 변경
-        const { nickname: userNickname, classId: userClassType } =
-          await userRepo.getNicknameAndClassId(user.uid);
-        const userRole = await userRepo.getRole(user.uid);
+        // UserContext profile 우선 사용 — Phase 2 Supabase 전환 후 repo 경로에서 class_type null 반환 이슈 회피.
+        // profile 이 없을 때만 repo 조회 fallback.
+        const ctxClassTypeRaw = profile?.classType as string | undefined;
+        const ctxClassType: 'A' | 'B' | 'C' | 'D' | null =
+          ctxClassTypeRaw && ctxClassTypeRaw.length > 0
+            ? (ctxClassTypeRaw as 'A' | 'B' | 'C' | 'D')
+            : null;
 
-        console.log('[createComment] profile fetched', {
+        let userNickname: string | undefined = profile?.nickname;
+        let userClassType: 'A' | 'B' | 'C' | 'D' | null | undefined =
+          profile ? ctxClassType : undefined;
+        let userRole: 'student' | 'professor' | undefined = profile?.role;
+
+        if (!userNickname || userClassType === undefined) {
+          const rp = await userRepo.getNicknameAndClassId(user.uid);
+          userNickname = userNickname || rp.nickname;
+          userClassType = userClassType ?? rp.classId;
+        }
+        if (!userRole) {
+          userRole = (await userRepo.getRole(user.uid)) ?? 'student';
+        }
+
+        console.log('[createComment] profile', {
           uid: user.uid,
+          fromContext: !!profile,
           userNickname,
           userClassType,
           userRole,
@@ -153,7 +172,7 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setLoading(false);
       }
     },
-    [user]
+    [user, profile]
   );
 
   return { createComment, loading, error };
