@@ -187,10 +187,10 @@ async function computeRankingsForCourse(courseId: string) {
   const [quizResult, resultsResult, rabbitResult, holdingsResult, expHistoryResult] = await Promise.allSettled([
     professorUids.length > 0
       ? db.collection("quizzes").where("courseId", "==", courseId)
-          .select("creatorId", "creatorUid").get()
+        .select("creatorId", "creatorUid").get()
       : Promise.resolve(null),
     db.collection("quizResults").where("courseId", "==", courseId)
-        .select("userId", "quizCreatorId", "quizId", "correctCount", "totalCount", "isUpdate", "completedAt", "createdAt").get(),
+      .select("userId", "quizCreatorId", "quizId", "correctCount", "totalCount", "isUpdate", "completedAt", "createdAt").get(),
     (async () => {
       const names: Record<string, string | null> = {};
       const ids = Array.from(rabbitDocIds);

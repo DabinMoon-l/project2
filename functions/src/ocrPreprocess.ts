@@ -259,7 +259,7 @@ function recoverTruncatedJson(
 ): Record<string, unknown> | Record<string, unknown>[] | null {
   try {
     // questions 배열의 시작 위치 찾기
-    const questionsStart = text.indexOf('"questions"');
+    const questionsStart = text.indexOf("\"questions\"");
     const arrayStart = questionsStart !== -1
       ? text.indexOf("[", questionsStart)
       : text.indexOf("[");
@@ -277,7 +277,7 @@ function recoverTruncatedJson(
       const ch = text[i];
       if (escaped) { escaped = false; continue; }
       if (ch === "\\") { escaped = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
+      if (ch === "\"") { inString = !inString; continue; }
       if (inString) continue;
       if (ch === "{") depth++;
       if (ch === "}") {
@@ -405,8 +405,8 @@ export async function preprocessOcrText(
     }
 
     // 2. { ... } 객체 부분만 추출 (가장 바깥쪽 중괄호)
-    const firstBrace = jsonText.indexOf('{');
-    const lastBrace = jsonText.lastIndexOf('}');
+    const firstBrace = jsonText.indexOf("{");
+    const lastBrace = jsonText.lastIndexOf("}");
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       jsonText = jsonText.substring(firstBrace, lastBrace + 1);
       console.log("[Preprocess] 중괄호로 추출됨, 길이:", jsonText.length);
@@ -467,7 +467,7 @@ export async function preprocessOcrText(
       return {
         success: false,
         questions: [],
-        error: `questions 배열 없음. 받은 키: [${keys.join(', ')}], 타입: ${typeof parsed}`,
+        error: `questions 배열 없음. 받은 키: [${keys.join(", ")}], 타입: ${typeof parsed}`,
       };
     }
 

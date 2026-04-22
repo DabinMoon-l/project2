@@ -12,6 +12,8 @@ import {
   SUPABASE_SERVICE_ROLE_SECRET,
   DEFAULT_ORG_ID_SECRET,
   supabaseDualWriteRabbitHolding,
+  supabaseDualUpdateUserPartial,
+  supabaseDualWriteExpHistory,
 } from "./utils/supabase";
 
 export const levelUpRabbit = onCall(
@@ -124,14 +126,39 @@ export const levelUpRabbit = onCall(
         newStats,
         statIncreases: increases,
         totalPoints,
+        _supabase: {
+          newLastGachaExp: lastGachaExp + 50,
+          expDocId: historyRef.id,
+          reason: `토끼 레벨업 (Lv.${currentLevel} → ${newLevel})`,
+          previousExp: totalExp,
+          newExp: totalExp,
+          metadata: { rabbitId, courseId, newLevel, statIncreases: increases },
+        },
       };
     });
 
     // Supabase dual-write (트랜잭션 성공 후)
-    await supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
-      level: result.newLevel,
-      stats: result.newStats,
-    });
+    await Promise.all([
+      supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
+        level: result.newLevel,
+        stats: result.newStats,
+      }),
+      supabaseDualUpdateUserPartial(userId, {
+        lastGachaExp: result._supabase.newLastGachaExp,
+      }).catch((e) => console.warn("[Supabase levelup user dual-write]", e)),
+      supabaseDualWriteExpHistory({
+        userId,
+        expDocId: result._supabase.expDocId,
+        amount: 0,
+        reason: result._supabase.reason,
+        type: "rabbit_levelup",
+        sourceId: `${courseId}_${rabbitId}`,
+        sourceCollection: "rabbitHoldings",
+        previousExp: result._supabase.previousExp,
+        newExp: result._supabase.newExp,
+        metadata: result._supabase.metadata,
+      }).catch((e) => console.warn("[Supabase levelup exp_history dual-write]", e)),
+    ]);
 
     return result;
   }

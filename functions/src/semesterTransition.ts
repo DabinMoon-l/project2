@@ -18,6 +18,8 @@ import {
   supabaseDualDeleteFoldersByUser,
   supabaseDualDeleteQuizResultsByUser,
   supabaseDualDeleteCompletionsByUser,
+  supabaseDualUpdateUserPartial,
+  supabaseDualDeleteUser,
 } from "./utils/supabase";
 
 // 과목 ID 상수
@@ -64,6 +66,20 @@ async function resetStudentData(
   });
 
   await batch.commit();
+
+  // Supabase dual-write (user_profiles 리셋)
+  await supabaseDualUpdateUserPartial(userId, {
+    courseId: newCourseId,
+    totalExp: 0,
+    lastGachaExp: 0,
+    equippedRabbits: [],
+    totalCorrect: 0,
+    totalAttemptedQuestions: 0,
+    professorQuizzesCompleted: 0,
+    tekkenTotal: 0,
+    feedbackCount: 0,
+    badges: [],
+  }).catch((e) => console.warn("[Supabase resetStudentData user dual-write]", e));
 
   // 2. 복습창 데이터 삭제 (reviews)
   const reviewsSnapshot = await db
@@ -205,6 +221,11 @@ async function deleteStudentAccount(
 
   // 3. 사용자 문서 삭제
   await db.collection("users").doc(userId).delete();
+
+  // Supabase dual-delete (user_profiles)
+  await supabaseDualDeleteUser(userId).catch((e) =>
+    console.warn("[Supabase deleteStudentAccount user delete]", e),
+  );
 
   // 4. Firebase Auth에서 삭제
   try {

@@ -212,7 +212,7 @@ export function getOldBaseStats(rabbitId: number) {
 export function generateStatIncreases() {
   const totalPoints = 3 + Math.floor(Math.random() * 3); // 3~5
   const result = { hp: 1, atk: 1, def: 1 }; // 각 최소 1 (3 소비)
-  let remaining = totalPoints - 3; // 0~2
+  const remaining = totalPoints - 3; // 0~2
   const stats = ["hp", "atk", "def"] as const;
   for (let i = 0; i < remaining; i++) {
     result[stats[Math.floor(Math.random() * 3)]] += 1;

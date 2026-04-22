@@ -1,6 +1,18 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import {
+  readUserForExp,
+  addExpInTransaction,
+  flushExpSupabase,
+  EXP_REWARDS,
+  type SupabaseExpPayload,
+} from "./utils/gold";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpdateUserPartial,
+} from "./utils/supabase";
 
 /**
  * 피드백 문서 타입
@@ -26,6 +38,7 @@ export const onFeedbackSubmit = onDocumentCreated(
   {
     document: "questionFeedbacks/{feedbackId}",
     region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
   },
   async (event) => {
     const snapshot = event.data;
@@ -85,12 +98,15 @@ export const onFeedbackSubmit = onDocumentCreated(
     const reason = "퀴즈 피드백 작성";
 
     try {
-      await db.runTransaction(async (transaction) => {
+      const txResult = await db.runTransaction<{
+        expPayload: SupabaseExpPayload | null;
+        newFeedbackCount: number | null;
+      }>(async (transaction) => {
         // 트랜잭션 내 중복 체크 (at-least-once 방어)
         const freshDoc = await transaction.get(snapshot.ref);
         if (freshDoc.data()?.rewarded) {
           console.log(`트랜잭션 내 중복 감지 (피드백): ${feedbackId}`);
-          return;
+          return { expPayload: null, newFeedbackCount: null };
         }
 
         // READ 먼저
@@ -103,24 +119,46 @@ export const onFeedbackSubmit = onDocumentCreated(
           expRewarded: expReward,
         });
 
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-          type: "feedback_submit",
-          sourceId: feedbackId,
-          sourceCollection: "questionFeedbacks",
-          metadata: { questionId, feedbackType: type },
-        });
+        const { supabasePayload } = addExpInTransaction(
+          transaction, userId, expReward, reason, userDoc, {
+            type: "feedback_submit",
+            sourceId: feedbackId,
+            sourceCollection: "questionFeedbacks",
+            metadata: { questionId, feedbackType: type },
+          }
+        );
 
         // feedbackCount 증가 (소통 지표 계산용 — computeRadarNorm에서 사용)
         const userRef = db.collection("users").doc(userId);
         transaction.update(userRef, {
           feedbackCount: FieldValue.increment(1),
         });
+        const prevFeedbackCount = (userDoc.data()?.feedbackCount as number) || 0;
+
+        return {
+          expPayload: supabasePayload,
+          newFeedbackCount: prevFeedbackCount + 1,
+        };
       });
 
       console.log(`피드백 보상 지급 완료: ${userId}`, {
         feedbackId,
         expReward,
       });
+
+      // Supabase dual-write (user_profiles.total_exp / feedback_count + exp_history)
+      if (txResult.expPayload) {
+        flushExpSupabase(txResult.expPayload).catch((e) =>
+          console.warn("[Supabase feedback exp dual-write] 실패:", e)
+        );
+      }
+      if (txResult.newFeedbackCount !== null) {
+        supabaseDualUpdateUserPartial(userId, {
+          feedbackCount: txResult.newFeedbackCount,
+        }).catch((e) =>
+          console.warn("[Supabase feedbackCount dual-write] 실패:", e)
+        );
+      }
 
       // 교수님에게 알림 생성 (새 피드백 알림)
       // 위에서 검증한 quizDoc 재사용

@@ -4,7 +4,9 @@ import {
   calculateQuizExp,
   readUserForExp,
   addExpInTransaction,
+  flushExpSupabase,
   EXP_REWARDS,
+  type SupabaseExpPayload,
 } from "./utils/gold";
 import {
   SUPABASE_URL_SECRET,
@@ -12,6 +14,7 @@ import {
   DEFAULT_ORG_ID_SECRET,
   supabaseDualWriteQuiz,
   supabaseDualDeleteQuiz,
+  supabaseDualUpdateUserPartial,
 } from "./utils/supabase";
 
 /**
@@ -47,6 +50,7 @@ export const onQuizComplete = onDocumentCreated(
   {
     document: "quizResults/{resultId}",
     region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
   },
   async (event) => {
     const snapshot = event.data;
@@ -99,27 +103,37 @@ export const onQuizComplete = onDocumentCreated(
       const reason = "복습 연습 완료";
 
       try {
-        await db.runTransaction(async (transaction) => {
-          // 트랜잭션 내 중복 체크 (at-least-once 방어)
-          const freshDoc = await transaction.get(snapshot.ref);
-          if (freshDoc.data()?.rewarded) {
-            console.log(`트랜잭션 내 중복 감지 (복습): ${resultId}`);
-            return;
+        const reviewExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
+          async (transaction) => {
+            // 트랜잭션 내 중복 체크 (at-least-once 방어)
+            const freshDoc = await transaction.get(snapshot.ref);
+            if (freshDoc.data()?.rewarded) {
+              console.log(`트랜잭션 내 중복 감지 (복습): ${resultId}`);
+              return null;
+            }
+            const userDoc = await readUserForExp(transaction, userId);
+            transaction.update(snapshot.ref, {
+              rewarded: true,
+              rewardedAt: FieldValue.serverTimestamp(),
+              expRewarded: expReward,
+            });
+            const { supabasePayload } = addExpInTransaction(
+              transaction, userId, expReward, reason, userDoc, {
+                type: "review_practice",
+                sourceId: quizId,
+                sourceCollection: "quizzes",
+                metadata: { resultId },
+              }
+            );
+            return supabasePayload;
           }
-          const userDoc = await readUserForExp(transaction, userId);
-          transaction.update(snapshot.ref, {
-            rewarded: true,
-            rewardedAt: FieldValue.serverTimestamp(),
-            expRewarded: expReward,
-          });
-          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-            type: "review_practice",
-            sourceId: quizId,
-            sourceCollection: "quizzes",
-            metadata: { resultId },
-          });
-        });
+        );
         console.log(`복습 보상 지급 완료: ${userId}`, { resultId, expReward });
+        if (reviewExpPayload) {
+          flushExpSupabase(reviewExpPayload).catch((e) =>
+            console.warn("[Supabase review trigger exp dual-write] 실패:", e)
+          );
+        }
       } catch (error) {
         console.error("복습 보상 지급 실패:", error);
         throw error;
@@ -178,12 +192,15 @@ export const onQuizComplete = onDocumentCreated(
     try {
       // 트랜잭션으로 보상 지급
       // 주의: Firestore 트랜잭션은 모든 READ가 WRITE보다 먼저 실행되어야 함
-      await db.runTransaction(async (transaction) => {
+      const completeTxResult = await db.runTransaction<{
+        expPayload: SupabaseExpPayload | null;
+        statsPatch: Record<string, number> | null;
+      }>(async (transaction) => {
         // 트랜잭션 내 중복 체크 (at-least-once 방어)
         const freshDoc = await transaction.get(snapshot.ref);
         if (freshDoc.data()?.rewarded) {
           console.log(`트랜잭션 내 중복 감지: ${resultId}`);
-          return;
+          return { expPayload: null, statsPatch: null };
         }
 
         // ── 모든 READ를 먼저 수행 ──
@@ -205,13 +222,16 @@ export const onQuizComplete = onDocumentCreated(
         });
 
         // 경험치 지급
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-          type: "quiz_complete",
-          sourceId: quizId,
-          sourceCollection: "quizzes",
-          metadata: { score, resultId, isUpdate },
-        });
+        const { supabasePayload } = addExpInTransaction(
+          transaction, userId, expReward, reason, userDoc, {
+            type: "quiz_complete",
+            sourceId: quizId,
+            sourceCollection: "quizzes",
+            metadata: { score, resultId, isUpdate },
+          }
+        );
 
+        let statsPatch: Record<string, number> | null = null;
         // 첫 시도 + 서버 채점된 결과에만 누적 통계 업데이트 (랭킹용)
         if (!isUpdate && correctCount !== undefined && totalCount !== undefined && (result as QuizResult & { gradedOnServer?: boolean }).gradedOnServer === true) {
           const userRef = db.collection("users").doc(userId);
@@ -220,12 +240,24 @@ export const onQuizComplete = onDocumentCreated(
             totalAttemptedQuestions: FieldValue.increment(totalCount),
           };
 
+          const userData = userDoc.data() || {};
+          const prevTotalCorrect = (userData.totalCorrect as number) || 0;
+          const prevTotalAttempted = (userData.totalAttemptedQuestions as number) || 0;
+          statsPatch = {
+            totalCorrect: prevTotalCorrect + correctCount,
+            totalAttemptedQuestions: prevTotalAttempted + totalCount,
+          };
+
           if (creatorDoc?.exists && creatorDoc.data()?.role === "professor") {
             statsUpdate.professorQuizzesCompleted = FieldValue.increment(1);
+            const prevProfCount = (userData.professorQuizzesCompleted as number) || 0;
+            statsPatch.professorQuizzesCompleted = prevProfCount + 1;
           }
 
           transaction.update(userRef, statsUpdate);
         }
+
+        return { expPayload: supabasePayload, statsPatch };
       });
 
       console.log(`퀴즈 보상 지급 완료: ${userId}`, {
@@ -233,6 +265,18 @@ export const onQuizComplete = onDocumentCreated(
         score,
         expReward,
       });
+
+      // Supabase dual-write (user_profiles.total_exp/total_correct/... + exp_history)
+      if (completeTxResult.expPayload) {
+        flushExpSupabase(completeTxResult.expPayload).catch((e) =>
+          console.warn("[Supabase quiz_complete exp dual-write] 실패:", e)
+        );
+      }
+      if (completeTxResult.statsPatch) {
+        supabaseDualUpdateUserPartial(userId, completeTxResult.statsPatch).catch((e) =>
+          console.warn("[Supabase quiz_complete stats dual-write] 실패:", e)
+        );
+      }
     } catch (error) {
       console.error("퀴즈 보상 지급 실패:", error);
       throw error;
@@ -323,6 +367,7 @@ export const onQuizCreate = onDocumentCreated(
   {
     document: "quizzes/{quizId}",
     region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
   },
   async (event) => {
     const snapshot = event.data;
@@ -353,37 +398,48 @@ export const onQuizCreate = onDocumentCreated(
     const db = getFirestore();
 
     try {
-      await db.runTransaction(async (transaction) => {
-        // 트랜잭션 내 중복 체크 (at-least-once 방어)
-        const freshDoc = await transaction.get(snapshot.ref);
-        if (freshDoc.data()?.rewarded) {
-          console.log(`트랜잭션 내 중복 감지 (퀴즈 생성): ${quizId}`);
-          return;
+      const createExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
+        async (transaction) => {
+          // 트랜잭션 내 중복 체크 (at-least-once 방어)
+          const freshDoc = await transaction.get(snapshot.ref);
+          if (freshDoc.data()?.rewarded) {
+            console.log(`트랜잭션 내 중복 감지 (퀴즈 생성): ${quizId}`);
+            return null;
+          }
+
+          // READ 먼저
+          const userDoc = await readUserForExp(transaction, creatorId);
+
+          // WRITE
+          transaction.update(snapshot.ref, {
+            rewarded: true,
+            rewardedAt: FieldValue.serverTimestamp(),
+            expRewarded: expReward,
+          });
+
+          const { supabasePayload } = addExpInTransaction(
+            transaction, creatorId, expReward, reason, userDoc, {
+              type: "quiz_create",
+              sourceId: quizId,
+              sourceCollection: "quizzes",
+              metadata: { isAiSave },
+            }
+          );
+          return supabasePayload;
         }
-
-        // READ 먼저
-        const userDoc = await readUserForExp(transaction, creatorId);
-
-        // WRITE
-        transaction.update(snapshot.ref, {
-          rewarded: true,
-          rewardedAt: FieldValue.serverTimestamp(),
-          expRewarded: expReward,
-        });
-
-        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc, {
-          type: "quiz_create",
-          sourceId: quizId,
-          sourceCollection: "quizzes",
-          metadata: { isAiSave },
-        });
-      });
+      );
 
       console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
         quizId,
         expReward,
         isAiSave,
       });
+
+      if (createExpPayload) {
+        flushExpSupabase(createExpPayload).catch((e) =>
+          console.warn("[Supabase quiz_create exp dual-write] 실패:", e)
+        );
+      }
     } catch (error) {
       console.error("퀴즈 생성 보상 지급 실패:", error);
       throw error;
@@ -401,6 +457,7 @@ export const onQuizMakePublic = onDocumentWritten(
   {
     document: "quizzes/{quizId}",
     region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
   },
   async (event) => {
     const before = event.data?.before.data() as Quiz | undefined;
@@ -424,32 +481,43 @@ export const onQuizMakePublic = onDocumentWritten(
     const db = getFirestore();
 
     try {
-      await db.runTransaction(async (transaction) => {
-        // 트랜잭션 내 중복 체크 (at-least-once 방어)
-        const quizRef = db.collection("quizzes").doc(quizId);
-        const freshDoc = await transaction.get(quizRef);
-        if (freshDoc.data()?.publicRewarded) {
-          console.log(`트랜잭션 내 중복 감지 (공개 전환): ${quizId}`);
-          return;
+      const publicExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
+        async (transaction) => {
+          // 트랜잭션 내 중복 체크 (at-least-once 방어)
+          const quizRef = db.collection("quizzes").doc(quizId);
+          const freshDoc = await transaction.get(quizRef);
+          if (freshDoc.data()?.publicRewarded) {
+            console.log(`트랜잭션 내 중복 감지 (공개 전환): ${quizId}`);
+            return null;
+          }
+
+          // READ 먼저
+          const userDoc = await readUserForExp(transaction, creatorId);
+
+          // WRITE
+          transaction.update(quizRef, {
+            publicRewarded: true,
+            publicRewardedAt: FieldValue.serverTimestamp(),
+          });
+
+          const { supabasePayload } = addExpInTransaction(
+            transaction, creatorId, expReward, reason, userDoc, {
+              type: "quiz_make_public",
+              sourceId: quizId,
+              sourceCollection: "quizzes",
+            }
+          );
+          return supabasePayload;
         }
-
-        // READ 먼저
-        const userDoc = await readUserForExp(transaction, creatorId);
-
-        // WRITE
-        transaction.update(quizRef, {
-          publicRewarded: true,
-          publicRewardedAt: FieldValue.serverTimestamp(),
-        });
-
-        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc, {
-          type: "quiz_make_public",
-          sourceId: quizId,
-          sourceCollection: "quizzes",
-        });
-      });
+      );
 
       console.log(`퀴즈 공개 전환 보상 지급: ${creatorId}`, { quizId, expReward });
+
+      if (publicExpPayload) {
+        flushExpSupabase(publicExpPayload).catch((e) =>
+          console.warn("[Supabase quiz_make_public exp dual-write] 실패:", e)
+        );
+      }
     } catch (error) {
       console.error("퀴즈 공개 전환 보상 실패:", error);
     }

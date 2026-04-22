@@ -30,7 +30,7 @@ export type Difficulty = "easy" | "medium" | "hard";
 
 export interface GeneratedQuestion {
   text: string;
-  type?: 'multiple' | 'ox';  // 문제 형식 (기본: multiple)
+  type?: "multiple" | "ox";  // 문제 형식 (기본: multiple)
   choices?: string[];        // 객관식 선지 (ox는 불필요)
   answer: number | number[] | string;   // 객관식: 0-based index 또는 배열(복수정답), OX: 'O' 또는 'X'
   explanation: string;
@@ -257,17 +257,17 @@ const MICROBIOLOGY_FOCUS_GUIDE = `## 미생물학 퀴즈 출제 포커스
 export function getFocusGuide(courseId: string, chapterNumbers?: string[]): string | null {
   let fullGuide: string | null = null;
   switch (courseId) {
-    case "biology":
-      fullGuide = BIOLOGY_FOCUS_GUIDE;
-      break;
-    case "pathophysiology":
-      fullGuide = PATHOPHYSIOLOGY_FOCUS_GUIDE;
-      break;
-    case "microbiology":
-      fullGuide = MICROBIOLOGY_FOCUS_GUIDE;
-      break;
-    default:
-      return null;
+  case "biology":
+    fullGuide = BIOLOGY_FOCUS_GUIDE;
+    break;
+  case "pathophysiology":
+    fullGuide = PATHOPHYSIOLOGY_FOCUS_GUIDE;
+    break;
+  case "microbiology":
+    fullGuide = MICROBIOLOGY_FOCUS_GUIDE;
+    break;
+  default:
+    return null;
   }
 
   if (!fullGuide || !chapterNumbers || chapterNumbers.length === 0) {
@@ -320,14 +320,14 @@ function filterFocusGuideByChapters(guide: string, chapterNumbers: string[]): st
  */
 export function getCourseIndex(courseId: string): CourseIndex | null {
   switch (courseId) {
-    case "biology":
-      return BIOLOGY_INDEX;
-    case "pathophysiology":
-      return PATHOPHYSIOLOGY_INDEX;
-    case "microbiology":
-      return MICROBIOLOGY_INDEX;
-    default:
-      return null;
+  case "biology":
+    return BIOLOGY_INDEX;
+  case "pathophysiology":
+    return PATHOPHYSIOLOGY_INDEX;
+  case "microbiology":
+    return MICROBIOLOGY_INDEX;
+  default:
+    return null;
   }
 }
 
@@ -341,14 +341,14 @@ export function buildChapterIndexPrompt(courseId: string, filterChapters?: strin
   // filterChapters가 있으면 해당 챕터만 포함 (프롬프트 효율화)
   const chapters = filterChapters && filterChapters.length > 0
     ? index.chapters.filter(ch => {
-        const num = ch.id.split("_")[1];
-        return filterChapters.includes(num);
-      })
+      const num = ch.id.split("_")[1];
+      return filterChapters.includes(num);
+    })
     : index.chapters;
 
   if (chapters.length === 0) return "";
 
-  let text = `## 챕터 분류 체계 (각 문제에 반드시 할당)\n\n`;
+  let text = "## 챕터 분류 체계 (각 문제에 반드시 할당)\n\n";
   text += `과목: ${index.courseName}\n\n`;
 
   for (const chapter of chapters) {
@@ -396,22 +396,22 @@ export function buildCourseOverviewPrompt(courseId: string, filterChapters?: str
   // 선택된 챕터의 상세 내용 표시
   const chapters = filterChapters && filterChapters.length > 0
     ? index.chapters.filter(ch => {
-        const num = ch.id.split("_")[1];
-        return filterChapters.includes(num);
-      })
+      const num = ch.id.split("_")[1];
+      return filterChapters.includes(num);
+    })
     : [];
 
   let text = `## 과목 개요 및 출제 가이드\n\n${overview}\n`;
 
   if (chapters.length > 0) {
-    text += `\n### 선택된 챕터 상세 커리큘럼\n`;
-    text += `아래는 출제 범위로 지정된 챕터의 세부 주제입니다. 이 주제들을 기반으로 문제를 구성하세요.\n\n`;
+    text += "\n### 선택된 챕터 상세 커리큘럼\n";
+    text += "아래는 출제 범위로 지정된 챕터의 세부 주제입니다. 이 주제들을 기반으로 문제를 구성하세요.\n\n";
     for (const chapter of chapters) {
       text += `**${chapter.name}**\n`;
       for (const detail of chapter.details) {
         text += `  - ${detail.name}\n`;
       }
-      text += `\n`;
+      text += "\n";
     }
   }
 
@@ -486,8 +486,8 @@ export async function loadScopeForQuiz(
         const adjacentScope = await loadScopeForAI(courseId, extraChapters, 6000);
         if (adjacentScope && adjacentScope.content) {
           // 메인 컨텐츠와 분리하여 오답 선지 참고용으로 표시
-          scopeData.content += `\n\n--- [오답 선지 참고용 인접 챕터] ---\n` +
-            `⚠️ 아래 내용은 발문(질문) 출제에 사용하지 마세요. 오답 선지 구성에만 참고하세요.\n` +
+          scopeData.content += "\n\n--- [오답 선지 참고용 인접 챕터] ---\n" +
+            "⚠️ 아래 내용은 발문(질문) 출제에 사용하지 마세요. 오답 선지 구성에만 참고하세요.\n" +
             adjacentScope.content.slice(0, 4000);
           scopeData.keywords.push(...adjacentScope.keywords);
         }
@@ -604,9 +604,9 @@ ${profile.styleDescription}
       if (p.examples && p.examples.length > 0) {
         styleSection += ` — 예: "${p.examples[0]}"`;
       }
-      styleSection += `\n`;
+      styleSection += "\n";
     }
-    styleSection += `위 패턴을 참고하여 비슷한 구조로 발문을 작성하세요.\n`;
+    styleSection += "위 패턴을 참고하여 비슷한 구조로 발문을 작성하세요.\n";
   }
 
   // 오답 구성 전략 (v2: 구체적 방법)
@@ -630,9 +630,9 @@ ${profile.styleDescription}
         const marker = q.correctAnswer === i ? "✓" : " ";
         styleSection += `  ${marker}${i + 1}. ${c}\n`;
       });
-      styleSection += `\n`;
+      styleSection += "\n";
     }
-    styleSection += `위 문제들의 발문 구조, 선지 길이, 용어 수준, 오답 구성 방식을 그대로 따라하세요.\n`;
+    styleSection += "위 문제들의 발문 구조, 선지 길이, 용어 수준, 오답 구성 방식을 그대로 따라하세요.\n";
   }
 
   // 주제별 비중 (v2)
@@ -838,11 +838,11 @@ export function buildFullPrompt(
   // 태그에서 사람이 읽을 수 있는 챕터 라벨 생성 (예: "12장(신경계), 11장(내분비계)")
   const tagChapterLabels = tags && tags.length > 0
     ? tags
-        .filter(t => /^\d+_/.test(t))
-        .map(t => {
-          const [num, ...rest] = t.split("_");
-          return `${num}장(${rest.join("_")})`;
-        })
+      .filter(t => /^\d+_/.test(t))
+      .map(t => {
+        const [num, ...rest] = t.split("_");
+        return `${num}장(${rest.join("_")})`;
+      })
     : [];
 
   // 태그에서 챕터 번호 추출 (과목 개요에 사용)
@@ -881,13 +881,13 @@ export function buildFullPrompt(
         return detailId;
       });
       const detailCount = selectedDetails.length;
-      selectedDetailsPrompt = `\n## 세부단원 집중 출제 지시 (필수)\n\n` +
+      selectedDetailsPrompt = "\n## 세부단원 집중 출제 지시 (필수)\n\n" +
         `학생이 다음 ${detailCount}개 세부단원을 선택했습니다.\n` +
         `**전체 ${questionCount}개 문제 중 최소 ${Math.min(questionCount, Math.ceil(questionCount * 0.7))}개는 반드시 아래 세부단원에서 출제**하세요.\n` +
-        `나머지 문제는 같은 챕터의 다른 세부단원에서 출제할 수 있습니다.\n\n` +
+        "나머지 문제는 같은 챕터의 다른 세부단원에서 출제할 수 있습니다.\n\n" +
         detailLabels.map(l => `- ${l}`).join("\n") + "\n\n" +
         `**중요**: 위 세부단원에서 출제한 문제의 chapterDetailId에 해당 ID(예: ${selectedDetails[0]})를 반드시 정확하게 할당하세요.\n` +
-        `chapterDetailId를 빈 값이나 null로 두지 마세요.\n`;
+        "chapterDetailId를 빈 값이나 null로 두지 마세요.\n";
     }
   }
 
@@ -1009,7 +1009,7 @@ export function buildFullPrompt(
   // professorPrompt가 있으면 모든 contentRule에 최우선 규칙 추가
   if (professorPrompt) {
     contentRule = `**🔴 최우선**: 위 '최우선 출제 지시사항'의 키워드/주제("${professorPrompt.slice(0, 50)}")와 직접 관련된 내용에서만 문제를 출제하세요. ` +
-      `이 키워드와 무관한 챕터나 주제의 문제는 절대 포함하지 마세요. ` + contentRule;
+      "이 키워드와 무관한 챕터나 주제의 문제는 절대 포함하지 마세요. " + contentRule;
   }
 
   // 태그 기반 챕터 확정 (최우선) 또는 추론된 챕터 제한
@@ -1017,13 +1017,13 @@ export function buildFullPrompt(
     // 사용자가 직접 선택한 챕터 태그 → 가장 확실한 범위 제한
     const tagList = tagChapterLabels.join(", ");
     contentRule = `🔒 **출제 범위 확정 (사용자 지정)**: ${tagList} 범위에서만 출제하세요. ` +
-      `이 챕터 외의 내용으로 문제를 만들면 탈락입니다. ` +
+      "이 챕터 외의 내용으로 문제를 만들면 탈락입니다. " +
       `${questionCount}문제 전부 위 챕터 범위 내에서 출제해야 합니다.\n   ` +
       contentRule;
   } else if (scopeChapters && scopeChapters.length > 0) {
     const chapterList = scopeChapters.join(", ");
     contentRule = `🔒 **챕터 제한**: ${chapterList}장 범위에서만 출제하세요. ` +
-      `다른 챕터의 내용으로 문제를 만들면 탈락입니다.\n   ` +
+      "다른 챕터의 내용으로 문제를 만들면 탈락입니다.\n   " +
       contentRule;
   }
 
@@ -1256,7 +1256,7 @@ ${imageRule}
  */
 function recoverTruncatedQuestions(jsonText: string): GeneratedQuestion[] {
   // questions 배열 시작 지점 찾기
-  const questionsStart = jsonText.indexOf('"questions"');
+  const questionsStart = jsonText.indexOf("\"questions\"");
   if (questionsStart === -1) return [];
 
   const arrayStart = jsonText.indexOf("[", questionsStart);
@@ -1271,9 +1271,9 @@ function recoverTruncatedQuestions(jsonText: string): GeneratedQuestion[] {
     const ch = jsonText[i];
 
     // 문자열 내부 스킵
-    if (ch === '"') {
+    if (ch === "\"") {
       i++;
-      while (i < jsonText.length && jsonText[i] !== '"') {
+      while (i < jsonText.length && jsonText[i] !== "\"") {
         if (jsonText[i] === "\\") i++; // 이스케이프 문자 스킵
         i++;
       }
@@ -1652,7 +1652,7 @@ export const generateStyledQuiz = onCall(
       // 병렬 로드: 스타일 프로필, 키워드, Scope 동시 조회
       // ========================================
       const startTime = Date.now();
-      let styleContext: StyleContext = { profile: null, keywords: null, questionBank: [], scope: null };
+      const styleContext: StyleContext = { profile: null, keywords: null, questionBank: [], scope: null };
 
       const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
 

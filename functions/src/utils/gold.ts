@@ -67,11 +67,35 @@ export interface ExpHistoryOptions {
 }
 
 /**
+ * addExpInTransaction 호출 후 Supabase dual-write 에 필요한 payload.
+ *
+ * 호출부는 트랜잭션 커밋 뒤 이 payload 를 모아서
+ *   supabaseDualUpdateUserPartial(userId, { totalExp: newExp })
+ *   supabaseDualWriteExpHistory({ userId, expDocId, amount, reason, ... })
+ * 를 실행해야 합니다. (트랜잭션 안에서 외부 쓰기 금지)
+ */
+export interface SupabaseExpPayload {
+  userId: string;
+  expDocId: string;
+  amount: number;
+  reason: string;
+  previousExp: number;
+  newExp: number;
+  type: string;
+  sourceId?: string;
+  sourceCollection?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * 사용자에게 경험치 지급 (트랜잭션 내에서 사용)
  *
  * XP만 증가시키고 히스토리 기록.
  * 주의: Firestore 트랜잭션의 reads-before-writes 규칙을 지키기 위해
  * readUserForExp()로 미리 읽은 userDoc을 전달해야 합니다.
+ *
+ * 반환: { rankUp, supabasePayload } — 호출부가 트랜잭션 커밋 후
+ * supabaseDualUpdateUserPartial + supabaseDualWriteExpHistory 호출에 사용.
  *
  * @param transaction Firestore 트랜잭션
  * @param userId 사용자 ID
@@ -87,7 +111,7 @@ export function addExpInTransaction(
   reason: string,
   userDoc: FirebaseFirestore.DocumentSnapshot,
   options?: ExpHistoryOptions
-): { rankUp: boolean } {
+): { rankUp: boolean; supabasePayload: SupabaseExpPayload } {
   if (!userDoc.exists) {
     throw new Error("사용자를 찾을 수 없습니다.");
   }
@@ -125,5 +149,45 @@ export function addExpInTransaction(
 
   transaction.set(historyRef, historyData);
 
-  return { rankUp: false };
+  const supabasePayload: SupabaseExpPayload = {
+    userId,
+    expDocId: historyRef.id,
+    amount,
+    reason,
+    previousExp: currentExp,
+    newExp,
+    type: options?.type || "other",
+  };
+  if (options?.sourceId) supabasePayload.sourceId = options.sourceId;
+  if (options?.sourceCollection) supabasePayload.sourceCollection = options.sourceCollection;
+  if (options?.metadata) supabasePayload.metadata = options.metadata;
+
+  return { rankUp: false, supabasePayload };
+}
+
+/**
+ * addExpInTransaction 결과를 Supabase 에 dual-write 하는 공용 헬퍼.
+ *
+ * 트랜잭션 커밋 뒤 호출. user_profiles.total_exp 업데이트 +
+ * exp_history 새 row 삽입을 병렬 실행. 실패해도 CF 본문엔 영향 없음.
+ */
+export async function flushExpSupabase(payload: SupabaseExpPayload): Promise<void> {
+  const supabase = await import("./supabase");
+  await Promise.all([
+    supabase.supabaseDualUpdateUserPartial(payload.userId, {
+      totalExp: payload.newExp,
+    }),
+    supabase.supabaseDualWriteExpHistory({
+      userId: payload.userId,
+      expDocId: payload.expDocId,
+      amount: payload.amount,
+      reason: payload.reason,
+      type: payload.type,
+      sourceId: payload.sourceId,
+      sourceCollection: payload.sourceCollection,
+      previousExp: payload.previousExp,
+      newExp: payload.newExp,
+      metadata: payload.metadata,
+    }),
+  ]);
 }

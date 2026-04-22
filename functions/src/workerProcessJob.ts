@@ -105,9 +105,9 @@ function validateChapterIds(
 
   const tagChapterIds = tags && tags.length > 0
     ? tags
-        .filter(t => /^\d+_/.test(t))
-        .map(t => chapterNumToId.get(t.split("_")[0]))
-        .filter((id): id is string => !!id)
+      .filter(t => /^\d+_/.test(t))
+      .map(t => chapterNumToId.get(t.split("_")[0]))
+      .filter((id): id is string => !!id)
     : [];
 
   for (const q of questions) {
@@ -173,7 +173,7 @@ async function executeJobProcessing(
   const isProfessor = userDoc?.data()?.role === "professor";
 
   let cacheHit = false;
-  let styleContext: StyleContext = { profile: null, keywords: null, questionBank: [], scope: null };
+  const styleContext: StyleContext = { profile: null, keywords: null, questionBank: [], scope: null };
   let croppedImages: CroppedImage[] = [];
 
   if (cached) {
@@ -228,42 +228,42 @@ async function executeJobProcessing(
   parallelTasks.push(
     userId && tags && tags.length > 0
       ? (async () => {
-          const [byCreatorId, byCreatorUid] = await Promise.all([
-            db.collection("quizzes")
-              .where("creatorId", "==", userId)
-              .where("type", "==", "ai-generated")
-              .where("courseId", "==", courseId)
-              .select("tags")
-              .get(),
-            db.collection("quizzes")
-              .where("creatorUid", "==", userId)
-              .where("type", "==", "ai-generated")
-              .where("courseId", "==", courseId)
-              .select("tags")
-              .get(),
-          ]);
+        const [byCreatorId, byCreatorUid] = await Promise.all([
+          db.collection("quizzes")
+            .where("creatorId", "==", userId)
+            .where("type", "==", "ai-generated")
+            .where("courseId", "==", courseId)
+            .select("tags")
+            .get(),
+          db.collection("quizzes")
+            .where("creatorUid", "==", userId)
+            .where("type", "==", "ai-generated")
+            .where("courseId", "==", courseId)
+            .select("tags")
+            .get(),
+        ]);
           // 중복 제거
-          const seen = new Set<string>();
-          const allDocs = [...byCreatorId.docs, ...byCreatorUid.docs].filter(d => {
-            if (seen.has(d.id)) return false;
-            seen.add(d.id);
-            return true;
-          });
-          const map: Record<string, number> = {};
-          const tagSet = new Set(tags as string[]);
-          for (const d of allDocs) {
-            const qTags: string[] = d.data().tags || [];
-            for (const t of qTags) {
-              if (tagSet.has(t)) {
-                map[t] = (map[t] || 0) + 1;
-              }
+        const seen = new Set<string>();
+        const allDocs = [...byCreatorId.docs, ...byCreatorUid.docs].filter(d => {
+          if (seen.has(d.id)) return false;
+          seen.add(d.id);
+          return true;
+        });
+        const map: Record<string, number> = {};
+        const tagSet = new Set(tags as string[]);
+        for (const d of allDocs) {
+          const qTags: string[] = d.data().tags || [];
+          for (const t of qTags) {
+            if (tagSet.has(t)) {
+              map[t] = (map[t] || 0) + 1;
             }
           }
-          return map;
-        })().catch(e => {
-          console.warn(`${logPrefix} 반복 횟수 조회 실패:`, e);
-          return {} as Record<string, number>;
-        })
+        }
+        return map;
+      })().catch(e => {
+        console.warn(`${logPrefix} 반복 횟수 조회 실패:`, e);
+        return {} as Record<string, number>;
+      })
       : Promise.resolve({} as Record<string, number>)
   );
 

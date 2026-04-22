@@ -84,7 +84,7 @@ function sanitizeJsonText(raw: string): string {
 
   // 작은따옴표를 큰따옴표로 변환 (JSON 키에 작은따옴표 사용하는 경우)
   // 안전하게: 문자열 밖의 키에만 적용
-  text = text.replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3');
+  text = text.replace(/([{,]\s*)'([^']+)'(\s*:)/g, "$1\"$2\"$3");
 
   return text.trim();
 }
@@ -109,9 +109,9 @@ function tryRepairObject(objStr: string): string | null {
   for (let i = 0; i < s.length; i++) {
     if (escaped) { escaped = false; continue; }
     if (s[i] === "\\") { escaped = true; continue; }
-    if (s[i] === '"') inStr = !inStr;
+    if (s[i] === "\"") inStr = !inStr;
   }
-  if (inStr) s += '"';
+  if (inStr) s += "\"";
 
   // 닫히지 않은 배열/객체 닫기
   const opens: string[] = [];
@@ -120,7 +120,7 @@ function tryRepairObject(objStr: string): string | null {
   for (let i = 0; i < s.length; i++) {
     if (escaped) { escaped = false; continue; }
     if (s[i] === "\\") { escaped = true; continue; }
-    if (s[i] === '"') { inStr = !inStr; continue; }
+    if (s[i] === "\"") { inStr = !inStr; continue; }
     if (inStr) continue;
     if (s[i] === "[") opens.push("]");
     else if (s[i] === "{") opens.push("}");
@@ -222,7 +222,7 @@ function robustParseQuestionArray(rawText: string): GeneratedQuestion[] {
     if (escaped) { escaped = false; continue; }
     if (ch === "\\") { escaped = true; continue; }
 
-    if (ch === '"') {
+    if (ch === "\"") {
       inString = !inString;
       continue;
     }
@@ -298,9 +298,9 @@ function robustParseQuestionArray(rawText: string): GeneratedQuestion[] {
   for (let i = 0; i < minLen; i++) {
     if (choicesArr[i].length >= 4 && answers[i] >= 0 && answers[i] < choicesArr[i].length) {
       questions.push({
-        text: texts[i].replace(/\\"/g, '"').replace(/\\n/g, " "),
+        text: texts[i].replace(/\\"/g, "\"").replace(/\\n/g, " "),
         type: "multiple",
-        choices: choicesArr[i].map(c => c.replace(/\\"/g, '"').replace(/\\n/g, " ")),
+        choices: choicesArr[i].map(c => c.replace(/\\"/g, "\"").replace(/\\n/g, " ")),
         correctAnswer: answers[i],
       });
     }
@@ -424,9 +424,9 @@ function buildEnhancedBattlePrompt(
 `;
     if (hasChapter1) {
       if (courseName.includes("미생물")) {
-        prompt += `⚠️ 1장(미생물학 역사)은 0~1문제만. 코흐(Koch)의 가설/실험만 다루세요.\n`;
+        prompt += "⚠️ 1장(미생물학 역사)은 0~1문제만. 코흐(Koch)의 가설/실험만 다루세요.\n";
       } else {
-        prompt += `⚠️ 1장은 0~1문제만 (개론/역사 챕터).\n`;
+        prompt += "⚠️ 1장은 0~1문제만 (개론/역사 챕터).\n";
       }
     }
   } else {
@@ -448,15 +448,15 @@ ${focusGuide}
       prompt += `\n[교수님 출제 스타일]\n${profile.styleDescription}\n`;
     }
     if (profile.questionPatterns && profile.questionPatterns.length > 0) {
-      prompt += `\n[자주 사용하는 발문 패턴]\n`;
+      prompt += "\n[자주 사용하는 발문 패턴]\n";
       for (const p of profile.questionPatterns.slice(0, 5)) {
         prompt += `- "${p.pattern}"`;
         if (p.examples && p.examples.length > 0) prompt += ` — 예: "${p.examples[0]}"`;
-        prompt += `\n`;
+        prompt += "\n";
       }
     }
     if (difficulty !== "easy" && profile.distractorStrategies && profile.distractorStrategies.length > 0) {
-      prompt += `\n[오답 선지 구성 방식]\n`;
+      prompt += "\n[오답 선지 구성 방식]\n";
       for (const s of profile.distractorStrategies.slice(0, 3)) {
         prompt += `- ${s}\n`;
       }
@@ -465,11 +465,11 @@ ${focusGuide}
 
   // ★ 원본 문제 few-shot (가장 중요한 스타일 컨텍스트)
   if (questionBank.length > 0) {
-    prompt += `\n[교수님 실제 문제 — 이 스타일 참고]\n`;
+    prompt += "\n[교수님 실제 문제 — 이 스타일 참고]\n";
     for (const q of questionBank.slice(0, 5)) {
       prompt += `Q. ${q.stem}\n`;
       q.choices.forEach((c, i) => { prompt += `  ${i + 1}. ${c}\n`; });
-      prompt += `\n`;
+      prompt += "\n";
     }
   }
 
@@ -482,7 +482,7 @@ ${focusGuide}
 
   // 출제 토픽 (medium만)
   if (keywords && keywords.examTopics && keywords.examTopics.length > 0 && difficulty !== "easy") {
-    prompt += `\n[주요 출제 토픽]\n`;
+    prompt += "\n[주요 출제 토픽]\n";
     for (const t of keywords.examTopics.slice(0, 5)) {
       prompt += `- ${t.topic}: ${t.subtopics.slice(0, 5).join(", ")}\n`;
     }
@@ -759,44 +759,44 @@ export async function pregenBattleQuestions(
  */
 export function getEmergencyQuestions(courseId: string = "biology"): GeneratedQuestion[] {
   switch (courseId) {
-    case "pathophysiology":
-      return [
-        { text: "세포가 자극에 적응하여 크기가 커지는 현상은?", type: "multiple", choices: ["비대", "증식", "화생", "이형성"], correctAnswer: 0, chapterId: "patho_3" },
-        { text: "괴사(necrosis)와 세포자멸사(apoptosis)의 차이로 옳은 것은?", type: "multiple", choices: ["괴사는 염증을 동반한다", "세포자멸사는 염증을 동반한다", "괴사는 ATP가 필요하다", "세포자멸사는 세포막이 먼저 파괴된다"], correctAnswer: 0, chapterId: "patho_3" },
-        { text: "급성 염증의 5대 징후에 해당하지 않는 것은?", type: "multiple", choices: ["발적", "종창", "섬유화", "동통"], correctAnswer: 2, chapterId: "patho_4" },
-        { text: "혈전 형성의 3대 요인(Virchow's triad)에 해당하지 않는 것은?", type: "multiple", choices: ["혈류 정체", "혈관 내피 손상", "혈소판 감소", "과응고 상태"], correctAnswer: 2, chapterId: "patho_5" },
-        { text: "제1형 과민반응을 매개하는 면역글로불린은?", type: "multiple", choices: ["IgA", "IgG", "IgE", "IgM"], correctAnswer: 2, chapterId: "patho_7" },
-        { text: "양성 종양과 악성 종양의 차이로 옳은 것은?", type: "multiple", choices: ["양성은 전이된다", "악성은 피막이 있다", "악성은 침윤성 성장을 한다", "양성은 분화가 나쁘다"], correctAnswer: 2, chapterId: "patho_8" },
-        { text: "색전증(embolism)의 가장 흔한 원인은?", type: "multiple", choices: ["공기", "지방", "혈전", "양수"], correctAnswer: 2, chapterId: "patho_5" },
-        { text: "쇼크의 초기 보상기에 나타나는 반응은?", type: "multiple", choices: ["혈압 상승", "서맥", "심박출량 증가", "빈맥"], correctAnswer: 3, chapterId: "patho_5" },
-        { text: "만성 염증에서 주로 관찰되는 세포는?", type: "multiple", choices: ["호중구", "대식세포", "호산구", "비만세포"], correctAnswer: 1, chapterId: "patho_4" },
-        { text: "상처 치유 시 육아조직(granulation tissue)의 주요 구성 요소는?", type: "multiple", choices: ["신경 섬유", "모세혈관과 섬유아세포", "성숙한 콜라겐", "탄성 섬유"], correctAnswer: 1, chapterId: "patho_4" },
-      ];
-    case "microbiology":
-      return [
-        { text: "그람 염색에서 그람양성균이 보라색을 유지하는 이유는?", type: "multiple", choices: ["외막이 있어서", "펩티도글리칸 층이 두꺼워서", "리포다당류가 있어서", "편모가 있어서"], correctAnswer: 1, chapterId: "micro_1" },
-        { text: "세균의 내독소(endotoxin)의 주요 성분은?", type: "multiple", choices: ["단백질", "펩티도글리칸", "리포다당류(LPS)", "핵산"], correctAnswer: 2, chapterId: "micro_1" },
-        { text: "아포(endospore)를 형성하는 세균은?", type: "multiple", choices: ["대장균", "포도상구균", "클로스트리듐", "연쇄상구균"], correctAnswer: 2, chapterId: "micro_2" },
-        { text: "후천면역 중 항체가 관여하는 면역은?", type: "multiple", choices: ["세포매개 면역", "체액성 면역", "선천면역", "보체 활성화"], correctAnswer: 1, chapterId: "micro_3" },
-        { text: "결핵을 일으키는 원인균은?", type: "multiple", choices: ["Staphylococcus aureus", "Mycobacterium tuberculosis", "Streptococcus pyogenes", "Escherichia coli"], correctAnswer: 1, chapterId: "micro_4" },
-        { text: "바이러스가 숙주세포 안에서만 증식하는 이유는?", type: "multiple", choices: ["크기가 작아서", "자체 대사 기구가 없어서", "DNA가 없어서", "세포벽이 없어서"], correctAnswer: 1, chapterId: "micro_5" },
-        { text: "감염병의 전파 경로 중 비말감염에 해당하는 것은?", type: "multiple", choices: ["인플루엔자", "말라리아", "B형 간염", "파상풍"], correctAnswer: 0, chapterId: "micro_3" },
-        { text: "페니실린의 작용 기전은?", type: "multiple", choices: ["단백질 합성 억제", "세포벽 합성 억제", "핵산 합성 억제", "세포막 파괴"], correctAnswer: 1, chapterId: "micro_2" },
-        { text: "칸디다증을 일으키는 미생물의 종류는?", type: "multiple", choices: ["세균", "바이러스", "진균", "원충"], correctAnswer: 2, chapterId: "micro_5" },
-        { text: "말라리아를 매개하는 곤충은?", type: "multiple", choices: ["파리", "모기", "벼룩", "이"], correctAnswer: 1, chapterId: "micro_4" },
-      ];
-    default: // biology
-      return [
-        { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스"], correctAnswer: 0, chapterId: "bio_1" },
-        { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효"], correctAnswer: 2, chapterId: "bio_3" },
-        { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성"], correctAnswer: 0, chapterId: "bio_5" },
-        { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "크리스타"], correctAnswer: 1, chapterId: "bio_4" },
-        { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "탄산탈수효소"], correctAnswer: 2, chapterId: "bio_9" },
-        { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장"], correctAnswer: 2, chapterId: "bio_7" },
-        { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델"], correctAnswer: 1, chapterId: "bio_2" },
-        { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형"], correctAnswer: 3, chapterId: "bio_9" },
-        { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA"], correctAnswer: 1, chapterId: "bio_5" },
-        { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽"], correctAnswer: 2, chapterId: "bio_10" },
-      ];
+  case "pathophysiology":
+    return [
+      { text: "세포가 자극에 적응하여 크기가 커지는 현상은?", type: "multiple", choices: ["비대", "증식", "화생", "이형성"], correctAnswer: 0, chapterId: "patho_3" },
+      { text: "괴사(necrosis)와 세포자멸사(apoptosis)의 차이로 옳은 것은?", type: "multiple", choices: ["괴사는 염증을 동반한다", "세포자멸사는 염증을 동반한다", "괴사는 ATP가 필요하다", "세포자멸사는 세포막이 먼저 파괴된다"], correctAnswer: 0, chapterId: "patho_3" },
+      { text: "급성 염증의 5대 징후에 해당하지 않는 것은?", type: "multiple", choices: ["발적", "종창", "섬유화", "동통"], correctAnswer: 2, chapterId: "patho_4" },
+      { text: "혈전 형성의 3대 요인(Virchow's triad)에 해당하지 않는 것은?", type: "multiple", choices: ["혈류 정체", "혈관 내피 손상", "혈소판 감소", "과응고 상태"], correctAnswer: 2, chapterId: "patho_5" },
+      { text: "제1형 과민반응을 매개하는 면역글로불린은?", type: "multiple", choices: ["IgA", "IgG", "IgE", "IgM"], correctAnswer: 2, chapterId: "patho_7" },
+      { text: "양성 종양과 악성 종양의 차이로 옳은 것은?", type: "multiple", choices: ["양성은 전이된다", "악성은 피막이 있다", "악성은 침윤성 성장을 한다", "양성은 분화가 나쁘다"], correctAnswer: 2, chapterId: "patho_8" },
+      { text: "색전증(embolism)의 가장 흔한 원인은?", type: "multiple", choices: ["공기", "지방", "혈전", "양수"], correctAnswer: 2, chapterId: "patho_5" },
+      { text: "쇼크의 초기 보상기에 나타나는 반응은?", type: "multiple", choices: ["혈압 상승", "서맥", "심박출량 증가", "빈맥"], correctAnswer: 3, chapterId: "patho_5" },
+      { text: "만성 염증에서 주로 관찰되는 세포는?", type: "multiple", choices: ["호중구", "대식세포", "호산구", "비만세포"], correctAnswer: 1, chapterId: "patho_4" },
+      { text: "상처 치유 시 육아조직(granulation tissue)의 주요 구성 요소는?", type: "multiple", choices: ["신경 섬유", "모세혈관과 섬유아세포", "성숙한 콜라겐", "탄성 섬유"], correctAnswer: 1, chapterId: "patho_4" },
+    ];
+  case "microbiology":
+    return [
+      { text: "그람 염색에서 그람양성균이 보라색을 유지하는 이유는?", type: "multiple", choices: ["외막이 있어서", "펩티도글리칸 층이 두꺼워서", "리포다당류가 있어서", "편모가 있어서"], correctAnswer: 1, chapterId: "micro_1" },
+      { text: "세균의 내독소(endotoxin)의 주요 성분은?", type: "multiple", choices: ["단백질", "펩티도글리칸", "리포다당류(LPS)", "핵산"], correctAnswer: 2, chapterId: "micro_1" },
+      { text: "아포(endospore)를 형성하는 세균은?", type: "multiple", choices: ["대장균", "포도상구균", "클로스트리듐", "연쇄상구균"], correctAnswer: 2, chapterId: "micro_2" },
+      { text: "후천면역 중 항체가 관여하는 면역은?", type: "multiple", choices: ["세포매개 면역", "체액성 면역", "선천면역", "보체 활성화"], correctAnswer: 1, chapterId: "micro_3" },
+      { text: "결핵을 일으키는 원인균은?", type: "multiple", choices: ["Staphylococcus aureus", "Mycobacterium tuberculosis", "Streptococcus pyogenes", "Escherichia coli"], correctAnswer: 1, chapterId: "micro_4" },
+      { text: "바이러스가 숙주세포 안에서만 증식하는 이유는?", type: "multiple", choices: ["크기가 작아서", "자체 대사 기구가 없어서", "DNA가 없어서", "세포벽이 없어서"], correctAnswer: 1, chapterId: "micro_5" },
+      { text: "감염병의 전파 경로 중 비말감염에 해당하는 것은?", type: "multiple", choices: ["인플루엔자", "말라리아", "B형 간염", "파상풍"], correctAnswer: 0, chapterId: "micro_3" },
+      { text: "페니실린의 작용 기전은?", type: "multiple", choices: ["단백질 합성 억제", "세포벽 합성 억제", "핵산 합성 억제", "세포막 파괴"], correctAnswer: 1, chapterId: "micro_2" },
+      { text: "칸디다증을 일으키는 미생물의 종류는?", type: "multiple", choices: ["세균", "바이러스", "진균", "원충"], correctAnswer: 2, chapterId: "micro_5" },
+      { text: "말라리아를 매개하는 곤충은?", type: "multiple", choices: ["파리", "모기", "벼룩", "이"], correctAnswer: 1, chapterId: "micro_4" },
+    ];
+  default: // biology
+    return [
+      { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스"], correctAnswer: 0, chapterId: "bio_1" },
+      { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효"], correctAnswer: 2, chapterId: "bio_3" },
+      { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성"], correctAnswer: 0, chapterId: "bio_5" },
+      { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "크리스타"], correctAnswer: 1, chapterId: "bio_4" },
+      { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "탄산탈수효소"], correctAnswer: 2, chapterId: "bio_9" },
+      { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장"], correctAnswer: 2, chapterId: "bio_7" },
+      { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델"], correctAnswer: 1, chapterId: "bio_2" },
+      { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형"], correctAnswer: 3, chapterId: "bio_9" },
+      { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA"], correctAnswer: 1, chapterId: "bio_5" },
+      { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽"], correctAnswer: 2, chapterId: "bio_10" },
+    ];
   }
 }
