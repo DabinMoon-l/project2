@@ -26,7 +26,11 @@ function getCurrentActivity(pathname: string): string {
 /** 가로모드 + 3쪽 잠금 상태 → '집중 학습' (바쁨으로 판정). 그 외엔 pathname 기반. */
 function resolveActivity(pathname: string, isLocked: boolean, isHomeOverlayOpen: boolean): string {
   if (isLocked) return '집중 학습';
-  if (isHomeOverlayOpen) return '홈';
+  // 홈 오버레이는 '홈 경로' 일 때만 "홈"으로 판정.
+  // 가로모드에서 오버레이 context 가 true 로 유지되는 경우, 학생이 게시판/퀴즈 등
+  // 다른 탭으로 이동해도 "홈"으로 잘못 표시되던 버그 방지.
+  const isHomePath = pathname === '/' || pathname === '/professor';
+  if (isHomePath && isHomeOverlayOpen) return '홈';
   return getCurrentActivity(pathname);
 }
 
