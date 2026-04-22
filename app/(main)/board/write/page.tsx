@@ -175,6 +175,15 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
           `/board/${postId}`,
         );
       } else {
+        // 세로 모드: URL 이동이라 props 전달 불가 → sessionStorage 경유
+        try {
+          const serialized = JSON.stringify({
+            ...post,
+            createdAt: post.createdAt.toISOString(),
+            updatedAt: post.updatedAt?.toISOString(),
+          });
+          sessionStorage.setItem(`new_post_${postId}`, serialized);
+        } catch { /* ignore */ }
         router.replace(`/board/${postId}`);
       }
     }

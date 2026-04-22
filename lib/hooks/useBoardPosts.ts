@@ -191,8 +191,9 @@ export const usePost = (postId: string, initialPost?: Post | null): UsePostRetur
   const [post, setPost] = useState<Post | null>(initialPost ?? null);
   const [loading, setLoading] = useState(!initialPost);
   const [error, setError] = useState<string | null>(null);
-  // initialPost 있을 때 첫 null 콜백은 Firestore 전파 지연으로 간주하여 유예
-  const firstCallbackGraceRef = useRef(!!initialPost);
+  // initialPost 있으면 실제 post 가 한 번이라도 도착하기 전까지 모든 null 콜백을 유예
+  // (Firestore + Supabase dual-write + CF 트리거 전파로 수 초 지연 가능)
+  const hasReceivedPostRef = useRef(false);
 
   // onSnapshot 실시간 구독
   useEffect(() => {
@@ -201,8 +202,16 @@ export const usePost = (postId: string, initialPost?: Post | null): UsePostRetur
       return;
     }
 
-    // initialPost 없을 때만 loading 초기화 (있으면 이미 false)
-    if (!firstCallbackGraceRef.current) setLoading(true);
+    if (!initialPost) setLoading(true);
+
+    // initialPost 기반 유예는 최대 15초 — 그 이후에도 실제 post 가 안 오면 진짜 삭제로 판정
+    let graceTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let graceActive = !!initialPost;
+    if (graceActive) {
+      graceTimeoutId = setTimeout(() => {
+        graceActive = false;
+      }, 15000);
+    }
 
     const unsubscribe = postRepo.subscribePost(
       postId,
@@ -210,10 +219,14 @@ export const usePost = (postId: string, initialPost?: Post | null): UsePostRetur
         if (p) {
           setPost(docToPost(p));
           setError(null);
-          firstCallbackGraceRef.current = false;
-        } else if (firstCallbackGraceRef.current) {
-          // 작성 직후 첫 콜백이 null 이면 서버 전파 대기 중 — 에러 대신 initialPost 유지
-          firstCallbackGraceRef.current = false;
+          hasReceivedPostRef.current = true;
+          graceActive = false;
+          if (graceTimeoutId) {
+            clearTimeout(graceTimeoutId);
+            graceTimeoutId = null;
+          }
+        } else if (graceActive && !hasReceivedPostRef.current) {
+          // 작성 직후 서버 전파 대기 중 — initialPost 유지, 에러 설정 안 함
         } else {
           setError('게시글을 찾을 수 없습니다.');
           setPost(null);
@@ -227,8 +240,11 @@ export const usePost = (postId: string, initialPost?: Post | null): UsePostRetur
       },
     );
 
-    return () => unsubscribe();
-  }, [postId]);
+    return () => {
+      unsubscribe();
+      if (graceTimeoutId) clearTimeout(graceTimeoutId);
+    };
+  }, [postId, initialPost]);
 
   // onSnapshot이 자동 처리하므로 no-op
   const refresh = useCallback(async () => {}, []);
