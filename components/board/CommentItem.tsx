@@ -372,7 +372,7 @@ function CommentItem({
       exit={{ opacity: 0, y: -10 }}
       className={`py-3 ${
         comment.isAccepted && !isReply
-          ? 'px-3 mb-3 border-[5px] border-[#1A1A1A]'
+          ? 'px-3 mb-3 border-[5px] border-[#5C5C5C]'
           : isReply
             ? 'pl-4 bg-[#EDE8DF]'
             : 'border-b border-dashed border-[#D4CFC4]'
