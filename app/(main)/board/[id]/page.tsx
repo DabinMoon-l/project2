@@ -219,7 +219,25 @@ export default function PostDetailPage({
   const { user } = useAuth();
   const { profile } = useUser();
   const isProfessor = profile?.role === 'professor';
-  const { post, loading, error, refresh } = usePost(postId, panelInitialPost);
+  // 세로 모드 write → URL 이동 대응: sessionStorage 로 방금 작성한 글 복원 (1회성)
+  const sessionInitialPost = useMemo(() => {
+    if (typeof window === 'undefined' || !postId) return undefined;
+    const raw = sessionStorage.getItem(`new_post_${postId}`);
+    if (!raw) return undefined;
+    try {
+      const parsed = JSON.parse(raw);
+      sessionStorage.removeItem(`new_post_${postId}`);
+      return {
+        ...parsed,
+        createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
+        updatedAt: parsed.updatedAt ? new Date(parsed.updatedAt) : undefined,
+      } as import('@/lib/hooks/useBoardTypes').Post;
+    } catch {
+      return undefined;
+    }
+  }, [postId]);
+
+  const { post, loading, error, refresh } = usePost(postId, panelInitialPost ?? sessionInitialPost);
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike } = useLike();
 
