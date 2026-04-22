@@ -579,6 +579,27 @@ A: #8B1A1A (버건디) / B: #B8860B (다크골드) / C: #1D5D4A (에메랄드) /
 | `functions/src/studentAuth.ts` | 1,309 | 학생 인증 + 일괄 등록 |
 | `functions/src/utils/supabase.ts` | 1,060 | Supabase 듀얼 라이트 헬퍼 |
 
+### 리팩토링 현황 (2026-04-22 기준)
+
+**현재 분할된 파일**: **없음** (Phase 2 에서 repository 레이어만 건드렸고 컴포넌트 내부 구조는 그대로).
+
+**Phase 3 이 자동 분할해주는 것 (3개)**:
+- `styledQuizGenerator.ts` 1,918 → Wave 2 Cloud Run 이전 시 `cloud-run-ai/src/routes/*` 로 엔드포인트별 분산 (buildFullPrompt, buildStyleContextPrompt, buildScopeContextPrompt 등 각자 파일)
+- `board.ts` 1,854 → Wave 1(onCall 3개 → Edge) + Wave 3(Firestore 트리거 6개 → pg_trigger webhook) 으로 절반 분할
+- `studentAuth.ts` 1,309 → Wave 1(단순 7개 → Edge) + Wave 2(bulkEnroll/delete 3개 → Cloud Run) 로 분할
+- 덤: `lib/ocr.ts` 1,692 도 Wave 2 `runVisionOcr` Cloud Run 이전 시 서버로 로직 이동으로 절반 축소 예상
+
+**Phase 3 이 건드리지 않는 프론트 8개**: 여전히 숙제 — 여름(SaaS Phase 5 직전)에 별도 트랙으로 처리.
+
+**동시 리팩토링을 추천하지 않는 이유**:
+1. Edge/Cloud Run 이전 시 `callFunction` 경로가 바뀌는데 프론트도 동시에 쪼개면 디버깅 지옥
+2. Edge Functions(JWT/CORS/Deno) vs React(Context/Reducer) 컨텍스트 전환 비용
+3. 대형 컴포넌트 E2E 커버리지 부재 → 리팩토링 전 테스트 확보가 선행 과제
+
+**타임라인**:
+- 지금~6월: Phase 3 Wave 1~4 (CF 3개 + ocr 자연 분할)
+- 7월(여름): 프론트 대형 8개 리팩토링 + i18n 준비 (SaaS Phase 5 직전)
+
 ## 디버깅 가이드
 
 | 증상 | 원인 | 해결 |
