@@ -73,7 +73,7 @@ export const cleanupExtraRabbits = onCall(
 
     return {
       success: true,
-      message: `토끼 #80~#99 정리 완료`,
+      message: "토끼 #80~#99 정리 완료",
       deletedHoldings,
       deletedRabbits,
       equippedCleaned: equippedRabbits.length - cleanedEquipped.length,

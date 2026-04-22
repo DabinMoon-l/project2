@@ -170,10 +170,10 @@ export const voteOnPoll = onCall(
       const newPolls = polls.map((p, i) =>
         i === pollIdx
           ? {
-              ...p,
-              voteCounts,
-              ...(legacyDirty ? { votes: cleanedLegacyVotes } : {}),
-            }
+            ...p,
+            voteCounts,
+            ...(legacyDirty ? { votes: cleanedLegacyVotes } : {}),
+          }
           : p
       );
 
@@ -458,7 +458,7 @@ export const submitPollSurvey = onCall(
         optIndices: newOpts,
         createdAt: existingVotesByPoll.has(pollIdx)
           ? (existingVotesSnap.docs.find((d) => d.data().pollIdx === pollIdx)?.data()
-              .createdAt as Timestamp | undefined) || FieldValue.serverTimestamp()
+            .createdAt as Timestamp | undefined) || FieldValue.serverTimestamp()
           : FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });

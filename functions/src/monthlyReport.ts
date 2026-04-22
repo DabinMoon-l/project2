@@ -207,7 +207,7 @@ ${JSON.stringify(weeklyData, null, 2)}
         `- 신규 퀴즈: ${totalQuizzes}개\n` +
         `- 피드백: ${totalFeedback}건\n` +
         `- 주 평균 활동 학생: ${avgActive}명\n\n` +
-        `> AI 인사이트 생성에 실패하여 기본 요약으로 대체되었습니다.`;
+        "> AI 인사이트 생성에 실패하여 기본 요약으로 대체되었습니다.";
     }
 
     // 리포트 저장

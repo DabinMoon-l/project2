@@ -1651,3 +1651,231 @@ export async function supabaseDualWriteUpsert(
     console.error(`[Supabase dual-write] ${table}/${courseId} 예외:`, err);
   }
 }
+
+// ============================================================
+// user_profiles / exp_history 듀얼 라이트 (Phase 2 Step 3 — userRepo)
+// ============================================================
+
+/**
+ * Firestore users 필드 → user_profiles 컬럼 매핑.
+ * 알려지지 않은 필드는 스킵. FieldValue 센티넬은 호출부가 계산된 새 값으로 대체해야 함.
+ */
+const USER_FIELD_MAP: Record<string, string> = {
+  nickname: "nickname",
+  name: "name",
+  role: "role",
+  courseId: "course_id",
+  classType: "class_type",
+  totalExp: "total_exp",
+  level: "level",
+  rank: "rank",
+  badges: "badges",
+  equippedRabbits: "equipped_rabbits",
+  profileRabbitId: "profile_rabbit_id",
+  totalCorrect: "total_correct",
+  totalAttemptedQuestions: "total_attempted_questions",
+  professorQuizzesCompleted: "professor_quizzes_completed",
+  tekkenTotal: "tekken_total",
+  feedbackCount: "feedback_count",
+  lastGachaExp: "last_gacha_exp",
+  spinLock: "spin_lock",
+  recoveryEmail: "recovery_email",
+  assignedCourses: "assigned_courses",
+};
+
+/**
+ * Firestore patch(camelCase)를 Supabase row(snake_case)로 변환.
+ * FieldValue.increment / arrayUnion / serverTimestamp 같은 센티넬은 스킵
+ * (호출부에서 계산된 실제 값으로 전달해야 함).
+ */
+function toUserProfileRow(
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const [fsKey, value] of Object.entries(patch)) {
+    const sbKey = USER_FIELD_MAP[fsKey];
+    if (!sbKey) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const vObj = value as Record<string, unknown>;
+      // Firestore Sentinel 감지
+      if ("_methodName" in vObj || "isEqual" in vObj) continue;
+    }
+    row[sbKey] = value;
+  }
+  return row;
+}
+
+/**
+ * user_profiles 전체 upsert.
+ *
+ * 최초 가입(registerStudent / initProfessorAccount) 시 Firestore 커밋 후 호출.
+ * nickname / role 은 필수이므로 누락 시 기본값 처리.
+ */
+export async function supabaseDualUpsertUser(
+  userId: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+
+  try {
+    const row: Record<string, unknown> = {
+      org_id: orgId,
+      user_id: userId,
+      ...toUserProfileRow(data),
+    };
+    if (!("nickname" in row)) {
+      row.nickname = typeof data.nickname === "string" ? data.nickname : userId;
+    }
+    if (!("role" in row)) {
+      row.role = typeof data.role === "string" ? data.role : "student";
+    }
+
+    const { error } = await client
+      .from("user_profiles")
+      .upsert(row, { onConflict: "org_id,user_id" });
+
+    if (error) {
+      console.error(
+        `[Supabase user upsert] ${userId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    }
+  } catch (err) {
+    console.error(`[Supabase user upsert] ${userId} 예외:`, err);
+  }
+}
+
+/**
+ * user_profiles 부분 업데이트.
+ *
+ * EXP/가챠/레벨업/장착 등 Firestore update 후 호출.
+ * 호출부는 FieldValue.increment/arrayUnion 대신 **계산된 새 값**을 넘겨야 함.
+ * (rabbitRepo 패턴 그대로)
+ */
+export async function supabaseDualUpdateUserPartial(
+  userId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+
+  try {
+    const row = toUserProfileRow(patch);
+    if (Object.keys(row).length === 0) return;
+
+    const { error } = await client
+      .from("user_profiles")
+      .update(row)
+      .eq("org_id", orgId)
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error(
+        `[Supabase user update] ${userId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    }
+  } catch (err) {
+    console.error(`[Supabase user update] ${userId} 예외:`, err);
+  }
+}
+
+/**
+ * user_profiles 삭제.
+ *
+ * Firestore users/{uid} 삭제 후 호출.
+ * 연관 데이터(quiz_results/reviews 등)는 별도 dual-delete 헬퍼가 처리.
+ */
+export async function supabaseDualDeleteUser(userId: string): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+
+  try {
+    const { error } = await client
+      .from("user_profiles")
+      .delete()
+      .eq("org_id", orgId)
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error(
+        `[Supabase user delete] ${userId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    }
+  } catch (err) {
+    console.error(`[Supabase user delete] ${userId} 예외:`, err);
+  }
+}
+
+/**
+ * exp_history 추가 (append-only).
+ *
+ * utils/gold.ts addExpInTransaction 이 expHistory 서브컬렉션에 쓸 때 함께 호출.
+ * source_firestore_id 는 `{userId}__{expDocId}` 로 합성 (uid 간 docId 중복 회피).
+ */
+export interface SupabaseExpHistoryInput {
+  userId: string;
+  expDocId: string;
+  amount: number;
+  reason: string;
+  type?: string;
+  sourceId?: string;
+  sourceCollection?: string;
+  previousExp?: number;
+  newExp?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export async function supabaseDualWriteExpHistory(
+  input: SupabaseExpHistoryInput,
+): Promise<void> {
+  if (!isSupabaseDualWriteEnabled()) return;
+  const client = getSupabaseAdmin();
+  const orgId = getDefaultOrgId();
+  if (!client || !orgId) return;
+
+  try {
+    const row: Record<string, unknown> = {
+      org_id: orgId,
+      user_id: input.userId,
+      amount: input.amount,
+      reason: input.reason,
+      source_firestore_id: `${input.userId}__${input.expDocId}`,
+    };
+    if (input.type !== undefined) row.type = input.type;
+    if (input.sourceId !== undefined) row.source_id = input.sourceId;
+    if (input.sourceCollection !== undefined)
+      row.source_collection = input.sourceCollection;
+    if (input.previousExp !== undefined) row.previous_exp = input.previousExp;
+    if (input.newExp !== undefined) row.new_exp = input.newExp;
+    if (input.metadata !== undefined) row.metadata = input.metadata;
+
+    const { error } = await client
+      .from("exp_history")
+      .upsert(row, { onConflict: "source_firestore_id" });
+
+    if (error) {
+      console.error(
+        `[Supabase exp_history upsert] ${input.userId}__${input.expDocId} 실패:`,
+        error.message,
+        error.details ?? "",
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[Supabase exp_history upsert] ${input.userId}__${input.expDocId} 예외:`,
+      err,
+    );
+  }
+}

@@ -465,9 +465,9 @@ function parseQuestionBlock(
     rawLines: lines,
   };
 
-  let stemParts: string[] = [];
-  let boxParts: string[] = [];
-  let choices: Choice[] = [];
+  const stemParts: string[] = [];
+  const boxParts: string[] = [];
+  const choices: Choice[] = [];
   let inBox = false;
   let currentChoiceKey: string | null = null;
   let currentChoiceText: string[] = [];

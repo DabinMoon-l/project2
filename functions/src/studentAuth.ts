@@ -20,6 +20,9 @@ import {
   supabaseDualDeleteEnrollment,
   supabaseDualWriteRabbit,
   supabaseDualWriteRabbitHolding,
+  supabaseDualUpsertUser,
+  supabaseDualUpdateUserPartial,
+  supabaseDualDeleteUser,
 } from "./utils/supabase";
 
 // 듀얼 라이트가 필요한 모든 CF에 공통 바인딩 (enrollment + rabbit 공용)
@@ -122,7 +125,7 @@ export const bulkEnrollStudents = onCall(
         // 유효성 검사 (학번 필수, 이름은 선택)
         if (!student.studentId) {
           errorCount++;
-          errors.push(`누락된 필드: 학번 없음`);
+          errors.push("누락된 필드: 학번 없음");
           continue;
         }
 
@@ -404,13 +407,25 @@ export const registerStudent = onCall(
     });
 
     // Supabase dual-write (트랜잭션 성공 후)
-    await supabaseDualWriteRabbit(courseId, rabbitId, rabbitSupabasePayload!);
-    await supabaseDualWriteRabbitHolding(courseId, uid, rabbitId, {
-      level: 1,
-      stats: getBaseStats(rabbitId),
-      discoveryOrder: holdingDiscoveryOrder,
-      discoveredAt: new Date(),
-    });
+    await Promise.all([
+      supabaseDualWriteRabbit(courseId, rabbitId, rabbitSupabasePayload!),
+      supabaseDualWriteRabbitHolding(courseId, uid, rabbitId, {
+        level: 1,
+        stats: getBaseStats(rabbitId),
+        discoveryOrder: holdingDiscoveryOrder,
+        discoveredAt: new Date(),
+      }),
+      // user_profiles 신규 upsert (가입 시)
+      supabaseDualUpsertUser(uid, {
+        nickname,
+        name: name || enrolledData.name || nickname,
+        role: "student",
+        courseId,
+        classType: classId,
+        totalExp: 0,
+        equippedRabbits: [{ rabbitId, courseId }],
+      }).catch((e) => console.warn("[Supabase registerStudent user upsert]", e)),
+    ]);
 
     // enrolledStudents 업데이트
     await enrolledRef.update({
@@ -560,52 +575,64 @@ export const grantDefaultRabbit = onCall(
     const holdingRef = userRef.collection("rabbitHoldings").doc(holdingKey);
     const rabbitRef = db.collection("rabbits").doc(holdingKey);
 
-    await db.runTransaction(async (transaction) => {
-      const holdingDoc = await transaction.get(holdingRef);
-      const rabbitDoc = await transaction.get(rabbitRef);
+    const newEquippedForSupabase = await db.runTransaction<Array<{ rabbitId: number; courseId: string }> | null>(
+      async (transaction) => {
+        const holdingDoc = await transaction.get(holdingRef);
+        const rabbitDoc = await transaction.get(rabbitRef);
 
-      // 홀딩이 이미 있으면 스킵
-      if (!holdingDoc.exists) {
-        transaction.set(holdingRef, {
-          rabbitId,
-          courseId,
-          discoveryOrder: 1,
-          discoveredAt: FieldValue.serverTimestamp(),
-          level: 1,
-          stats: getBaseStats(rabbitId),
-        });
-      }
+        // 홀딩이 이미 있으면 스킵
+        if (!holdingDoc.exists) {
+          transaction.set(holdingRef, {
+            rabbitId,
+            courseId,
+            discoveryOrder: 1,
+            discoveredAt: FieldValue.serverTimestamp(),
+            level: 1,
+            stats: getBaseStats(rabbitId),
+          });
+        }
 
-      // 토끼 문서 생성/업데이트
-      if (!rabbitDoc.exists) {
-        transaction.set(rabbitRef, {
-          rabbitId,
-          courseId,
-          name: null,
-          firstDiscovererUserId: uid,
-          firstDiscovererName: nickname,
-          discovererCount: 1,
-          discoverers: [{ userId: uid, nickname, discoveryOrder: 1 }],
-          createdAt: FieldValue.serverTimestamp(),
+        // 토끼 문서 생성/업데이트
+        if (!rabbitDoc.exists) {
+          transaction.set(rabbitRef, {
+            rabbitId,
+            courseId,
+            name: null,
+            firstDiscovererUserId: uid,
+            firstDiscovererName: nickname,
+            discovererCount: 1,
+            discoverers: [{ userId: uid, nickname, discoveryOrder: 1 }],
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        // equippedRabbits + isAdmin 업데이트
+        const currentEquipped = userData.equippedRabbits || [];
+        const updateFields: Record<string, unknown> = {
           updatedAt: FieldValue.serverTimestamp(),
-        });
+        };
+        let newEquipped: Array<{ rabbitId: number; courseId: string }> | null = null;
+        if (currentEquipped.length === 0) {
+          newEquipped = [{ rabbitId, courseId }];
+          updateFields.equippedRabbits = newEquipped;
+        }
+        if (setAdmin) {
+          updateFields.isAdmin = true;
+        }
+        if (Object.keys(updateFields).length > 1) {
+          transaction.update(userRef, updateFields);
+        }
+        return newEquipped;
       }
+    );
 
-      // equippedRabbits + isAdmin 업데이트
-      const currentEquipped = userData.equippedRabbits || [];
-      const updateFields: Record<string, unknown> = {
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      if (currentEquipped.length === 0) {
-        updateFields.equippedRabbits = [{ rabbitId, courseId }];
-      }
-      if (setAdmin) {
-        updateFields.isAdmin = true;
-      }
-      if (Object.keys(updateFields).length > 1) {
-        transaction.update(userRef, updateFields);
-      }
-    });
+    // Supabase dual-write (equippedRabbits 만 user_profiles 로 매핑 가능. isAdmin 은 미매핑)
+    if (newEquippedForSupabase) {
+      supabaseDualUpdateUserPartial(uid, { equippedRabbits: newEquippedForSupabase }).catch(
+        (e) => console.warn("[Supabase grantDefaultRabbit user dual-write]", e),
+      );
+    }
 
     console.log(`기본 토끼 수동 지급: ${studentId} (${uid})`);
     return { success: true, message: `${userData.name || nickname}(${studentId})에게 기본 토끼를 지급했습니다.` };
@@ -877,6 +904,11 @@ export const updateRecoveryEmail = onCall(
         recoveryEmail,
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Supabase dual-write (recovery_email)
+      supabaseDualUpdateUserPartial(uid, { recoveryEmail }).catch((e) =>
+        console.warn("[Supabase updateRecoveryEmail user dual-write]", e),
+      );
 
       // 인증 코드 삭제
       await db.collection("verificationCodes").doc(uid).delete();
@@ -1150,6 +1182,11 @@ async function cleanupStudentData(
 
   // 3. users/{uid} 문서 삭제
   await db.collection("users").doc(uid).delete();
+
+  // 4. Supabase dual-delete (user_profiles)
+  supabaseDualDeleteUser(uid).catch((e) =>
+    console.warn("[Supabase cleanupStudentData user delete]", e),
+  );
 }
 
 // ============================================================

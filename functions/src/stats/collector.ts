@@ -157,7 +157,7 @@ export const backfillWeeklyStats = onCall(
     const endKST = new Date(endDate + "T23:59:59+09:00");
     const results: string[] = [];
 
-    let current = new Date(startKST);
+    const current = new Date(startKST);
     const dayOfWeek = current.getDay();
     current.setDate(current.getDate() + (dayOfWeek === 0 ? -6 : 1 - dayOfWeek));
 

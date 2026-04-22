@@ -327,12 +327,12 @@ STEP 3. 자체 검증 (필수)
         isValidAnswer
       ) {
         // 선지별 해설 유효성 검사 및 추출
-      let choiceExplanations: string[] | undefined;
-      if (Array.isArray(q.choiceExplanations) && q.choiceExplanations.length === q.choices.length) {
-        choiceExplanations = q.choiceExplanations.map((exp: unknown) =>
-          typeof exp === "string" ? exp : ""
-        );
-      }
+        let choiceExplanations: string[] | undefined;
+        if (Array.isArray(q.choiceExplanations) && q.choiceExplanations.length === q.choices.length) {
+          choiceExplanations = q.choiceExplanations.map((exp: unknown) =>
+            typeof exp === "string" ? exp : ""
+          );
+        }
 
         validQuestions.push({
           text: q.text,

@@ -45,7 +45,7 @@ interface LogicalLine {
 }
 
 export interface BoxItem {
-  kind: 'text' | 'labeled';
+  kind: "text" | "labeled";
   title?: string;
   text?: string;
   items?: string[];
@@ -55,12 +55,12 @@ export interface SubQuestion {
   number: number;
   questionText: string;
   choices: string[];
-  type: 'multipleChoice' | 'shortAnswer' | 'ox';
+  type: "multipleChoice" | "shortAnswer" | "ox";
 }
 
 export interface ParsedQuestionV2 {
   questionNumber: number | string;
-  type: 'multipleChoice' | 'shortAnswer' | 'ox' | 'combined';
+  type: "multipleChoice" | "shortAnswer" | "ox" | "combined";
   questionText: string;
   passage: string;
   boxes: BoxItem[];
@@ -132,7 +132,7 @@ function normalizeTokens(fields: ClovaField[]): Token[] {
     const y2 = vertices[2]?.y || vertices[3]?.y || y;
 
     return {
-      text: field.inferText || '',
+      text: field.inferText || "",
       x,
       y,
       width: Math.max(x2 - x, 1),
@@ -244,7 +244,7 @@ function createLineFromTokens(tokens: Token[]): LogicalLine {
   const sorted = [...tokens].sort((a, b) => a.x - b.x);
 
   // 텍스트 조합 (간격 기반 공백)
-  let text = '';
+  let text = "";
   for (let i = 0; i < sorted.length; i++) {
     const token = sorted[i];
     if (i > 0) {
@@ -253,7 +253,7 @@ function createLineFromTokens(tokens: Token[]): LogicalLine {
       const avgCharWidth = prev.width / Math.max(prev.text.length, 1);
       // 간격이 문자 너비의 0.5배 이상이면 공백
       if (gap > avgCharWidth * 0.5) {
-        text += ' ';
+        text += " ";
       }
     }
     text += token.text;
@@ -456,15 +456,15 @@ function extractQuestionBlocks(lines: LogicalLine[], boundaries: QuestionBoundar
   return blocks;
 }
 
-function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortAnswer' | 'ox' | 'combined' {
-  if (block.isCombined) return 'combined';
+function determineQuestionType(block: QuestionBlock): "multipleChoice" | "shortAnswer" | "ox" | "combined" {
+  if (block.isCombined) return "combined";
 
-  const fullText = block.lines.map(l => l.text).join(' ');
+  const fullText = block.lines.map(l => l.text).join(" ");
 
   // OX 체크 (최우선)
   for (const pattern of OX_PATTERNS) {
     if (pattern.test(fullText)) {
-      return 'ox';
+      return "ox";
     }
   }
 
@@ -474,20 +474,20 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
 
     // 원문자 선지 체크 (①②③④⑤)
     if (CIRCLE_NUMBER_IN_LINE.test(text)) {
-      return 'multipleChoice';
+      return "multipleChoice";
     }
 
     // 다중 선지 라인 패턴 체크
     for (const pattern of MULTI_CHOICE_LINE_PATTERNS) {
       if (pattern.test(text)) {
-        return 'multipleChoice';
+        return "multipleChoice";
       }
     }
 
     // 단일 선지 패턴 체크
     for (const pattern of SINGLE_CHOICE_PATTERNS) {
       if (pattern.test(text)) {
-        return 'multipleChoice';
+        return "multipleChoice";
       }
     }
   }
@@ -495,23 +495,23 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
   // 토큰 레벨 체크 (백업)
   const hasCircleChoice = block.allTokens.some(t => CIRCLE_NUMBER_PATTERN.test(t.text));
   if (hasCircleChoice) {
-    return 'multipleChoice';
+    return "multipleChoice";
   }
 
   // "고르시오", "것은?" 패턴 + <보기> 존재
   if (/고르[시는]|것은\?|옳[은지]/.test(fullText)) {
     const hasBox = BOX_START_PATTERN.test(fullText) || /<\s*보\s*기\s*>/.test(fullText);
     if (hasBox) {
-      return 'multipleChoice';
+      return "multipleChoice";
     }
 
     // "ㄱ, ㄴ, ㄷ" 형태의 보기 조합 존재
     if (/[ㄱㄴㄷ]\s*,\s*[ㄱㄴㄷ]/.test(fullText)) {
-      return 'multipleChoice';
+      return "multipleChoice";
     }
   }
 
-  return 'shortAnswer';
+  return "shortAnswer";
 }
 
 // ============================================================
@@ -527,14 +527,14 @@ interface ExtractedContent {
 
 function extractContent(block: QuestionBlock): ExtractedContent {
   const result: ExtractedContent = {
-    questionText: '',
-    passage: '',
+    questionText: "",
+    passage: "",
     boxes: [],
     choices: [],
   };
 
   // 첫 번째 라인에서 문제 번호 제거
-  let firstLineText = block.lines[0]?.text || '';
+  let firstLineText = block.lines[0]?.text || "";
   const numMatch = firstLineText.match(/^(\d{1,2})\.\s*/);
   if (numMatch) {
     firstLineText = firstLineText.slice(numMatch[0].length);
@@ -547,8 +547,8 @@ function extractContent(block: QuestionBlock): ExtractedContent {
   }
 
   // 상태 기반 파싱
-  type State = 'passage' | 'box' | 'question' | 'choices';
-  let state: State = 'passage';
+  type State = "passage" | "box" | "question" | "choices";
+  let state: State = "passage";
 
   const passageParts: string[] = [];
   const questionParts: string[] = [];
@@ -569,7 +569,7 @@ function extractContent(block: QuestionBlock): ExtractedContent {
 
     // <보기> 시작
     if (BOX_START_PATTERN.test(text)) {
-      state = 'box';
+      state = "box";
       currentBoxItems = [];
       continue;
     }
@@ -579,8 +579,8 @@ function extractContent(block: QuestionBlock): ExtractedContent {
       // 보기 종료
       if (currentBoxItems.length > 0) {
         result.boxes.push({
-          kind: 'labeled',
-          title: '보기',
+          kind: "labeled",
+          title: "보기",
           items: [...currentBoxItems],
         });
         currentBoxItems = [];
@@ -590,7 +590,7 @@ function extractContent(block: QuestionBlock): ExtractedContent {
       const choices = parseChoicesFromLine(text);
       if (choices.length > 0) {
         choiceList.push(...choices);
-        state = 'choices';
+        state = "choices";
         continue;
       }
     }
@@ -599,8 +599,8 @@ function extractContent(block: QuestionBlock): ExtractedContent {
     if (/\d\s+[ㄱㄴㄷㄹ].*\d\s+[ㄱㄴㄷㄹ]/.test(text)) {
       if (currentBoxItems.length > 0) {
         result.boxes.push({
-          kind: 'labeled',
-          title: '보기',
+          kind: "labeled",
+          title: "보기",
           items: [...currentBoxItems],
         });
         currentBoxItems = [];
@@ -609,7 +609,7 @@ function extractContent(block: QuestionBlock): ExtractedContent {
       const choices = parseAltChoicesFromLine(text);
       if (choices.length > 0) {
         choiceList.push(...choices);
-        state = 'choices';
+        state = "choices";
         continue;
       }
     }
@@ -619,21 +619,21 @@ function extractContent(block: QuestionBlock): ExtractedContent {
     if (circleMatch) {
       if (currentBoxItems.length > 0) {
         result.boxes.push({
-          kind: 'labeled',
-          title: '보기',
+          kind: "labeled",
+          title: "보기",
           items: [...currentBoxItems],
         });
         currentBoxItems = [];
       }
       choiceList.push(`${circleMatch[1]} ${circleMatch[2]}`.trim());
-      state = 'choices';
+      state = "choices";
       continue;
     }
 
     // 보기 내 ㄱ.ㄴ.ㄷ. 항목
     const boxItemMatch = text.match(/^([ㄱㄴㄷㄹㅁㅂㅅㅇ])[.\)]\s*(.*)/);
-    if (boxItemMatch && (state === 'box' || currentBoxItems.length > 0)) {
-      state = 'box';
+    if (boxItemMatch && (state === "box" || currentBoxItems.length > 0)) {
+      state = "box";
       currentBoxItems.push(`${boxItemMatch[1]}. ${boxItemMatch[2]}`);
       continue;
     }
@@ -643,50 +643,50 @@ function extractContent(block: QuestionBlock): ExtractedContent {
       // 보기 종료
       if (currentBoxItems.length > 0) {
         result.boxes.push({
-          kind: 'labeled',
-          title: '보기',
+          kind: "labeled",
+          title: "보기",
           items: [...currentBoxItems],
         });
         currentBoxItems = [];
       }
       questionParts.push(text);
-      state = 'question';
+      state = "question";
       continue;
     }
 
     // 상태별 텍스트 추가
     switch (state) {
-      case 'passage':
-        passageParts.push(text);
-        break;
-      case 'box':
-        if (currentBoxItems.length > 0) {
-          currentBoxItems[currentBoxItems.length - 1] += ' ' + text;
-        } else {
-          currentBoxItems.push(text);
-        }
-        break;
-      case 'question':
-        questionParts.push(text);
-        break;
-      case 'choices':
-        // 선지 이후 추가 텍스트는 무시 (또는 마지막 선지에 추가)
-        break;
+    case "passage":
+      passageParts.push(text);
+      break;
+    case "box":
+      if (currentBoxItems.length > 0) {
+        currentBoxItems[currentBoxItems.length - 1] += " " + text;
+      } else {
+        currentBoxItems.push(text);
+      }
+      break;
+    case "question":
+      questionParts.push(text);
+      break;
+    case "choices":
+      // 선지 이후 추가 텍스트는 무시 (또는 마지막 선지에 추가)
+      break;
     }
   }
 
   // 남은 보기 저장
   if (currentBoxItems.length > 0) {
     result.boxes.push({
-      kind: 'labeled',
-      title: '보기',
+      kind: "labeled",
+      title: "보기",
       items: [...currentBoxItems],
     });
   }
 
   // passage와 questionText 정리
-  const allPassage = passageParts.join(' ').trim();
-  const allQuestion = questionParts.join(' ').trim();
+  const allPassage = passageParts.join(" ").trim();
+  const allQuestion = questionParts.join(" ").trim();
 
   if (allQuestion) {
     result.questionText = allQuestion;
@@ -734,7 +734,7 @@ function parseChoicesFromLine(text: string): string[] {
  */
 function parseAltChoicesFromLine(text: string): string[] {
   const choices: string[] = [];
-  const circleNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+  const circleNums = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
   // "숫자 내용" 패턴으로 분리
   const regex = /([1-5])\s+([ㄱㄴㄷㄹ][,ㄱㄴㄷㄹ\s]*?)(?=\s+[1-5]\s+|$)/g;

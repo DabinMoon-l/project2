@@ -3,7 +3,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fetch from "node-fetch";
-import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import {
+  readUserForExp,
+  addExpInTransaction,
+  flushExpSupabase,
+  EXP_REWARDS,
+  type SupabaseExpPayload,
+} from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
 import { loadScopeForAI, inferChaptersFromText } from "./courseScope";
 import {
@@ -134,34 +140,46 @@ export const onPostCreate = onDocumentCreated(
       const expReward = skipExp ? 0 : EXP_REWARDS.POST_CREATE;
       const reason = "게시글 작성";
 
-      await db.runTransaction(async (transaction) => {
-        // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
-        const freshDoc = await transaction.get(snapshot.ref);
-        if (freshDoc.data()?.rewarded) {
-          console.log(`트랜잭션 내 중복 감지 (게시글): ${postId}`);
-          return;
-        }
+      const postExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
+        async (transaction) => {
+          // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
+          const freshDoc = await transaction.get(snapshot.ref);
+          if (freshDoc.data()?.rewarded) {
+            console.log(`트랜잭션 내 중복 감지 (게시글): ${postId}`);
+            return null;
+          }
 
-        const userDoc = !skipExp
-          ? await readUserForExp(transaction, userId)
-          : null;
+          const userDoc = !skipExp
+            ? await readUserForExp(transaction, userId)
+            : null;
 
-        // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
-        transaction.update(snapshot.ref, {
-          rewarded: true,
-          rewardedAt: FieldValue.serverTimestamp(),
-          expRewarded: expReward,
-        });
-
-        if (!skipExp && userDoc) {
-          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-            type: "post_create",
-            sourceId: postId,
-            sourceCollection: "posts",
-            metadata: { tag: post.tag || null },
+          // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
+          transaction.update(snapshot.ref, {
+            rewarded: true,
+            rewardedAt: FieldValue.serverTimestamp(),
+            expRewarded: expReward,
           });
+
+          if (!skipExp && userDoc) {
+            const { supabasePayload } = addExpInTransaction(
+              transaction, userId, expReward, reason, userDoc, {
+                type: "post_create",
+                sourceId: postId,
+                sourceCollection: "posts",
+                metadata: { tag: post.tag || null },
+              }
+            );
+            return supabasePayload;
+          }
+          return null;
         }
-      });
+      );
+
+      if (postExpPayload) {
+        flushExpSupabase(postExpPayload).catch((e) =>
+          console.warn("[Supabase post_create exp dual-write] 실패:", e)
+        );
+      }
 
       console.log(skipExp
         ? `비공개 글 EXP 스킵: ${postId}`
@@ -431,32 +449,44 @@ export const onCommentCreate = onDocumentCreated(
       const expReward = EXP_REWARDS.COMMENT_CREATE;
       const reason = "댓글 작성";
 
-      await db.runTransaction(async (transaction) => {
-        // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
-        const freshDoc = await transaction.get(snapshot.ref);
-        if (freshDoc.data()?.rewarded) {
-          console.log(`트랜잭션 내 중복 감지 (댓글): ${commentId}`);
-          return;
-        }
+      const commentExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
+        async (transaction) => {
+          // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
+          const freshDoc = await transaction.get(snapshot.ref);
+          if (freshDoc.data()?.rewarded) {
+            console.log(`트랜잭션 내 중복 감지 (댓글): ${commentId}`);
+            return null;
+          }
 
-        const userDoc = await readUserForExp(transaction, userId);
+          const userDoc = await readUserForExp(transaction, userId);
 
-        // WRITE — rewarded 마킹
-        transaction.update(snapshot.ref, {
-          rewarded: true,
-          rewardedAt: FieldValue.serverTimestamp(),
-          expRewarded: expReward,
-        });
-
-        if (userDoc) {
-          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-            type: "comment_create",
-            sourceId: commentId,
-            sourceCollection: "comments",
-            metadata: { postId },
+          // WRITE — rewarded 마킹
+          transaction.update(snapshot.ref, {
+            rewarded: true,
+            rewardedAt: FieldValue.serverTimestamp(),
+            expRewarded: expReward,
           });
+
+          if (userDoc) {
+            const { supabasePayload } = addExpInTransaction(
+              transaction, userId, expReward, reason, userDoc, {
+                type: "comment_create",
+                sourceId: commentId,
+                sourceCollection: "comments",
+                metadata: { postId },
+              }
+            );
+            return supabasePayload;
+          }
+          return null;
         }
-      });
+      );
+
+      if (commentExpPayload) {
+        flushExpSupabase(commentExpPayload).catch((e) =>
+          console.warn("[Supabase comment_create exp dual-write] 실패:", e)
+        );
+      }
 
       // 게시글의 댓글 수 서버사이드 증가
       await db.collection("posts").doc(postId).update({
@@ -1687,28 +1717,37 @@ export const acceptComment = onCall(
     const expReward = EXP_REWARDS.COMMENT_ACCEPTED;
 
     // 트랜잭션으로 채택 처리 + EXP 지급
-    await db.runTransaction(async (transaction) => {
-      const userDoc = await readUserForExp(transaction, commentAuthorId);
+    const acceptExpPayload = await db.runTransaction<SupabaseExpPayload>(
+      async (transaction) => {
+        const userDoc = await readUserForExp(transaction, commentAuthorId);
 
-      // 게시글에 채택 댓글 ID 저장
-      transaction.update(postDoc.ref, {
-        acceptedCommentId: commentId,
-      });
+        // 게시글에 채택 댓글 ID 저장
+        transaction.update(postDoc.ref, {
+          acceptedCommentId: commentId,
+        });
 
-      // 댓글에 채택 표시
-      transaction.update(commentDoc.ref, {
-        isAccepted: true,
-        acceptedAt: FieldValue.serverTimestamp(),
-      });
+        // 댓글에 채택 표시
+        transaction.update(commentDoc.ref, {
+          isAccepted: true,
+          acceptedAt: FieldValue.serverTimestamp(),
+        });
 
-      // 댓글 작성자에게 EXP 지급
-      addExpInTransaction(transaction, commentAuthorId, expReward, "댓글 채택", userDoc, {
-        type: "comment_accepted",
-        sourceId: commentId,
-        sourceCollection: "comments",
-        metadata: { postId },
-      });
-    });
+        // 댓글 작성자에게 EXP 지급
+        const { supabasePayload } = addExpInTransaction(
+          transaction, commentAuthorId, expReward, "댓글 채택", userDoc, {
+            type: "comment_accepted",
+            sourceId: commentId,
+            sourceCollection: "comments",
+            metadata: { postId },
+          }
+        );
+        return supabasePayload;
+      }
+    );
+
+    flushExpSupabase(acceptExpPayload).catch((e) =>
+      console.warn("[Supabase comment_accepted exp dual-write] 실패:", e)
+    );
 
     // 댓글 작성자에게 알림
     await db.collection("notifications").add({

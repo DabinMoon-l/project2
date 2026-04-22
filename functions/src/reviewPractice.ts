@@ -7,7 +7,13 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import {
+  readUserForExp,
+  addExpInTransaction,
+  flushExpSupabase,
+  EXP_REWARDS,
+  type SupabaseExpPayload,
+} from "./utils/gold";
 import {
   SUPABASE_URL_SECRET,
   SUPABASE_SERVICE_ROLE_SECRET,
@@ -117,7 +123,7 @@ export const recordReviewPractice = onCall(
     // 트랜잭션 밖에서 id 사전 할당 → Supabase dual-write 에 동일 id 사용
     const resultRef = db.collection("quizResults").doc();
 
-    await db.runTransaction(async (transaction) => {
+    const expPayload = await db.runTransaction<SupabaseExpPayload | null>(async (transaction) => {
       // reads-before-writes: EXP 지급이 필요한 경우에만 읽기
       let userDoc: FirebaseFirestore.DocumentSnapshot | null = null;
       if (!alreadyRewarded) {
@@ -143,17 +149,28 @@ export const recordReviewPractice = onCall(
 
       // EXP 지급 (중복이 아닌 경우만)
       if (!alreadyRewarded && userDoc) {
-        addExpInTransaction(transaction, userId, expReward, "복습 연습 완료", userDoc, {
-          type: "review_practice",
-          sourceId: quizId,
-          sourceCollection: "quizzes",
-          metadata: { score, correctCount, totalCount },
-        });
+        const { supabasePayload } = addExpInTransaction(
+          transaction, userId, expReward, "복습 연습 완료", userDoc, {
+            type: "review_practice",
+            sourceId: quizId,
+            sourceCollection: "quizzes",
+            metadata: { score, correctCount, totalCount },
+          }
+        );
+        return supabasePayload;
       }
+      return null;
     });
 
     // 락 해제
     await lockRef.delete().catch(() => {});
+
+    // Supabase dual-write (user_profiles.total_exp + exp_history)
+    if (expPayload) {
+      flushExpSupabase(expPayload).catch((e) =>
+        console.warn("[Supabase review_practice exp dual-write] 실패:", e)
+      );
+    }
 
     // Supabase dual-write (quiz_results) — isReviewPractice 플래그는 metadata 대신 attempt_key 로 구분
     supabaseDualWriteQuizResult({

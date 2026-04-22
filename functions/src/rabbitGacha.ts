@@ -21,6 +21,7 @@ import {
   DEFAULT_ORG_ID_SECRET,
   supabaseDualWriteRabbit,
   supabaseDualWriteRabbitHolding,
+  supabaseDualUpdateUserPartial,
 } from "./utils/supabase";
 
 const RABBIT_DUAL_WRITE_SECRETS = [
@@ -59,7 +60,7 @@ interface ClaimResult {
 // spinRabbitGacha: users 문서만 건드림 (lastGachaExp/pendingSpin/spinLock).
 // rabbits/rabbit_holdings 에는 쓰지 않으므로 듀얼 라이트 불필요.
 export const spinRabbitGacha = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: RABBIT_DUAL_WRITE_SECRETS },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -191,8 +192,9 @@ export const spinRabbitGacha = onCall(
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
 
       // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금 설정
+      const newLastGachaExp = lastGachaExp + 50;
       transaction.update(userRef, {
-        lastGachaExp: lastGachaExp + 50,
+        lastGachaExp: newLastGachaExp,
         spinLock: Date.now(),
         pendingSpin: { rabbitId, courseId },
         updatedAt: FieldValue.serverTimestamp(),
@@ -207,7 +209,8 @@ export const spinRabbitGacha = onCall(
           nextDiscoveryOrder: null,
           myDiscoveryOrder: null,
           equippedCount: equippedRabbits.length,
-        } as RollResult;
+          _supabaseNewLastGachaExp: newLastGachaExp,
+        } as RollResult & { _supabaseNewLastGachaExp?: number };
       }
 
       // 발견 — 이미 존재하는 토끼 (다른 사람이 발견)
@@ -218,10 +221,21 @@ export const spinRabbitGacha = onCall(
         nextDiscoveryOrder: (rabbitData.discovererCount || 1) + 1,
         myDiscoveryOrder: null,
         equippedCount: equippedRabbits.length,
-      } as RollResult;
-    });
+        _supabaseNewLastGachaExp: newLastGachaExp,
+      } as RollResult & { _supabaseNewLastGachaExp?: number };
+    }) as RollResult & { _supabaseNewLastGachaExp?: number };
 
-    return result;
+    // Supabase dual-write (lastGachaExp 만 동기화. pendingSpin / spinLock 은 user_profiles 에 없음)
+    if (result._supabaseNewLastGachaExp !== undefined) {
+      supabaseDualUpdateUserPartial(userId, {
+        lastGachaExp: result._supabaseNewLastGachaExp,
+      }).catch((e) => console.warn("[Supabase spinRabbitGacha user dual-write]", e));
+    }
+
+    // 내부 페이로드 노출 방지
+    const { _supabaseNewLastGachaExp: _unused, ...publicResult } = result;
+    void _unused;
+    return publicResult;
   }
 );
 
@@ -453,6 +467,8 @@ export const claimGachaRabbit = onCall(
       const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
         userData.equippedRabbits || [];
 
+      let newEquippedForSupabase: Array<{ rabbitId: number; courseId: string }> | null = null;
+
       if (equippedRabbits.length < 2) {
         // 빈 슬롯에 자동 장착 + pendingSpin 정리 + 스핀 잠금 해제
         const newEquipped = [...equippedRabbits, { rabbitId, courseId }];
@@ -462,6 +478,7 @@ export const claimGachaRabbit = onCall(
           spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
+        newEquippedForSupabase = newEquipped;
       } else if (
         equipSlot !== undefined &&
         (equipSlot === 0 || equipSlot === 1)
@@ -475,6 +492,7 @@ export const claimGachaRabbit = onCall(
           spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
+        newEquippedForSupabase = newEquipped;
       } else {
         // 슬롯 가득 & 미지정 → 장착하지 않음 + pendingSpin 정리 + 스핀 잠금 해제
         transaction.update(userRef, {
@@ -491,21 +509,37 @@ export const claimGachaRabbit = onCall(
         rabbitName,
         // 트랜잭션 외부에서 dual-write 하기 위한 payload (반환 타입엔 없음)
         _supabasePayload: rabbitUpsertPayload,
-      } as ClaimResult & { _supabasePayload: typeof rabbitUpsertPayload };
+        _supabaseNewEquipped: newEquippedForSupabase,
+      } as ClaimResult & {
+        _supabasePayload: typeof rabbitUpsertPayload;
+        _supabaseNewEquipped: Array<{ rabbitId: number; courseId: string }> | null;
+      };
     });
 
     // Supabase dual-write (트랜잭션 성공 후)
-    await supabaseDualWriteRabbit(courseId, rabbitId, result._supabasePayload);
-    await supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
-      level: 1,
-      stats: getBaseStats(rabbitId),
-      discoveryOrder: result.discoveryOrder,
-      discoveredAt: new Date(),
-    });
+    await Promise.all([
+      supabaseDualWriteRabbit(courseId, rabbitId, result._supabasePayload),
+      supabaseDualWriteRabbitHolding(courseId, userId, rabbitId, {
+        level: 1,
+        stats: getBaseStats(rabbitId),
+        discoveryOrder: result.discoveryOrder,
+        discoveredAt: new Date(),
+      }),
+      result._supabaseNewEquipped
+        ? supabaseDualUpdateUserPartial(userId, {
+          equippedRabbits: result._supabaseNewEquipped,
+        }).catch((e) => console.warn("[Supabase claimGachaRabbit user dual-write]", e))
+        : Promise.resolve(),
+    ]);
 
     // 내부 페이로드 노출 방지
-    const { _supabasePayload: _unused, ...publicResult } = result;
-    void _unused;
+    const {
+      _supabasePayload: _unused1,
+      _supabaseNewEquipped: _unused2,
+      ...publicResult
+    } = result;
+    void _unused1;
+    void _unused2;
     return publicResult;
   }
 );

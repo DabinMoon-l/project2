@@ -687,7 +687,7 @@ export const backfillWeeklyStats = onCall(
     const endKST = new Date(new Date(endDate + "T23:59:59+09:00").getTime());
 
     const results: string[] = [];
-    let current = new Date(startKST);
+    const current = new Date(startKST);
 
     // 월요일로 정렬
     const dayOfWeek = current.getDay();

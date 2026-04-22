@@ -43,7 +43,7 @@ interface LogicalLine {
   y: number;
   minX: number;
   maxX: number;
-  column: 'left' | 'right' | 'single';
+  column: "left" | "right" | "single";
 }
 
 // ============================================================
@@ -51,7 +51,7 @@ interface LogicalLine {
 // ============================================================
 
 export interface PassageBlock {
-  type: 'text' | 'labeled';
+  type: "text" | "labeled";
   content?: string;
   items?: Array<{ label: string; text: string }>;
 }
@@ -67,14 +67,14 @@ export interface Choice {
 }
 
 export interface MediaPlaceholder {
-  kind: 'image' | 'table' | 'graph';
+  kind: "image" | "table" | "graph";
   note: string;
   bbox: { x: number; y: number; w: number; h: number };
 }
 
 export interface ParsedQuestionV3 {
   questionNumber: number | string;
-  type: 'multipleChoice' | 'ox' | 'unknown';  // 주관식 없음, unknown 사용
+  type: "multipleChoice" | "ox" | "unknown";  // 주관식 없음, unknown 사용
   stem: string;
   passages: Record<string, string>;  // { "(가)": "...", "(나)": "..." }
   passageBlocks: PassageBlock[];     // 기존 호환용
@@ -107,7 +107,7 @@ export interface ParseResultV3 {
 // ============================================================
 
 // 원문자
-const CIRCLE_NUMBERS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+const CIRCLE_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
 // ===== 선지 패턴 (줄 시작 기준) =====
 // 1. 원문자: ①②③④⑤
@@ -128,10 +128,10 @@ const CHOICE_OCR_NUMBER_ENGLISH = /^([1-5])\s*([A-Z][a-zA-Z].*)/;
 
 // 한글 자음 정규화 맵
 const KOREAN_LABEL_MAP: Record<string, string> = {
-  'ㄱ': 'ㄱ', 'ㄴ': 'ㄴ', 'ㄷ': 'ㄷ', 'ㄹ': 'ㄹ',
-  'ㅁ': 'ㅁ', 'ㅂ': 'ㅂ', 'ㅅ': 'ㅅ', 'ㅇ': 'ㅇ',
-  '7': 'ㄱ', 'L': 'ㄴ', '드': 'ㄷ', '그': 'ㄱ',
-  'r': 'ㄱ', '기': 'ㄱ', '己': 'ㄱ',
+  "ㄱ": "ㄱ", "ㄴ": "ㄴ", "ㄷ": "ㄷ", "ㄹ": "ㄹ",
+  "ㅁ": "ㅁ", "ㅂ": "ㅂ", "ㅅ": "ㅅ", "ㅇ": "ㅇ",
+  "7": "ㄱ", "L": "ㄴ", "드": "ㄷ", "그": "ㄱ",
+  "r": "ㄱ", "기": "ㄱ", "己": "ㄱ",
 };
 
 // 수능 스타일 한 줄 선지: "① ㄱ ② ㄴ ③ ㄱ,ㄴ" 또는 "1 ㄱ 2 ㄴ 3 ㄱ,ㄴ"
@@ -201,7 +201,7 @@ function normalizeTokens(fields: ClovaField[]): Token[] {
     const y2 = vertices[2]?.y || vertices[3]?.y || y;
 
     return {
-      text: field.inferText || '',
+      text: field.inferText || "",
       x, y,
       width: Math.max(x2 - x, 1),
       height: Math.max(y2 - y, 1),
@@ -290,7 +290,7 @@ function buildLines(tokens: Token[], columnInfo: ColumnInfo): LogicalLine[] {
   const medianH = heights[Math.floor(heights.length / 2)] || 20;
   const yTol = Math.max(medianH * 0.5, 8);
 
-  function buildForColumn(colTokens: Token[], column: 'left' | 'right' | 'single'): LogicalLine[] {
+  function buildForColumn(colTokens: Token[], column: "left" | "right" | "single"): LogicalLine[] {
     if (colTokens.length === 0) return [];
 
     const sorted = [...colTokens].sort((a, b) => a.centerY - b.centerY);
@@ -312,14 +312,14 @@ function buildLines(tokens: Token[], columnInfo: ColumnInfo): LogicalLine[] {
     return lines;
   }
 
-  function makeLine(toks: Token[], column: 'left' | 'right' | 'single'): LogicalLine {
+  function makeLine(toks: Token[], column: "left" | "right" | "single"): LogicalLine {
     const sorted = [...toks].sort((a, b) => a.x - b.x);
-    let text = '';
+    let text = "";
     for (let i = 0; i < sorted.length; i++) {
       if (i > 0) {
         const gap = sorted[i].x - sorted[i - 1].right;
         const charW = sorted[i - 1].width / Math.max(sorted[i - 1].text.length, 1);
-        if (gap > charW * 0.3) text += ' ';
+        if (gap > charW * 0.3) text += " ";
       }
       text += sorted[i].text;
     }
@@ -334,14 +334,14 @@ function buildLines(tokens: Token[], columnInfo: ColumnInfo): LogicalLine[] {
   }
 
   if (!columnInfo.isTwoColumn) {
-    return buildForColumn(tokens, 'single');
+    return buildForColumn(tokens, "single");
   }
 
   const leftTokens = tokens.filter(t => t.centerX < columnInfo.columnDividerX);
   const rightTokens = tokens.filter(t => t.centerX >= columnInfo.columnDividerX);
 
-  const leftLines = buildForColumn(leftTokens, 'left');
-  const rightLines = buildForColumn(rightTokens, 'right');
+  const leftLines = buildForColumn(leftTokens, "left");
+  const rightLines = buildForColumn(rightTokens, "right");
 
 
   // 좌측 먼저 → 우측
@@ -433,7 +433,7 @@ function matchChoicePattern(text: string): { type: string; label: string; text: 
   // 1. 원문자: ①②③④⑤
   const circleMatch = text.match(CHOICE_CIRCLE_PATTERN);
   if (circleMatch) {
-    return { type: 'circle', label: circleMatch[1], text: circleMatch[2].trim() };
+    return { type: "circle", label: circleMatch[1], text: circleMatch[2].trim() };
   }
 
   // 2. 숫자 괄호: 1) 2)
@@ -441,7 +441,7 @@ function matchChoicePattern(text: string): { type: string; label: string; text: 
   if (parenMatch) {
     const num = parseInt(parenMatch[1], 10);
     if (num >= 1 && num <= 10) {
-      return { type: 'paren', label: CIRCLE_NUMBERS[num - 1], text: parenMatch[2].trim() };
+      return { type: "paren", label: CIRCLE_NUMBERS[num - 1], text: parenMatch[2].trim() };
     }
   }
 
@@ -450,7 +450,7 @@ function matchChoicePattern(text: string): { type: string; label: string; text: 
   if (bracketMatch) {
     const num = parseInt(bracketMatch[1], 10);
     if (num >= 1 && num <= 10) {
-      return { type: 'bracket', label: CIRCLE_NUMBERS[num - 1], text: bracketMatch[2].trim() };
+      return { type: "bracket", label: CIRCLE_NUMBERS[num - 1], text: bracketMatch[2].trim() };
     }
   }
 
@@ -459,15 +459,15 @@ function matchChoicePattern(text: string): { type: string; label: string; text: 
   if (ocrParenMatch) {
     const num = parseInt(ocrParenMatch[1], 10);
     const letter = ocrParenMatch[2].toLowerCase();
-    const extra = ocrParenMatch[3]?.trim() || '';
-    return { type: 'ocr_paren', label: CIRCLE_NUMBERS[num - 1], text: `(${letter})${extra ? ' ' + extra : ''}` };
+    const extra = ocrParenMatch[3]?.trim() || "";
+    return { type: "ocr_paren", label: CIRCLE_NUMBERS[num - 1], text: `(${letter})${extra ? " " + extra : ""}` };
   }
 
   // 5. OCR이 ①→1로 인식 + 영어 대문자: "1Dress" "1 Dress"
   const ocrEnglishMatch = text.match(CHOICE_OCR_NUMBER_ENGLISH);
   if (ocrEnglishMatch) {
     const num = parseInt(ocrEnglishMatch[1], 10);
-    return { type: 'ocr_english', label: CIRCLE_NUMBERS[num - 1], text: ocrEnglishMatch[2].trim() };
+    return { type: "ocr_english", label: CIRCLE_NUMBERS[num - 1], text: ocrEnglishMatch[2].trim() };
   }
 
   return null;
@@ -520,16 +520,16 @@ function parseCsatChoiceLine(text: string): Choice[] {
 
   // OCR 오인식 정규화
   let normalized = text
-    .replace(/그/g, 'ㄱ')
-    .replace(/L/g, 'ㄴ')
-    .replace(/드/g, 'ㄷ')
-    .replace(/7(?=\s|,|$)/g, 'ㄱ')
-    .replace(/□/g, '')
+    .replace(/그/g, "ㄱ")
+    .replace(/L/g, "ㄴ")
+    .replace(/드/g, "ㄷ")
+    .replace(/7(?=\s|,|$)/g, "ㄱ")
+    .replace(/□/g, "")
     .trim();
 
   // 원문자 → 숫자 변환
   for (let i = 0; i < CIRCLE_NUMBERS.length; i++) {
-    normalized = normalized.replace(new RegExp(CIRCLE_NUMBERS[i], 'g'), `${i + 1}`);
+    normalized = normalized.replace(new RegExp(CIRCLE_NUMBERS[i], "g"), `${i + 1}`);
   }
 
   // 패턴: 숫자 + (ㄱㄴㄷ 조합)
@@ -538,7 +538,7 @@ function parseCsatChoiceLine(text: string): Choice[] {
 
   while ((match = pattern.exec(normalized)) !== null) {
     const num = parseInt(match[1], 10);
-    const choiceText = match[2].replace(/[,\s]+$/g, '').trim();
+    const choiceText = match[2].replace(/[,\s]+$/g, "").trim();
 
     if (choiceText && num >= 1 && num <= 5) {
       if (!choices.some(c => c.label === CIRCLE_NUMBERS[num - 1])) {
@@ -599,7 +599,7 @@ function extractQuestionContent(
 
     // 첫 줄: 문제 번호 제거
     if (i === startIdx) {
-      text = text.replace(QUESTION_NUMBER_PATTERN, '').trim();
+      text = text.replace(QUESTION_NUMBER_PATTERN, "").trim();
       if (!text) continue;
     }
 
@@ -612,7 +612,7 @@ function extractQuestionContent(
       inChoiceSection = false;
       // 이전 passage 저장
       if (currentPassageLabel) {
-        passages[currentPassageLabel] = (passages[currentPassageLabel] || '').trim();
+        passages[currentPassageLabel] = (passages[currentPassageLabel] || "").trim();
         currentPassageLabel = null;
       }
       continue;
@@ -633,7 +633,7 @@ function extractQuestionContent(
     const choiceMatch = matchChoicePattern(text);
     if (choiceMatch) {
       // 한 줄에 여러 원문자가 있으면 모두 파싱
-      if (choiceMatch.type === 'circle' && text.match(/[①②③④⑤⑥⑦⑧⑨⑩].*[①②③④⑤⑥⑦⑧⑨⑩]/)) {
+      if (choiceMatch.type === "circle" && text.match(/[①②③④⑤⑥⑦⑧⑨⑩].*[①②③④⑤⑥⑦⑧⑨⑩]/)) {
         choices.push(...parseCircleChoicesInLine(text));
       } else {
         choices.push({ label: choiceMatch.label, text: choiceMatch.text });
@@ -663,7 +663,7 @@ function extractQuestionContent(
     if (passageMatch && !inChoiceSection && !inBoxSection) {
       // 선지/보기 섹션이 아닐 때만 지문으로 인식
       if (currentPassageLabel) {
-        passages[currentPassageLabel] = (passages[currentPassageLabel] || '').trim();
+        passages[currentPassageLabel] = (passages[currentPassageLabel] || "").trim();
       }
       currentPassageLabel = `(${passageMatch[1]})`;
       passages[currentPassageLabel] = passageMatch[2].trim();
@@ -674,16 +674,16 @@ function extractQuestionContent(
     if (inBoxSection) {
       // 보기 섹션 내 → 마지막 boxItem에 추가
       if (boxItems.length > 0) {
-        boxItems[boxItems.length - 1].text += ' ' + text;
+        boxItems[boxItems.length - 1].text += " " + text;
       }
     } else if (inChoiceSection) {
       // 선지 섹션 내 → 마지막 choice에 추가
       if (choices.length > 0) {
-        choices[choices.length - 1].text += ' ' + text;
+        choices[choices.length - 1].text += " " + text;
       }
     } else if (currentPassageLabel) {
       // 지문 섹션 내 → passages에 추가
-      passages[currentPassageLabel] = (passages[currentPassageLabel] || '') + ' ' + text;
+      passages[currentPassageLabel] = (passages[currentPassageLabel] || "") + " " + text;
     } else {
       // stem
       stemParts.push(text);
@@ -692,7 +692,7 @@ function extractQuestionContent(
 
   // 마지막 passage 정리
   if (currentPassageLabel) {
-    passages[currentPassageLabel] = (passages[currentPassageLabel] || '').trim();
+    passages[currentPassageLabel] = (passages[currentPassageLabel] || "").trim();
   }
 
   // boxItems/choices 정리
@@ -705,7 +705,7 @@ function extractQuestionContent(
 
 
   return {
-    stem: stemParts.join(' ').trim(),
+    stem: stemParts.join(" ").trim(),
     passages,
     boxItems,
     choices,
@@ -717,17 +717,17 @@ function extractQuestionContent(
 // Stage 7: 문제 유형 판정
 // ============================================================
 
-function determineType(content: { choices: Choice[] }, fullText: string): 'multipleChoice' | 'ox' | 'unknown' {
+function determineType(content: { choices: Choice[] }, fullText: string): "multipleChoice" | "ox" | "unknown" {
   // OX 체크
   for (const p of OX_PATTERNS) {
-    if (p.test(fullText)) return 'ox';
+    if (p.test(fullText)) return "ox";
   }
 
   // 선지 2개 이상 → 객관식
-  if (content.choices.length >= 2) return 'multipleChoice';
+  if (content.choices.length >= 2) return "multipleChoice";
 
   // 선지 없음 → unknown (주관식 확정 금지)
-  return 'unknown';
+  return "unknown";
 }
 
 // ============================================================
@@ -761,7 +761,7 @@ export function parseQuestionsV3(fields: ClovaField[]): ParseResultV3 {
     const endIdx = i + 1 < boundaries.length ? boundaries[i + 1].lineIndex : lines.length;
 
     const blockLines = lines.slice(startIdx, endIdx);
-    const fullText = blockLines.map(l => l.text).join(' ');
+    const fullText = blockLines.map(l => l.text).join(" ");
 
     const content = extractQuestionContent(lines, startIdx, endIdx, boundary.number);
     const type = determineType(content, fullText);
@@ -783,7 +783,7 @@ export function parseQuestionsV3(fields: ClovaField[]): ParseResultV3 {
     const passageKeys = Object.keys(content.passages);
     if (passageKeys.length > 0) {
       passageBlocks.push({
-        type: 'labeled',
+        type: "labeled",
         items: passageKeys.map(k => ({ label: k, text: content.passages[k] })),
       });
     }
@@ -794,17 +794,17 @@ export function parseQuestionsV3(fields: ClovaField[]): ParseResultV3 {
       stem: content.stem,
       passages: content.passages,
       passageBlocks,
-      optionBoxText: '',
+      optionBoxText: "",
       boxItems: content.boxItems,
       choices: content.choices,
       mediaPlaceholders: [],
-      needsReview: type === 'unknown',
+      needsReview: type === "unknown",
       bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
     });
   }
 
-  const leftLines = lines.filter(l => l.column === 'left').length;
-  const rightLines = lines.filter(l => l.column === 'right').length;
+  const leftLines = lines.filter(l => l.column === "left").length;
+  const rightLines = lines.filter(l => l.column === "right").length;
 
   return {
     success: questions.length > 0,

@@ -16,6 +16,8 @@ import { getEmergencyQuestions } from "./tekkenQuestions";
 import type { GeneratedQuestion, PregenCache, PlayerSetup, BotPlayerSetup, BattleData, BattleRoundData, BattlePlayer } from "./tekkenTypes";
 import {
   supabaseDualBatchUpsertReviews,
+  supabaseDualUpdateUserPartial,
+  supabaseDualWriteExpHistory,
   type SupabaseReviewInput,
 } from "../utils/supabase";
 
@@ -151,7 +153,7 @@ export async function createBattle(
     return id;
   };
 
-  const rounds: Record<string, Omit<BattleRoundData, 'started' | 'result' | 'answers'>> = {};
+  const rounds: Record<string, Omit<BattleRoundData, "started" | "result" | "answers">> = {};
   const battleAnswersData: Record<string, number> = {};
   for (let i = 0; i < questions!.length; i++) {
     const q = questions![i];
@@ -393,7 +395,31 @@ export async function endBattle(
     )
   );
 
-  for (const { uid, isWinner, newStreak, xp } of streakResults) {
+  // Supabase dual-write 용 payload — batch.commit 후에 실행하려면 새 값을 미리 계산해야 함
+  // FieldValue.increment 는 Supabase 가 해석 못 하므로 현재 user doc 을 읽어서 계산
+  const userDocs = await Promise.all(
+    streakResults.map(({ uid }) => fsDb.collection("users").doc(uid).get()),
+  );
+
+  const supabasePayloads: Array<{
+    uid: string;
+    expDocId: string;
+    amount: number;
+    reason: string;
+    isWinner: boolean;
+    newStreak: number;
+    newTotalExp: number;
+    newTekkenTotal: number;
+    previousExp: number;
+  }> = [];
+
+  for (let i = 0; i < streakResults.length; i++) {
+    const { uid, isWinner, newStreak, xp } = streakResults[i];
+    const userDoc = userDocs[i];
+    const userData = userDoc.data() || {};
+    const prevExp = (userData.totalExp as number) || 0;
+    const prevTekkenTotal = (userData.tekkenTotal as number) || 0;
+
     const userRef = fsDb.collection("users").doc(uid);
     batch.update(userRef, {
       totalExp: FieldValue.increment(xp),
@@ -405,14 +431,15 @@ export async function endBattle(
     // previousExp/newExp는 FieldValue.increment 사용 시 정확한 값 알 수 없음
     // → 트리거 기반으로 기록 (실시간 조회 제거)
     const histRef = userRef.collection("expHistory").doc();
+    const reason = isWinner
+      ? `배틀 승리 (${newStreak}연승)`
+      : isDraw
+        ? "배틀 무승부"
+        : "배틀 패배";
     batch.set(histRef, {
       type: "tekken_battle",
       amount: xp,
-      reason: isWinner
-        ? `배틀 승리 (${newStreak}연승)`
-        : isDraw
-          ? "배틀 무승부"
-          : "배틀 패배",
+      reason,
       sourceId: battleId,
       sourceCollection: "tekken/battles",
       metadata: {
@@ -422,14 +449,52 @@ export async function endBattle(
       },
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    supabasePayloads.push({
+      uid,
+      expDocId: histRef.id,
+      amount: xp,
+      reason,
+      isWinner,
+      newStreak,
+      newTotalExp: prevExp + xp,
+      newTekkenTotal: prevTekkenTotal + 1,
+      previousExp: prevExp,
+    });
   }
 
+  let batchCommitted = false;
   try {
     await batch.commit();
+    batchCommitted = true;
   } catch (err) {
     // Firestore batch 실패 → xpGranted 리셋 (재시도 가능)
     console.error("XP 지급 Firestore batch 실패, xpGranted 리셋:", err);
     await xpGrantedRef.set(false).catch(() => {});
+  }
+
+  // Supabase dual-write (user_profiles.total_exp/tekken_total + exp_history)
+  if (batchCommitted) {
+    await Promise.all(
+      supabasePayloads.flatMap((p) => [
+        supabaseDualUpdateUserPartial(p.uid, {
+          totalExp: p.newTotalExp,
+          tekkenTotal: p.newTekkenTotal,
+        }).catch((e) => console.warn(`[Supabase battle user dual-write] ${p.uid}:`, e)),
+        supabaseDualWriteExpHistory({
+          userId: p.uid,
+          expDocId: p.expDocId,
+          amount: p.amount,
+          reason: p.reason,
+          type: "tekken_battle",
+          sourceId: battleId,
+          sourceCollection: "tekken/battles",
+          previousExp: p.previousExp,
+          newExp: p.newTotalExp,
+          metadata: { isWinner: p.isWinner, isDraw, streak: p.newStreak },
+        }).catch((e) => console.warn(`[Supabase battle exp_history dual-write] ${p.uid}:`, e)),
+      ]),
+    );
   }
 
   // 오답 → reviews 컬렉션 저장 (복습 오답탭 연동, fire-and-forget)

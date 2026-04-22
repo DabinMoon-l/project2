@@ -7,6 +7,12 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpdateUserPartial,
+} from "./utils/supabase";
 
 /**
  * equipRabbit — 토끼 장착 (슬롯 지정)
@@ -15,7 +21,10 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
  * 검증: rabbitHoldings 존재 확인, 최대 2개
  */
 export const equipRabbit = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -39,60 +48,69 @@ export const equipRabbit = onCall(
     const db = getFirestore();
     const rabbitDocId = `${courseId}_${rabbitId}`;
 
-    await db.runTransaction(async (transaction) => {
-      // 보유 여부 확인
-      const holdingRef = db
-        .collection("users")
-        .doc(userId)
-        .collection("rabbitHoldings")
-        .doc(rabbitDocId);
-      const holdingDoc = await transaction.get(holdingRef);
+    const newEquipped = await db.runTransaction<Array<{ rabbitId: number; courseId: string }>>(
+      async (transaction) => {
+        // 보유 여부 확인
+        const holdingRef = db
+          .collection("users")
+          .doc(userId)
+          .collection("rabbitHoldings")
+          .doc(rabbitDocId);
+        const holdingDoc = await transaction.get(holdingRef);
 
-      if (!holdingDoc.exists) {
-        throw new HttpsError("not-found", "발견하지 않은 토끼입니다.");
-      }
-
-      // 현재 장착 상태 확인
-      const userRef = db.collection("users").doc(userId);
-      const userDoc = await transaction.get(userRef);
-
-      if (!userDoc.exists) {
-        throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
-      }
-
-      const userData = userDoc.data()!;
-      const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
-        userData.equippedRabbits || [];
-
-      // 이미 장착 중인지 확인
-      const alreadyEquipped = equippedRabbits.some(
-        (e) => e.rabbitId === rabbitId && e.courseId === courseId
-      );
-      if (alreadyEquipped) {
-        throw new HttpsError("already-exists", "이미 장착 중인 토끼입니다.");
-      }
-
-      // 새 배열 구성
-      const newEquipped = [...equippedRabbits];
-
-      if (newEquipped.length <= slotIndex) {
-        // 슬롯이 비어있으면 추가
-        while (newEquipped.length <= slotIndex) {
-          newEquipped.push({ rabbitId: -1, courseId: "" });
+        if (!holdingDoc.exists) {
+          throw new HttpsError("not-found", "발견하지 않은 토끼입니다.");
         }
+
+        // 현재 장착 상태 확인
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await transaction.get(userRef);
+
+        if (!userDoc.exists) {
+          throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
+        }
+
+        const userData = userDoc.data()!;
+        const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
+          userData.equippedRabbits || [];
+
+        // 이미 장착 중인지 확인
+        const alreadyEquipped = equippedRabbits.some(
+          (e) => e.rabbitId === rabbitId && e.courseId === courseId
+        );
+        if (alreadyEquipped) {
+          throw new HttpsError("already-exists", "이미 장착 중인 토끼입니다.");
+        }
+
+        // 새 배열 구성
+        const built = [...equippedRabbits];
+
+        if (built.length <= slotIndex) {
+          // 슬롯이 비어있으면 추가
+          while (built.length <= slotIndex) {
+            built.push({ rabbitId: -1, courseId: "" });
+          }
+        }
+        built[slotIndex] = { rabbitId, courseId };
+
+        // 빈 슬롯(-1) 제거하고 유효한 것만 유지
+        const validEquipped = built.filter(
+          (e) => e.rabbitId >= 0 && e.courseId !== ""
+        );
+
+        transaction.update(userRef, {
+          equippedRabbits: validEquipped,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return validEquipped;
       }
-      newEquipped[slotIndex] = { rabbitId, courseId };
+    );
 
-      // 빈 슬롯(-1) 제거하고 유효한 것만 유지
-      const validEquipped = newEquipped.filter(
-        (e) => e.rabbitId >= 0 && e.courseId !== ""
-      );
-
-      transaction.update(userRef, {
-        equippedRabbits: validEquipped,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    });
+    // Supabase dual-write
+    supabaseDualUpdateUserPartial(userId, { equippedRabbits: newEquipped }).catch(
+      (e) => console.warn("[Supabase equipRabbit dual-write]", e),
+    );
 
     return { success: true };
   }
@@ -104,7 +122,10 @@ export const equipRabbit = onCall(
  * 입력: slotIndex (0|1)
  */
 export const unequipRabbit = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -120,29 +141,38 @@ export const unequipRabbit = onCall(
     const db = getFirestore();
     const userRef = db.collection("users").doc(userId);
 
-    await db.runTransaction(async (transaction) => {
-      const userDoc = await transaction.get(userRef);
+    const newEquipped = await db.runTransaction<Array<{ rabbitId: number; courseId: string }>>(
+      async (transaction) => {
+        const userDoc = await transaction.get(userRef);
 
-      if (!userDoc.exists) {
-        throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
+        if (!userDoc.exists) {
+          throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
+        }
+
+        const userData = userDoc.data()!;
+        const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
+          userData.equippedRabbits || [];
+
+        if (slotIndex >= equippedRabbits.length) {
+          throw new HttpsError("not-found", "해당 슬롯에 장착된 토끼가 없습니다.");
+        }
+
+        // 해당 인덱스 제거
+        const remaining = equippedRabbits.filter((_, i) => i !== slotIndex);
+
+        transaction.update(userRef, {
+          equippedRabbits: remaining,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return remaining;
       }
+    );
 
-      const userData = userDoc.data()!;
-      const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
-        userData.equippedRabbits || [];
-
-      if (slotIndex >= equippedRabbits.length) {
-        throw new HttpsError("not-found", "해당 슬롯에 장착된 토끼가 없습니다.");
-      }
-
-      // 해당 인덱스 제거
-      const newEquipped = equippedRabbits.filter((_, i) => i !== slotIndex);
-
-      transaction.update(userRef, {
-        equippedRabbits: newEquipped,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    });
+    // Supabase dual-write
+    supabaseDualUpdateUserPartial(userId, { equippedRabbits: newEquipped }).catch(
+      (e) => console.warn("[Supabase unequipRabbit dual-write]", e),
+    );
 
     return { success: true };
   }

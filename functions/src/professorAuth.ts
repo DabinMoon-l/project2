@@ -10,9 +10,19 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  DEFAULT_ORG_ID_SECRET,
+  supabaseDualUpsertUser,
+  supabaseDualUpdateUserPartial,
+} from "./utils/supabase";
 
 export const initProfessorAccount = onCall(
-  { region: "asia-northeast3" },
+  {
+    region: "asia-northeast3",
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET, DEFAULT_ORG_ID_SECRET],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -52,12 +62,24 @@ export const initProfessorAccount = onCall(
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Supabase dual-write (신규 교수 user_profiles upsert)
+      supabaseDualUpsertUser(request.auth.uid, {
+        nickname: allowedData.nickname || "교수님",
+        role: "professor",
+        assignedCourses,
+      }).catch((e) => console.warn("[Supabase initProfessorAccount upsert]", e));
     } else if (userDoc.data()?.role === "professor") {
       // 기존 교수 — 과목 목록 동기화 (allowedProfessors에서 변경 시 반영)
       await userRef.update({
         assignedCourses,
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Supabase dual-write (assigned_courses)
+      supabaseDualUpdateUserPartial(request.auth.uid, { assignedCourses }).catch(
+        (e) => console.warn("[Supabase initProfessorAccount update]", e),
+      );
     }
 
     return { success: true, courses: assignedCourses };

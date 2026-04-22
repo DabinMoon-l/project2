@@ -251,20 +251,20 @@ ${questionsText}
     styleDescription: typeof parsed.styleDescription === "string" ? parsed.styleDescription : "",
     questionPatterns: Array.isArray(parsed.questionPatterns)
       ? (parsed.questionPatterns as Record<string, unknown>[])
-          .filter((p) => typeof p.pattern === "string")
-          .map((p) => ({
-            pattern: p.pattern as string,
-            examples: Array.isArray(p.examples) ? (p.examples as unknown[]).filter((e): e is string => typeof e === "string").slice(0, 3) : [],
-          }))
+        .filter((p) => typeof p.pattern === "string")
+        .map((p) => ({
+          pattern: p.pattern as string,
+          examples: Array.isArray(p.examples) ? (p.examples as unknown[]).filter((e): e is string => typeof e === "string").slice(0, 3) : [],
+        }))
       : [],
     distractorStrategies: Array.isArray(parsed.distractorStrategies)
       ? (parsed.distractorStrategies as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 5)
       : [],
     topicEmphasis: Array.isArray(parsed.topicEmphasis)
       ? (parsed.topicEmphasis as Record<string, unknown>[])
-          .filter((t) => typeof t.topic === "string" && typeof t.weight === "number")
-          .map((t) => ({ topic: t.topic as string, weight: t.weight as number }))
-          .slice(0, 10)
+        .filter((t) => typeof t.topic === "string" && typeof t.weight === "number")
+        .map((t) => ({ topic: t.topic as string, weight: t.weight as number }))
+        .slice(0, 10)
       : [],
   };
 }
@@ -290,8 +290,8 @@ async function extractKeywordsFromQuestions(
   const subjectHint = courseId.includes("patho")
     ? "병태생리학"
     : courseId.includes("micro")
-    ? "미생물학"
-    : "생물학";
+      ? "미생물학"
+      : "생물학";
 
   const prompt = `당신은 ${subjectHint} 시험 분석 전문가입니다.
 아래 교수가 실제로 출제한 시험 문제에서 핵심 학술 용어와 출제 토픽을 추출하세요.
@@ -368,22 +368,22 @@ ${questionsText.slice(0, 8000)}
     return {
       coreTerms: Array.isArray(parsed.coreTerms)
         ? (parsed.coreTerms as Record<string, unknown>[])
-            .filter((t) => typeof t.korean === "string" && (t.korean as string).length > 0)
-            .map((t) => ({
-              korean: t.korean as string,
-              english: typeof t.english === "string" ? t.english : undefined,
-              context: typeof t.context === "string" ? t.context : "",
-            }))
-            .slice(0, 25)
+          .filter((t) => typeof t.korean === "string" && (t.korean as string).length > 0)
+          .map((t) => ({
+            korean: t.korean as string,
+            english: typeof t.english === "string" ? t.english : undefined,
+            context: typeof t.context === "string" ? t.context : "",
+          }))
+          .slice(0, 25)
         : [],
       examTopics: Array.isArray(parsed.examTopics)
         ? (parsed.examTopics as Record<string, unknown>[])
-            .filter((t) => typeof t.topic === "string")
-            .map((t) => ({
-              topic: t.topic as string,
-              subtopics: Array.isArray(t.subtopics) ? (t.subtopics as unknown[]).filter((s): s is string => typeof s === "string") : [],
-            }))
-            .slice(0, 10)
+          .filter((t) => typeof t.topic === "string")
+          .map((t) => ({
+            topic: t.topic as string,
+            subtopics: Array.isArray(t.subtopics) ? (t.subtopics as unknown[]).filter((s): s is string => typeof s === "string") : [],
+          }))
+          .slice(0, 10)
         : [],
     };
   } catch {
