@@ -328,11 +328,28 @@ export const getCourseScope = onCall(
  * @param targetChapters - 대상 챕터 번호 목록 (없으면 전체)
  * @param maxLength - 최대 문자 수 (기본 15000)
  */
+interface LoadScopeOptions {
+  /**
+   * true 이면 targetChapters 가 비어있을 때 scope 를 반환하지 않음 (null).
+   * false/미지정(레거시) 이면 targetChapters 없을 때 전체 챕터를 로드 — 이 경우
+   * 1장부터 순차로 채우다가 maxLength 초과 시 1장 일부만 실리는 부작용이 있어
+   * 질문과 무관한 챕터로 답변 품질이 떨어짐. 신규 호출은 strict=true 권장.
+   */
+  strict?: boolean;
+}
+
 export async function loadScopeForAI(
   courseId: string,
   targetChapters?: string[],
-  maxLength: number = 15000
+  maxLength: number = 15000,
+  options?: LoadScopeOptions,
 ): Promise<{ content: string; keywords: string[]; chaptersLoaded: string[] } | null> {
+  // strict 모드: targetChapters 가 비어있으면 전체 로드 대신 null 반환.
+  // 질문과 무관한 1장만 "(일부)" 로 실리는 부작용 방지.
+  if (options?.strict && (!targetChapters || targetChapters.length === 0)) {
+    return null;
+  }
+
   const db = getFirestore();
   const scopeRef = db.collection("courseScopes").doc(courseId);
   const scopeDoc = await scopeRef.get();

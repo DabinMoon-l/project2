@@ -1080,6 +1080,7 @@ async function generateBoardAIReply(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
         scopeMaxLength,
+        { strict: true }, // 추론된 챕터 없으면 scope 없음 (무관한 1장 로드 금지)
       );
       if (scope && scope.content) {
         courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래는 이 과목의 교과서 내용이야. 이 내용에 나오는 용어, 분류, 메커니즘, 비교를 답변의 뼈대로 삼아. scope에 해당 주제의 구체적인 설명(예: 특정 물질명, 구조 비교, 기전 차이 등)이 있으면 반드시 해당 내용을 답변에 포함해. scope에 없는 부분만 일반 지식으로 보충해.
@@ -1436,6 +1437,7 @@ async function generateAIReplyToComment(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
         replyScopeMax,
+        { strict: true }, // 추론된 챕터 없으면 scope 없음 (대화 맥락에 무관한 1장 로드 금지)
       );
       if (scope && scope.content) {
         courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래 교과서 내용에 나오는 구체적인 용어, 물질명, 메커니즘을 답변에 반드시 반영해.\n\n${scope.content}`;

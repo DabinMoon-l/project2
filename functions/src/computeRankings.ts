@@ -80,6 +80,28 @@ function getTodayDateStringKST(): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * 이번 주 월요일부터 오늘까지의 KST YYYY-MM-DD 배열
+ * (dailyAttendance 주간 합집합용)
+ */
+function getWeekDateStringsKST(): string[] {
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + KST_OFFSET);
+  const day = kstNow.getUTCDay(); // 0=일, 1=월
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+  const dates: string[] = [];
+  for (let i = 0; i <= daysSinceMonday; i++) {
+    const d = new Date(kstNow);
+    d.setUTCDate(d.getUTCDate() - (daysSinceMonday - i));
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    dates.push(`${y}-${m}-${dd}`);
+  }
+  return dates;
+}
+
 // ── 랭킹 계산 핵심 로직 ──
 
 interface RankedUserDoc {
@@ -183,6 +205,22 @@ async function computeRankingsForCourse(courseId: string) {
       ? ((attendanceDocSnap.data()?.attendedUids || []) as string[])
       : [],
   );
+
+  // 이번 주(월~오늘) dailyAttendance 합집합 — weekly 랭킹의 "활동자" 판정 근거
+  const weekDateStrs = getWeekDateStringsKST();
+  const weeklyAttendanceDocs = await Promise.all(
+    weekDateStrs.map((d) =>
+      db.collection("dailyAttendance").doc(`${courseId}_${d}`).get(),
+    ),
+  );
+  const attendedThisWeekUids = new Set<string>();
+  for (const doc of weeklyAttendanceDocs) {
+    if (doc.exists) {
+      ((doc.data()?.attendedUids || []) as string[]).forEach((uid) =>
+        attendedThisWeekUids.add(uid),
+      );
+    }
+  }
 
   const [quizResult, resultsResult, rabbitResult, holdingsResult, expHistoryResult] = await Promise.allSettled([
     professorUids.length > 0
@@ -396,11 +434,12 @@ async function computeRankingsForCourse(courseId: string) {
       // (legacy lastActive는 스테일이라 의미 없어 제거)
       dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id]
         : (attendedTodayUids.has(u.id) ? 0 : null),
-      // 주간은 "이번 주 접속자" 판정 권위 소스가 없으므로 전원 0점 포함 (0점 학생도 목록에 표시).
-      // day 와 달리 전원 포함 정책 — 사용자 피드백: "0점 친구들도 떠야 함"
-      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : 0,
+      // 주간은 dailyAttendance 7일치 합집합(attendedThisWeekUids)을 접속자 판정 근거로 사용.
+      // 이번 주 한 번이라도 접속했으면 0점 포함, 전혀 접속 안 했으면 null(목록 제외).
+      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id]
+        : (attendedThisWeekUids.has(u.id) ? 0 : null),
       dailyRankScore: dailyRankScore ?? (attendedTodayUids.has(u.id) ? computeRankScore(0, 0, 0) : null),
-      weeklyRankScore: weeklyRankScore ?? computeRankScore(0, 0, 0),
+      weeklyRankScore: weeklyRankScore ?? (attendedThisWeekUids.has(u.id) ? computeRankScore(0, 0, 0) : null),
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
