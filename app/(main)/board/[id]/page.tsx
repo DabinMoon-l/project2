@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, getDoc, db, postRepo } from '@/lib/repositories';
+import { postRepo, userRepo } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
@@ -410,8 +410,8 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   const [authorName, setAuthorName] = useState<string | null>(null);
   useEffect(() => {
     if (!isProfessor || !post?.authorId) return;
-    getDoc(doc(db, 'users', post.authorId)).then(snap => {
-      if (snap.exists()) setAuthorName(snap.data().name || null);
+    userRepo.getName(post.authorId).then((name) => {
+      setAuthorName(name);
     }).catch(() => {});
   }, [isProfessor, post?.authorId]);
 

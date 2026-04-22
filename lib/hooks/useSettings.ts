@@ -7,14 +7,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  db,
-} from '@/lib/repositories';
+import { userRepo } from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의
@@ -153,34 +146,31 @@ export function useSettings(): UseSettingsReturn {
       setError(null);
 
       // users/{uid} 문서에서 appSettings 필드 조회
-      const userRef = doc(db, 'users', uid);
-      const userSnap = await getDoc(userRef);
+      const appSettings = (await userRepo.getAppSettings(uid)) as
+        | {
+            notifications?: Partial<NotificationSettings>;
+            display?: Partial<DisplaySettings>;
+            privacy?: Partial<PrivacySettings>;
+          }
+        | null;
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const appSettings = userData.appSettings;
-
-        if (appSettings) {
-          setSettings({
-            notifications: {
-              ...DEFAULT_SETTINGS.notifications,
-              ...appSettings.notifications,
-            },
-            display: {
-              ...DEFAULT_SETTINGS.display,
-              ...appSettings.display,
-            },
-            privacy: {
-              ...DEFAULT_SETTINGS.privacy,
-              ...appSettings.privacy,
-            },
-          });
-        } else {
-          // appSettings가 없으면 기본값 사용 (저장은 나중에 변경 시)
-          setSettings(DEFAULT_SETTINGS);
-        }
+      if (appSettings) {
+        setSettings({
+          notifications: {
+            ...DEFAULT_SETTINGS.notifications,
+            ...appSettings.notifications,
+          },
+          display: {
+            ...DEFAULT_SETTINGS.display,
+            ...appSettings.display,
+          },
+          privacy: {
+            ...DEFAULT_SETTINGS.privacy,
+            ...appSettings.privacy,
+          },
+        });
       } else {
-        // 사용자 문서가 없으면 기본값 사용
+        // appSettings가 없거나 문서가 없으면 기본값 사용
         setSettings(DEFAULT_SETTINGS);
       }
     } catch (err) {
@@ -203,16 +193,12 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const userRef = doc(db, 'users', uid);
         const newNotifications = {
           ...(settings?.notifications || DEFAULT_SETTINGS.notifications),
           ...data,
         };
 
-        await updateDoc(userRef, {
-          'appSettings.notifications': newNotifications,
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateAppSettingsSection(uid, 'notifications', newNotifications);
 
         setSettings((prev) =>
           prev
@@ -240,16 +226,12 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const userRef = doc(db, 'users', uid);
         const newDisplay = {
           ...(settings?.display || DEFAULT_SETTINGS.display),
           ...data,
         };
 
-        await updateDoc(userRef, {
-          'appSettings.display': newDisplay,
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateAppSettingsSection(uid, 'display', newDisplay);
 
         setSettings((prev) =>
           prev
@@ -277,16 +259,12 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const userRef = doc(db, 'users', uid);
         const newPrivacy = {
           ...(settings?.privacy || DEFAULT_SETTINGS.privacy),
           ...data,
         };
 
-        await updateDoc(userRef, {
-          'appSettings.privacy': newPrivacy,
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateAppSettingsSection(uid, 'privacy', newPrivacy);
 
         setSettings((prev) =>
           prev
@@ -313,11 +291,7 @@ export function useSettings(): UseSettingsReturn {
       setLoading(true);
       setError(null);
 
-      const userRef = doc(db, 'users', uid);
-      await updateDoc(userRef, {
-        appSettings: DEFAULT_SETTINGS,
-        updatedAt: serverTimestamp(),
-      });
+      await userRepo.resetAppSettings(uid, DEFAULT_SETTINGS as unknown as Record<string, unknown>);
 
       setSettings(DEFAULT_SETTINGS);
     } catch (err) {

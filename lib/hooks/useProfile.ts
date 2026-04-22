@@ -7,14 +7,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-  Timestamp,
-  db,
-} from '@/lib/repositories';
+import { Timestamp, userRepo } from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의
@@ -161,43 +154,41 @@ export function useProfile(): UseProfileReturn {
       setLoading(true);
       setError(null);
 
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
+      const data = await userRepo.getProfile(uid);
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-
+      if (data) {
         // 레벨 계산
-        const totalExp = data.totalExp || 0;
+        const totalExp = (data.totalExp as number) || 0;
         const level = calculateLevel(totalExp);
 
         setProfile({
           uid,
-          email: data.email || '',
-          nickname: data.nickname || '용사',
-          classType: data.classId || 'A', // Firestore 필드명은 classId
-          studentId: data.studentId,
-          department: data.department,
-          characterOptions: data.characterOptions || {
+          email: (data.email as string) || '',
+          nickname: (data.nickname as string) || '용사',
+          classType: (data.classId as 'A' | 'B' | 'C' | 'D') || 'A', // Firestore 필드명은 classId
+          studentId: data.studentId as string | undefined,
+          department: data.department as string | undefined,
+          characterOptions: (data.characterOptions as CharacterOptions) || {
             hairStyle: 0,
             skinColor: 3,
             beard: 0,
           },
-          equipment: data.equipment || {},
+          equipment: (data.equipment as Equipment) || {},
           totalExp,
           level,
-          totalQuizzes: data.totalQuizzes || 0,
-          correctAnswers: data.correctAnswers || 0,
-          wrongAnswers: data.wrongAnswers || 0,
-          averageScore: data.averageScore || 0,
-          participationRate: data.participationRate || 0,
-          totalFeedbacks: data.totalFeedbacks || 0,
-          helpfulFeedbacks: data.helpfulFeedbacks || 0,
-          badges: data.badges || [],
-          role: data.role || 'student',
-          equippedRabbits: data.equippedRabbits || [],
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
+          totalQuizzes: (data.totalQuizzes as number) || 0,
+          correctAnswers: (data.correctAnswers as number) || 0,
+          wrongAnswers: (data.wrongAnswers as number) || 0,
+          averageScore: (data.averageScore as number) || 0,
+          participationRate: (data.participationRate as number) || 0,
+          totalFeedbacks: (data.totalFeedbacks as number) || 0,
+          helpfulFeedbacks: (data.helpfulFeedbacks as number) || 0,
+          badges: (data.badges as string[]) || [],
+          role: (data.role as 'student' | 'professor') || 'student',
+          equippedRabbits:
+            (data.equippedRabbits as Array<{ rabbitId: number; courseId: string }>) || [],
+          createdAt: data.createdAt as Timestamp,
+          updatedAt: data.updatedAt as Timestamp,
         });
       } else {
         setError('프로필을 찾을 수 없습니다.');
@@ -219,11 +210,7 @@ export function useProfile(): UseProfileReturn {
         setLoading(true);
         setError(null);
 
-        const docRef = doc(db, 'users', uid);
-        await updateDoc(docRef, {
-          ...data,
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateProfile(uid, data as Record<string, unknown>);
 
         // 로컬 상태 업데이트
         setProfile((prev) => (prev ? { ...prev, ...data } : null));

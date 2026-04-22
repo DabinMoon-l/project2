@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, postRepo, Timestamp } from '@/lib/repositories';
+import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, postRepo, userRepo, Timestamp } from '@/lib/repositories';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHomeScale } from './useHomeScale';
 
@@ -163,8 +163,8 @@ export default function StudentActivityPanel({
   // 학생 프로필 (학번) — userId 변경 시 1회만
   useEffect(() => {
     if (!userId) return;
-    getDoc(doc(db, 'users', userId)).then(snap => {
-      if (snap.exists()) setStudentId(snap.data()?.studentId || '');
+    userRepo.getStudentId(userId).then((sid) => {
+      if (sid) setStudentId(sid);
     });
   }, [userId]);
 

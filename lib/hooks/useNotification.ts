@@ -11,12 +11,12 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  getDoc,
   updateDoc,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
   db,
+  userRepo,
 } from '@/lib/repositories';
 import {
   getNotificationPermission,
@@ -235,15 +235,8 @@ export function useNotification(): UseNotificationReturn {
         const tokenRef = doc(db, 'fcmTokens', token);
         await setDoc(tokenRef, tokenData);
 
-        // 사용자 문서에 토큰 참조 추가
-        const userRef = doc(db, 'users', uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          await updateDoc(userRef, {
-            fcmTokens: arrayUnion(token),
-            updatedAt: serverTimestamp(),
-          });
-        }
+        // 사용자 문서에 토큰 참조 추가 (문서가 존재할 때만)
+        await userRepo.addFcmToken(uid, token);
 
         setFcmToken(token);
         setIsSubscribed(true);
@@ -276,15 +269,8 @@ export function useNotification(): UseNotificationReturn {
         const tokenRef = doc(db, 'fcmTokens', fcmToken);
         await deleteDoc(tokenRef);
 
-        // 사용자 문서에서 토큰 참조 제거
-        const userRef = doc(db, 'users', uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          await updateDoc(userRef, {
-            fcmTokens: arrayRemove(fcmToken),
-            updatedAt: serverTimestamp(),
-          });
-        }
+        // 사용자 문서에서 토큰 참조 제거 (문서가 존재할 때만)
+        await userRepo.removeFcmToken(uid, fcmToken);
 
         setFcmToken(null);
         setIsSubscribed(false);

@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSessionState } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, db } from '@/lib/repositories';
+import { userRepo } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
@@ -85,16 +85,14 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       return;
     }
     Promise.all(
-      missing.map(uid =>
-        getDoc(doc(db, 'users', uid))
-          .then(snap => {
-            if (snap.exists()) {
-              const name = snap.data().name;
-              if (name) cache.set(uid, name);
-            }
+      missing.map((uid) =>
+        userRepo
+          .getName(uid)
+          .then((name) => {
+            if (name) cache.set(uid, name);
           })
-          .catch(() => {})
-      )
+          .catch(() => {}),
+      ),
     ).then(() => {
       setAuthorNameMap(new Map(cache));
     });
@@ -110,16 +108,15 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       return;
     }
     Promise.all(
-      missing.map(uid =>
-        getDoc(doc(db, 'users', uid))
-          .then(snap => {
-            if (snap.exists()) {
-              const nickname = snap.data().nickname;
-              if (nickname) cache.set(uid, nickname);
-            }
+      missing.map((uid) =>
+        userRepo
+          .getProfile(uid)
+          .then((data) => {
+            const nickname = data?.nickname as string | undefined;
+            if (nickname) cache.set(uid, nickname);
           })
-          .catch(() => {})
-      )
+          .catch(() => {}),
+      ),
     ).then(() => {
       setAuthorNicknameMap(new Map(cache));
     });

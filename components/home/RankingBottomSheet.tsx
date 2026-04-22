@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
-import { rankingRepo } from '@/lib/repositories';
+import { rankingRepo, userRepo } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -895,8 +895,8 @@ interface EquippedRabbitEntry {
 }
 
 async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]> {
-  const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId)));
-  const allUsers: UserDocForRanking[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDocForRanking));
+  const users = await userRepo.fetchUsersByCourse(courseId);
+  const allUsers: UserDocForRanking[] = users as unknown as UserDocForRanking[];
   const students = allUsers.filter((u) => u.role !== 'professor');
   const professorUids = allUsers.filter((u) => u.role === 'professor').map((u) => u.id);
 

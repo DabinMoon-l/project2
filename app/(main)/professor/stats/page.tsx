@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, doc, getDoc, db } from '@/lib/repositories';
+import { collection, query, where, getDocs, doc, getDoc, db, userRepo } from '@/lib/repositories';
 import { useCourse } from '@/lib/contexts';
 import { useProfessorStats, getRawStudents, type QuestionSource, type RawStudentData } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
@@ -260,19 +260,18 @@ export default function ProfessorStatsPage() {
 
         let rawStudents = getRawStudents(courseId);
         if (!rawStudents) {
-          const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student')));
-          rawStudents = usersSnap.docs.map(d => {
-            const data = d.data();
-            return {
-              uid: d.id,
-              classId: (data.classId || 'A') as string,
-              totalExp: data.totalExp || 0,
-              profCorrectCount: data.profCorrectCount || 0,
-              profAttemptCount: data.profAttemptCount || 0,
-              equippedRabbits: Array.isArray(data.equippedRabbits) ? data.equippedRabbits : [],
-              lastGachaExp: data.lastGachaExp || 0,
-            } as RawStudentData;
-          });
+          const users = await userRepo.fetchUsersByCourse(courseId, { role: 'student' });
+          rawStudents = users.map((u) => ({
+            uid: u.id,
+            classId: ((u.classId as string) || 'A') as string,
+            totalExp: (u.totalExp as number) || 0,
+            profCorrectCount: (u.profCorrectCount as number) || 0,
+            profAttemptCount: (u.profAttemptCount as number) || 0,
+            equippedRabbits: Array.isArray(u.equippedRabbits)
+              ? (u.equippedRabbits as Array<{ rabbitId: number; courseId: string }>)
+              : [],
+            lastGachaExp: (u.lastGachaExp as number) || 0,
+          } as RawStudentData));
         }
         if (cancelled) return;
 

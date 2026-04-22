@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-  collection, query, where, getDocs, Timestamp, db, quizRepo, type DocumentData,
+  Timestamp, quizRepo, userRepo, type DocumentData,
 } from '@/lib/repositories';
 import type { CourseId } from '@/lib/types/course';
 import {
@@ -394,9 +394,9 @@ export function useProfessorStats() {
 
     try {
       // 전체 퀴즈 + 학생 병렬 조회
-      const [quizDocs, usersSnap] = await Promise.all([
+      const [quizDocs, users] = await Promise.all([
         quizRepo.fetchQuizzesByCourse<DocumentData>(courseId),
-        getDocs(query(collection(db, 'users'), where('role', '==', 'student'), where('courseId', '==', courseId))),
+        userRepo.fetchUsersByCourse(courseId, { role: 'student' }),
       ]);
 
       const quizzes: QuizDoc[] = [];
@@ -415,20 +415,21 @@ export function useProfessorStats() {
 
       const userClassMap: Record<string, ClassType> = {};
       const rawStudents: RawStudentData[] = [];
-      usersSnap.forEach(d => {
-        const u = d.data();
-        const cls = u.classId || u.classType;
+      users.forEach((u) => {
+        const cls = (u.classId as string) || (u.classType as string);
         if (cls) {
-          userClassMap[d.id] = cls as ClassType;
+          userClassMap[u.id] = cls as ClassType;
         }
         rawStudents.push({
-          uid: d.id,
+          uid: u.id,
           classId: (cls || 'A') as string,
-          totalExp: u.totalExp || 0,
-          profCorrectCount: u.profCorrectCount || 0,
-          profAttemptCount: u.profAttemptCount || 0,
-          equippedRabbits: Array.isArray(u.equippedRabbits) ? u.equippedRabbits : [],
-          lastGachaExp: u.lastGachaExp || 0,
+          totalExp: (u.totalExp as number) || 0,
+          profCorrectCount: (u.profCorrectCount as number) || 0,
+          profAttemptCount: (u.profAttemptCount as number) || 0,
+          equippedRabbits: Array.isArray(u.equippedRabbits)
+            ? (u.equippedRabbits as Array<{ rabbitId: number; courseId: string }>)
+            : [],
+          lastGachaExp: (u.lastGachaExp as number) || 0,
         });
       });
 

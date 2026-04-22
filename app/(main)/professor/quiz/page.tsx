@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp, db, type QueryDocumentSnapshot, type DocumentData } from '@/lib/repositories';
+import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp, db, userRepo, type QueryDocumentSnapshot, type DocumentData } from '@/lib/repositories';
 import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';
@@ -543,12 +543,11 @@ export default function ProfessorQuizListPage() {
     const uid = detailsQuiz.creatorUid;
     const cached = creatorInfoCache.current.get(uid);
     if (cached) { setDetailsCreatorInfo(cached); return; }
-    getDoc(doc(db, 'users', uid)).then(snap => {
-      if (snap.exists()) {
-        const data = snap.data();
-        const info = { role: data.role || 'student', name: data.name || undefined, nickname: data.nickname || undefined, classId: data.classId || undefined };
-        creatorInfoCache.current.set(uid, info);
-        setDetailsCreatorInfo(info);
+    userRepo.getCreatorInfo(uid).then((info) => {
+      if (info) {
+        const cacheVal = { name: info.name, classId: info.classId };
+        creatorInfoCache.current.set(uid, cacheVal);
+        setDetailsCreatorInfo({ role: info.role, name: info.name, nickname: info.nickname, classId: info.classId });
       } else {
         setDetailsCreatorInfo(null);
       }
