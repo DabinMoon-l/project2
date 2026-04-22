@@ -314,22 +314,34 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                     const isText = poll.type === 'text';
                     return (
                       <div key={pi} className="border border-[#D4CFC4] p-2 space-y-1">
-                        <div className="flex items-center gap-1">
-                          <input value={poll.question} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, question: e.target.value } : p))}
-                            className="flex-1 bg-transparent text-sm text-[#1A1A1A] font-bold outline-none border-b border-[#D4CFC4] pb-0.5" placeholder="투표 질문" />
+                        <div className="flex items-start gap-1">
+                          <textarea value={poll.question}
+                            ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                            onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, question: e.target.value } : p))}
+                            onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                            rows={1}
+                            className="flex-1 min-w-0 bg-transparent text-sm text-[#1A1A1A] font-bold outline-none border-b border-[#D4CFC4] pb-0.5 resize-none leading-snug break-words"
+                            style={{ overflowWrap: 'anywhere' }}
+                            placeholder="투표 질문" />
                           <button onClick={() => { setEditPolls(prev => prev.filter((_, i) => i !== pi)); setEditResetPolls(prev => { const s = new Set(prev); s.delete(pi); return s; }); }}
-                            className="text-red-400 hover:text-red-600 shrink-0">
+                            className="text-red-400 hover:text-red-600 shrink-0 mt-0.5">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
                         </div>
                         {!isText && poll.options.map((opt, oi) => (
-                          <div key={oi} className="flex items-center gap-1 pl-2">
-                            <span className="text-xs text-[#5C5C5C] shrink-0">{oi + 1}.</span>
-                            <input value={opt} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.map((o, j) => j === oi ? e.target.value : o) } : p))}
-                              className="flex-1 bg-transparent text-xs text-[#1A1A1A] outline-none border-b border-[#D4CFC4]/50 pb-0.5" placeholder={`선지 ${oi + 1}`} />
+                          <div key={oi} className="flex items-start gap-1 pl-2">
+                            <span className="text-xs text-[#5C5C5C] shrink-0 mt-0.5">{oi + 1}.</span>
+                            <textarea value={opt}
+                              ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                              onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.map((o, j) => j === oi ? e.target.value : o) } : p))}
+                              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                              rows={1}
+                              className="flex-1 min-w-0 bg-transparent text-xs text-[#1A1A1A] outline-none border-b border-[#D4CFC4]/50 pb-0.5 resize-none leading-snug break-words"
+                              style={{ overflowWrap: 'anywhere' }}
+                              placeholder={`선지 ${oi + 1}`} />
                             {poll.options.length > 2 && (
                               <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.filter((_, j) => j !== oi) } : p))}
-                                className="text-[#5C5C5C] hover:text-red-400 shrink-0">
+                                className="text-[#5C5C5C] hover:text-red-400 shrink-0 mt-0.5">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             )}
