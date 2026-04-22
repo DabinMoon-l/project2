@@ -1531,7 +1531,14 @@ async function generateAIReplyToComment(
 - **인과관계 주의**: "~한다"(확정)와 "~할 수 있다"(가능성)를 구분해서 써.
 - 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}${quizContext}`;
 
-  const contextText = `[원본 게시글]
+  // 개인 콩콩이(비공개): 각 루트 댓글 = 독립 브랜치. 원 글 본문은 첫 브랜치의
+  // 맥락일 뿐이므로, 이후 다른 루트 댓글에 답할 땐 원 글을 끌어오면 안 됨.
+  // (예: 원 글 "igg/igm 차이" → 이후 루트 "매독균 세포벽" 질문이면 매독균만 답해야 함)
+  // 공개 학술: 원본 post 맥락이 중요하므로 그대로 포함.
+  const contextText = post.isPrivate
+    ? `[현재 대화 스레드]
+${conversationHistory}`
+    : `[원본 게시글]
 제목: ${post.title}
 본문: ${post.content}
 ${otherCommentsContext}
@@ -1544,8 +1551,8 @@ ${conversationHistory}`;
     { text: systemPrompt + "\n\n" + contextText },
   ];
 
-  // 원본 게시글 이미지 추가
-  if (post.imageUrls && post.imageUrls.length > 0) {
+  // 원본 게시글 이미지 추가 (공개 학술만 — 개인 콩콩이는 브랜치 독립이라 원 글 이미지 무관)
+  if (!post.isPrivate && post.imageUrls && post.imageUrls.length > 0) {
     for (const imageUrl of post.imageUrls) {
       try {
         const imgResponse = await fetch(imageUrl);
