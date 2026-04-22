@@ -295,12 +295,34 @@ function quizRowToDoc(row: QuizRow): QuizDoc {
   };
 }
 
+/**
+ * quizzes 테이블 조인 시 끌어오는 denormalized 필드 셋.
+ * Firestore quizResults / questionFeedbacks 문서가 저장하는 denorm 필드를
+ * 복원하기 위해 각 fetcher 가 inner join 으로 조회해 quizResultRowToDoc /
+ * feedbackRowToDoc 에 넘긴다.
+ */
+interface QuizInfoJoin {
+  id?: string | null;
+  source_firestore_id?: string | null;
+  course_id?: string | null;
+  title?: string | null;
+  category?: string | null;
+  is_public?: boolean | null;
+  creator_id?: string | null;
+  creator_class_type?: string | null;
+}
+
+/** quizzes 조인 컬럼 공통 select 절 */
+const QUIZZES_JOIN_COLS =
+  'id, source_firestore_id, course_id, title, category, is_public, creator_id, creator_class_type';
+
 function quizResultRowToDoc(
   row: QuizResultRow,
   quizUuidToFirestoreId: Map<string, string>,
+  quizInfo?: QuizInfoJoin,
 ): QuizResultDoc {
   const firestoreQuizId = quizUuidToFirestoreId.get(row.quiz_id) || row.quiz_id;
-  return {
+  const doc: QuizResultDoc & Record<string, unknown> = {
     id: row.source_firestore_id || row.id,
     userId: row.user_id,
     quizId: firestoreQuizId,
@@ -314,6 +336,18 @@ function quizResultRowToDoc(
     durationSeconds: row.duration_seconds,
     createdAt: tsLike(row.created_at),
   };
+  if (quizInfo) {
+    // Firestore quizResults 문서의 denormalized 필드 복원
+    if (quizInfo.title != null) doc.quizTitle = quizInfo.title;
+    if (quizInfo.category != null) doc.quizType = quizInfo.category;
+    if (quizInfo.is_public != null) doc.quizIsPublic = quizInfo.is_public;
+    if (quizInfo.creator_id != null) doc.quizCreatorId = quizInfo.creator_id;
+    const courseCode = quizInfo.course_id ? resolveCourseCode(quizInfo.course_id) : null;
+    if (courseCode) doc.courseId = courseCode;
+  }
+  // attempt_no > 1 이면 isUpdate (Firestore denorm 필드 호환)
+  doc.isUpdate = row.attempt_no > 1;
+  return doc as QuizResultDoc;
 }
 
 function quizCompletionRowToDoc(
@@ -334,9 +368,10 @@ function quizCompletionRowToDoc(
 function feedbackRowToDoc(
   row: FeedbackRow,
   quizUuidToFirestoreId: Map<string, string>,
+  quizInfo?: QuizInfoJoin,
 ): FeedbackDoc {
   const firestoreQuizId = quizUuidToFirestoreId.get(row.quiz_id) || row.quiz_id;
-  return {
+  const doc: FeedbackDoc & Record<string, unknown> = {
     id: row.source_firestore_id || row.id,
     quizId: firestoreQuizId,
     userId: row.user_id,
@@ -344,6 +379,14 @@ function feedbackRowToDoc(
     rating: row.rating,
     createdAt: tsLike(row.created_at),
   };
+  if (quizInfo) {
+    if (quizInfo.title != null) doc.quizTitle = quizInfo.title;
+    if (quizInfo.category != null) doc.quizType = quizInfo.category;
+    if (quizInfo.creator_id != null) doc.quizCreatorId = quizInfo.creator_id;
+    const courseCode = quizInfo.course_id ? resolveCourseCode(quizInfo.course_id) : null;
+    if (courseCode) doc.courseId = courseCode;
+  }
+  return doc as FeedbackDoc;
 }
 
 /** quiz_id(uuid) 세트 → 각 uuid 의 source_firestore_id 맵 구성 */
@@ -728,12 +771,13 @@ export async function fetchQuizResultsByQuiz<T extends Record<string, unknown>>(
   if (!quizUuid) return [];
   const { data } = await supabase
     .from('quiz_results')
-    .select('*')
+    .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
     .eq('quiz_id', quizUuid);
-  const rows = (data as QuizResultRow[] | null) || [];
+  type JoinRow = QuizResultRow & { quizzes: QuizInfoJoin };
+  const rows = (data as JoinRow[] | null) || [];
   const map = new Map<string, string>();
   map.set(quizUuid, quizId);
-  return rows.map((r) => quizResultRowToDoc(r, map)) as (T & { id: string })[];
+  return rows.map((r) => quizResultRowToDoc(r, map, r.quizzes)) as (T & { id: string })[];
 }
 
 export async function fetchQuizResultsByQuizzes<T extends Record<string, unknown>>(
@@ -749,15 +793,16 @@ export async function fetchQuizResultsByQuizzes<T extends Record<string, unknown
   const reverseMap = new Map<string, string>();
   for (const [fsId, uuid] of uuidMap.entries()) reverseMap.set(uuid, fsId);
 
+  type JoinRow = QuizResultRow & { quizzes: QuizInfoJoin };
   const out: QuizResultDoc[] = [];
   for (let i = 0; i < uuids.length; i += 30) {
     const batch = uuids.slice(i, i + 30);
     const { data } = await supabase
       .from('quiz_results')
-      .select('*')
+      .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
       .in('quiz_id', batch);
-    for (const row of (data as QuizResultRow[] | null) || []) {
-      out.push(quizResultRowToDoc(row, reverseMap));
+    for (const row of (data as JoinRow[] | null) || []) {
+      out.push(quizResultRowToDoc(row, reverseMap, row.quizzes));
     }
   }
   return out as (T & { id: string })[];
@@ -774,7 +819,7 @@ export async function fetchQuizResultsByUser<T extends Record<string, unknown>>(
 
   let query = supabase
     .from('quiz_results')
-    .select('*, quizzes!inner(id, source_firestore_id, course_id)')
+    .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
     .eq('org_id', DEFAULT_ORG_ID)
     .eq('user_id', userId);
   if (filters?.courseId) {
@@ -784,15 +829,13 @@ export async function fetchQuizResultsByUser<T extends Record<string, unknown>>(
   }
 
   const { data } = await query;
-  type JoinRow = QuizResultRow & {
-    quizzes: { id: string; source_firestore_id: string | null; course_id: string | null };
-  };
+  type JoinRow = QuizResultRow & { quizzes: QuizInfoJoin };
   const rows = (data as JoinRow[] | null) || [];
   const reverseMap = new Map<string, string>();
   for (const r of rows) {
     if (r.quizzes?.source_firestore_id) reverseMap.set(r.quiz_id, r.quizzes.source_firestore_id);
   }
-  return rows.map((r) => quizResultRowToDoc(r, reverseMap)) as (T & { id: string })[];
+  return rows.map((r) => quizResultRowToDoc(r, reverseMap, r.quizzes)) as (T & { id: string })[];
 }
 
 export async function fetchQuizResultsByUserAndQuiz<T extends Record<string, unknown>>(
@@ -807,15 +850,16 @@ export async function fetchQuizResultsByUserAndQuiz<T extends Record<string, unk
   if (!quizUuid) return [];
   let query = supabase
     .from('quiz_results')
-    .select('*')
+    .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
     .eq('user_id', userId)
     .eq('quiz_id', quizUuid);
   if (listLimit) query = query.limit(listLimit);
   const { data } = await query;
   const map = new Map<string, string>();
   map.set(quizUuid, quizId);
-  const rows = (data as QuizResultRow[] | null) || [];
-  return rows.map((r) => quizResultRowToDoc(r, map)) as (T & { id: string })[];
+  type JoinRow = QuizResultRow & { quizzes: QuizInfoJoin };
+  const rows = (data as JoinRow[] | null) || [];
+  return rows.map((r) => quizResultRowToDoc(r, map, r.quizzes)) as (T & { id: string })[];
 }
 
 export async function getQuizResults<T extends Record<string, unknown>>(
@@ -825,7 +869,9 @@ export async function getQuizResults<T extends Record<string, unknown>>(
   const supabase = getSupabaseClient();
   if (!supabase) return [];
 
-  let query = supabase.from('quiz_results').select('*');
+  let query = supabase
+    .from('quiz_results')
+    .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`);
   let quizUuid: string | null = null;
   if (filters.quizId) {
     quizUuid = await resolveQuizUuid(filters.quizId);
@@ -835,15 +881,16 @@ export async function getQuizResults<T extends Record<string, unknown>>(
   if (filters.userId) query = query.eq('user_id', filters.userId);
 
   const { data } = await query;
-  const rows = (data as QuizResultRow[] | null) || [];
+  type JoinRow = QuizResultRow & { quizzes: QuizInfoJoin };
+  const rows = (data as JoinRow[] | null) || [];
   const reverseMap = new Map<string, string>();
   if (quizUuid && filters.quizId) reverseMap.set(quizUuid, filters.quizId);
-  else if (rows.length > 0) {
-    const uuids = new Set(rows.map((r) => r.quiz_id));
-    const reverse = await buildQuizUuidReverseMap(uuids);
-    for (const [uuid, fsId] of reverse.entries()) reverseMap.set(uuid, fsId);
+  else {
+    for (const r of rows) {
+      if (r.quizzes?.source_firestore_id) reverseMap.set(r.quiz_id, r.quizzes.source_firestore_id);
+    }
   }
-  return rows.map((r) => quizResultRowToDoc(r, reverseMap)) as (T & { id: string })[];
+  return rows.map((r) => quizResultRowToDoc(r, reverseMap, r.quizzes)) as (T & { id: string })[];
 }
 
 // ============================================================
@@ -1006,15 +1053,16 @@ export async function fetchFeedbacksByQuizzes<T extends Record<string, unknown>>
   for (const [fsId, uuid] of uuidMap.entries()) reverseMap.set(uuid, fsId);
   const uuids = Array.from(uuidMap.values());
 
+  type JoinRow = FeedbackRow & { quizzes: QuizInfoJoin };
   const out: FeedbackDoc[] = [];
   for (let i = 0; i < uuids.length; i += 30) {
     const batch = uuids.slice(i, i + 30);
     const { data } = await supabase
       .from('feedbacks')
-      .select('*')
+      .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
       .in('quiz_id', batch);
-    for (const row of (data as FeedbackRow[] | null) || []) {
-      out.push(feedbackRowToDoc(row, reverseMap));
+    for (const row of (data as JoinRow[] | null) || []) {
+      out.push(feedbackRowToDoc(row, reverseMap, row.quizzes));
     }
   }
   return out as (T & { id: string })[];
@@ -1028,18 +1076,16 @@ export async function fetchFeedbacksByUser<T extends Record<string, unknown>>(
   if (!supabase || !DEFAULT_ORG_ID) return [];
   const { data } = await supabase
     .from('feedbacks')
-    .select('*, quizzes!inner(id, source_firestore_id)')
+    .select(`*, quizzes!inner(${QUIZZES_JOIN_COLS})`)
     .eq('org_id', DEFAULT_ORG_ID)
     .eq('user_id', userId);
-  type JoinRow = FeedbackRow & {
-    quizzes: { id: string; source_firestore_id: string | null };
-  };
+  type JoinRow = FeedbackRow & { quizzes: QuizInfoJoin };
   const rows = (data as JoinRow[] | null) || [];
   const reverseMap = new Map<string, string>();
   for (const r of rows) {
     if (r.quizzes?.source_firestore_id) reverseMap.set(r.quiz_id, r.quizzes.source_firestore_id);
   }
-  return rows.map((r) => feedbackRowToDoc(r, reverseMap)) as (T & { id: string })[];
+  return rows.map((r) => feedbackRowToDoc(r, reverseMap, r.quizzes)) as (T & { id: string })[];
 }
 
 // ============================================================
