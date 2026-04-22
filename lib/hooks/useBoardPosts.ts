@@ -9,11 +9,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  doc,
-  getDoc,
   serverTimestamp,
-  db,
   postRepo,
+  userRepo,
   type PostPageCursor,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
@@ -265,15 +263,8 @@ export const useCreatePost = (): UseCreatePostReturn => {
         setError(null);
 
         // Firestore에서 사용자 정보 가져오기 (보안 강화)
-        let userNickname = '용사';
-        let userClassType: 'A' | 'B' | 'C' | 'D' | undefined;
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          userNickname = userData.nickname || '용사';
-          userClassType = userData.classId; // Firestore 필드명은 classId
-        }
+        const { nickname: userNickname, classId: userClassType } =
+          await userRepo.getNicknameAndClassId(user.uid);
 
         // 비공개 글 중복 체크 (서버 사이드 안전장치)
         if (data.isPrivate) {

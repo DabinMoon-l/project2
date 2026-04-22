@@ -19,6 +19,7 @@ import {
   serverTimestamp,
   where,
   db,
+  userRepo,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
@@ -985,10 +986,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
                   <button
                     onClick={async () => {
                       if (selectedClass && selectedClass !== profile.classType && user?.uid) {
-                        await updateDoc(doc(db, 'users', user.uid), {
-                          classId: selectedClass,
-                          updatedAt: serverTimestamp(),
-                        });
+                        await userRepo.updateClassId(user.uid, selectedClass);
                       }
                       setShowClassModal(false);
                     }}

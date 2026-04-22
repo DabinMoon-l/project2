@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ref as rtdbRef, onValue } from 'firebase/database';
 import {
-  collection, query, where, getDocs, doc, getDoc, db,
+  doc, getDoc, db, userRepo,
 } from '@/lib/repositories';
 import { getRtdb } from '@/lib/firebase';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
@@ -47,18 +47,16 @@ interface RabbitMeta {
 }
 
 async function loadStudents(courseId: string, myUid: string): Promise<Record<string, BaseInfo>> {
-  const snap = await getDocs(
-    query(collection(db, 'users'), where('courseId', '==', courseId)),
-  );
+  const users = await userRepo.fetchUsersByCourse(courseId);
   const map: Record<string, BaseInfo> = {};
-  snap.forEach((d) => {
-    if (d.id === myUid) return;
-    const data = d.data();
-    if (data.role === 'professor') return;
-    const equipped: Array<{ rabbitId: number; courseId: string }> = data.equippedRabbits || [];
-    map[d.id] = {
-      nickname: data.nickname || '플레이어',
-      classType: data.classType || null,
+  users.forEach((u) => {
+    if (u.id === myUid) return;
+    if (u.role === 'professor') return;
+    const equipped: Array<{ rabbitId: number; courseId: string }> =
+      (u.equippedRabbits as Array<{ rabbitId: number; courseId: string }>) || [];
+    map[u.id] = {
+      nickname: (u.nickname as string) || '플레이어',
+      classType: (u.classType as string | null) || null,
       rabbitId: equipped[0]?.rabbitId ?? 0,
     };
   });

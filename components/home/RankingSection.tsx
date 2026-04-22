@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, db } from '@/lib/repositories';
-import { rankingRepo } from '@/lib/repositories';
+import { rankingRepo, userRepo } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
@@ -232,8 +232,8 @@ async function computeHomeFallback(
   setPersonalRank: (v: number) => void,
   setTotalStudents: (v: number) => void,
 ) {
-  const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId)));
-  const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
+  const users = await userRepo.fetchUsersByCourse(courseId);
+  const allUsers: UserDoc[] = users as unknown as UserDoc[];
   const students = allUsers.filter((u) => u.role !== 'professor');
   const professorUids = allUsers.filter((u) => u.role === 'professor').map((u) => u.id);
 

@@ -1,22 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  doc,
-  getDoc,
-  onSnapshot,
-  db,
-  type QueryDocumentSnapshot,
-  type DocumentData,
-} from '@/lib/repositories';
-import type { Unsubscribe } from '@/lib/repositories';
-import { rankingRepo, quizRepo } from '@/lib/repositories';
+import type { Unsubscribe, DocumentData } from '@/lib/repositories';
+import { rankingRepo, quizRepo, userRepo } from '@/lib/repositories';
 import { ref as rtdbRef, onValue, off as rtdbOff } from 'firebase/database';
 import { getRtdb } from '@/lib/firebase';
 import { rankPercentile } from '@/lib/utils/statistics';
@@ -229,30 +215,34 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
    * presence가 없으면(오프라인) Firestore의 legacy 값 또는 new Date(0) 폴백.
    */
   const convertToStudentData = (
-    docSnap: QueryDocumentSnapshot<DocumentData>,
+    user: Record<string, unknown> & { id: string },
     courseId: string,
   ): StudentData => {
-    const data = docSnap.data();
-    const presence = _presenceMap.get(courseId)?.get(docSnap.id);
+    const data = user;
+    const presence = _presenceMap.get(courseId)?.get(user.id);
+    const quizStats = (data.quizStats as Record<string, unknown>) || {};
+    const lastAttemptTs = quizStats.lastAttemptAt as { toDate?: () => Date } | undefined;
+    const createdAtTs = data.createdAt as { toDate?: () => Date } | undefined;
+    const lastActiveTs = data.lastActiveAt as { toDate?: () => Date } | undefined;
     return {
-      uid: docSnap.id,
-      name: data.name || undefined,
-      nickname: data.nickname || '익명',
-      studentId: data.studentId || '',
-      classId: data.classId || 'A',
-      level: data.level || 1,
-      totalExp: data.totalExp || 0,
+      uid: user.id,
+      name: (data.name as string) || undefined,
+      nickname: (data.nickname as string) || '익명',
+      studentId: (data.studentId as string) || '',
+      classId: (data.classId as ClassType) || 'A',
+      level: (data.level as number) || 1,
+      totalExp: (data.totalExp as number) || 0,
       quizStats: {
-        totalAttempts: data.quizStats?.totalAttempts || 0,
-        totalCorrect: data.quizStats?.totalCorrect || 0,
-        averageScore: data.quizStats?.averageScore || 0,
-        lastAttemptAt: data.quizStats?.lastAttemptAt?.toDate?.() || undefined,
+        totalAttempts: (quizStats.totalAttempts as number) || 0,
+        totalCorrect: (quizStats.totalCorrect as number) || 0,
+        averageScore: (quizStats.averageScore as number) || 0,
+        lastAttemptAt: lastAttemptTs?.toDate?.() || undefined,
       },
-      currentActivity: presence?.currentActivity ?? (data.currentActivity || undefined),
-      profileRabbitId: data.profileRabbitId ?? undefined,
-      feedbackCount: data.feedbackCount || 0,
-      createdAt: data.createdAt?.toDate?.() || new Date(),
-      lastActiveAt: presence?.lastActiveAt ?? (data.lastActiveAt?.toDate?.() || new Date(0)),
+      currentActivity: presence?.currentActivity ?? ((data.currentActivity as string) || undefined),
+      profileRabbitId: (data.profileRabbitId as number | null | undefined) ?? undefined,
+      feedbackCount: (data.feedbackCount as number) || 0,
+      createdAt: createdAtTs?.toDate?.() || new Date(),
+      lastActiveAt: presence?.lastActiveAt ?? (lastActiveTs?.toDate?.() || new Date(0)),
       online: presence?.online === true,
     };
   };
@@ -316,17 +306,10 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
     }
 
     // orderBy 제거: 학생 정렬은 클라이언트에서 studentId 순으로 수행.
-    // 또한 presence(lastActiveAt/currentActivity)는 RTDB로 분리되어
+    // presence(lastActiveAt/currentActivity)는 RTDB로 분리되어
     // 학생 heartbeat가 더 이상 Firestore users 문서를 변경하지 않음 →
-    // onSnapshot 트리거가 실제 의미 있는 변경(닉네임/반/EXP/퀴즈통계)에만 발동.
-    const usersRef = collection(db, 'users');
-    const q = query(
-      usersRef,
-      where('role', '==', 'student'),
-      where('courseId', '==', courseId),
-    );
-
-    // docChanges() 활용: 변경된 문서만 증분 업데이트
+    // 구독 트리거가 실제 의미 있는 변경(닉네임/반/EXP/퀴즈통계)에만 발동.
+    // userRepo 경유 — 전체 배열 콜백 (Supabase 전환 대비)
     const studentsMap = new Map<string, ReturnType<typeof convertToStudentData>>();
 
     /** presence(RTDB) 변경 시 studentsMap을 재병합해 setStudents 트리거 */
@@ -381,25 +364,17 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       applyPresenceOverlay();
     }
 
-    unsubRef.current = onSnapshot(
-      q,
-      (snapshot) => {
-        const changes = snapshot.docChanges();
-
-        if (changes.length === 0 && studentsMap.size > 0) return;
-
-        // 첫 스냅샷이면 전체 로드 (docChanges가 전부 'added')
-        if (!hasLoadedRef.current) {
-          snapshot.docs.forEach(d => studentsMap.set(d.id, convertToStudentData(d, courseId)));
-        } else {
-          // 증분 업데이트: 변경된 문서만 처리
-          for (const change of changes) {
-            if (change.type === 'removed') {
-              studentsMap.delete(change.doc.id);
-            } else {
-              studentsMap.set(change.doc.id, convertToStudentData(change.doc, courseId));
-            }
-          }
+    unsubRef.current = userRepo.subscribeUsersByCourse(
+      courseId,
+      (users) => {
+        // 전체 리스트로 Map 재구성 (증분 계산은 Supabase 이관을 위해 포기)
+        const nextIds = new Set<string>();
+        for (const u of users) {
+          nextIds.add(u.id);
+          studentsMap.set(u.id, convertToStudentData(u, courseId));
+        }
+        for (const existingId of Array.from(studentsMap.keys())) {
+          if (!nextIds.has(existingId)) studentsMap.delete(existingId);
         }
 
         const studentsList = Array.from(studentsMap.values());
@@ -410,6 +385,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         // 모듈 레벨 캐시 갱신
         _studentsListCacheMap.set(courseId, studentsList);
       },
+      { role: 'student' },
       (err) => {
         console.error('학생 목록 실시간 구독 실패:', err);
         setError('학생 목록을 불러오는데 실패했습니다.');

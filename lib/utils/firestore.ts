@@ -9,6 +9,7 @@ import {
   getDoc,
   Timestamp,
   db,
+  userRepo,
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
 } from '@/lib/repositories';
@@ -111,36 +112,14 @@ export function docsToArray<T extends Record<string, unknown>>(
  * @returns 닉네임 (없으면 '용사')
  */
 export async function getUserNickname(uid: string): Promise<string> {
-  try {
-    const userDocRef = doc(db, 'users', uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (userDocSnap.exists()) {
-      return userDocSnap.data().nickname || '용사';
-    }
-    return '용사';
-  } catch (error) {
-    console.error('닉네임 조회 실패:', error);
-    return '용사';
-  }
+  return userRepo.getNickname(uid);
 }
 
 /**
  * 사용자 역할 확인
  */
 export async function getUserRole(uid: string): Promise<'student' | 'professor' | null> {
-  try {
-    const userDocRef = doc(db, 'users', uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (userDocSnap.exists()) {
-      return userDocSnap.data().role || 'student';
-    }
-    return null;
-  } catch (error) {
-    console.error('역할 조회 실패:', error);
-    return null;
-  }
+  return userRepo.getRole(uid);
 }
 
 // ============================================================

@@ -72,7 +72,6 @@ export {
 } from './firebase/firestoreBase';
 
 // 도메인 Repository
-export * as userRepo from './firebase/userRepo';
 export * as settingsRepo from './firebase/settingsRepo';
 export * as announcementRepo from './firebase/announcementRepo';
 export * as battleRepo from './firebase/battleRepo';
@@ -176,3 +175,19 @@ const _useSupabaseQuizzes =
 export const quizRepo: typeof firebaseQuizRepo = _useSupabaseQuizzes
   ? (supabaseQuizRepo as unknown as typeof firebaseQuizRepo)
   : firebaseQuizRepo;
+
+// User Repo — Feature flag 기반 분기 (Phase 2 Step 3 — userRepo)
+// NEXT_PUBLIC_USE_SUPABASE_USERS=true → Supabase, 아니면 Firestore
+// 단순 읽기(nickname/name/role/fetchUsersByCourse/getUsersByIds/getCreatorInfo 등)만 Supabase.
+// 복잡한 전체-프로필 읽기(getProfile/subscribeProfile/getAppSettings/getStudentId 등)는
+// user_profiles 에 없는 필드가 있어 Firebase 위임. 쓰기는 전부 Firebase 위임 + CF dual-write.
+import * as firebaseUserRepo from './firebase/userRepo';
+import * as supabaseUserRepo from './supabase/userRepo';
+
+const _useSupabaseUsers =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_USERS === 'true';
+
+export const userRepo: typeof firebaseUserRepo = _useSupabaseUsers
+  ? (supabaseUserRepo as unknown as typeof firebaseUserRepo)
+  : firebaseUserRepo;

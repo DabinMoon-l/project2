@@ -20,6 +20,7 @@ import {
   getDoc,
   getDocs,
   db,
+  userRepo,
 } from '@/lib/repositories';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
@@ -176,20 +177,13 @@ export default function QuizStatsModal({
         // 배치로 교수 여부 확인 (10명씩, 권한 에러 무시)
         for (let i = 0; i < userIds.length; i += 10) {
           const batch = userIds.slice(i, i + 10);
-          const userDocs = await Promise.all(
-            batch.map(async (uid) => {
-              try {
-                return await getDoc(doc(db, 'users', uid));
-              } catch {
-                return null; // 학생 계정 — 다른 유저 get 권한 없음
-              }
-            })
-          );
-          userDocs.forEach((userDoc) => {
-            if (userDoc?.exists() && userDoc.data()?.role === 'professor') {
-              professorIds.add(userDoc.id);
+          const userMap = await userRepo.getUsersByIds(batch);
+          for (const uid of batch) {
+            const u = userMap[uid];
+            if (u && u.role === 'professor') {
+              professorIds.add(uid);
             }
-          });
+          }
         }
 
         // 3단계: 유저별 첫 풀이 선택 (순수 시간순 — isUpdate 플래그 역전 버그 대응)
@@ -233,25 +227,15 @@ export default function QuizStatsModal({
         const classNeededUserIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
 
         if (classNeededUserIds.length > 0) {
-          // 30개씩 배치로 쿼리 (Firestore 'in' 제한)
+          // 30개씩 배치로 쿼리
           for (let i = 0; i < classNeededUserIds.length; i += 30) {
             const batch = classNeededUserIds.slice(i, i + 30);
-            const batchResults = await Promise.all(
-              batch.map(async (userId) => {
-                try {
-                  const userDoc = await getDoc(doc(db, 'users', userId));
-                  const userData = userDoc.exists() ? userDoc.data() : null;
-                  // 이름도 캐시
-                  if (userData?.name) _statsUserNameCache.set(userId, userData.name);
-                  return { userId, classId: userData?.classId || null };
-                } catch {
-                  return { userId, classId: null };
-                }
-              })
-            );
-            batchResults.forEach(({ userId, classId }) => {
-              userClassCache.set(userId, classId);
-            });
+            const userMap = await userRepo.getUsersByIds(batch);
+            for (const userId of batch) {
+              const userData = userMap[userId];
+              if (userData?.name) _statsUserNameCache.set(userId, userData.name as string);
+              userClassCache.set(userId, (userData?.classId as 'A' | 'B' | 'C' | 'D') || null);
+            }
           }
         }
 
@@ -289,13 +273,11 @@ export default function QuizStatsModal({
           const fbUniqueUids = [...new Set(fbNeedClass.map((fb) => fb.userId as string))];
           for (let i = 0; i < fbUniqueUids.length; i += 30) {
             const batch = fbUniqueUids.slice(i, i + 30);
-            await Promise.all(batch.map(async (uid) => {
-              try {
-                const userDoc = await getDoc(doc(db, 'users', uid));
-                const cls = userDoc.exists() ? userDoc.data()?.classId || null : null;
-                _statsUserClassCache.set(uid, cls);
-              } catch { /* ignore */ }
-            }));
+            const userMap = await userRepo.getUsersByIds(batch);
+            for (const uid of batch) {
+              const cls = (userMap[uid]?.classId as 'A' | 'B' | 'C' | 'D') || null;
+              _statsUserClassCache.set(uid, cls);
+            }
           }
           // 반 정보 재적용
           fbItems.forEach((fb) => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
-import { rankingRepo } from '@/lib/repositories';
+import { rankingRepo, userRepo } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
@@ -368,8 +368,8 @@ async function computeProfessorFallback(
   setTeamEntries: (v: TeamRankEntry[]) => void,
   setParticipationRate: (v: number) => void,
 ) {
-  const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId)));
-  const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
+  const users = await userRepo.fetchUsersByCourse(courseId);
+  const allUsers: UserDoc[] = users as unknown as UserDoc[];
   const students = allUsers.filter((u) => u.role !== 'professor');
   const professorUids = allUsers.filter((u) => u.role === 'professor').map((u) => u.id);
 

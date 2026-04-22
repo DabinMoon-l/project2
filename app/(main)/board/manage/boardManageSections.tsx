@@ -3,7 +3,7 @@
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, db, postRepo } from '@/lib/repositories';
+import { postRepo, userRepo } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -569,23 +569,22 @@ export function ActivitySection({ posts, courseId, onPostClick }: { posts: Post[
     }
 
     setDataLoading(true);
-    const usersQ = query(
-      collection(db, 'users'),
-      where('courseId', '==', courseId),
-      where('role', '==', 'student')
+    const unsub = userRepo.subscribeUsersByCourse(
+      courseId,
+      (users) => {
+        const counts: ClassStudentCounts = { A: 0, B: 0, C: 0, D: 0 };
+        const ids = new Set<string>();
+        for (const u of users) {
+          ids.add(u.id);
+          const cls = u.classId as keyof ClassStudentCounts | undefined;
+          if (cls && counts[cls] !== undefined) counts[cls]++;
+        }
+        setClassStudents(counts);
+        setStudentIds(ids);
+        setDataLoading(false);
+      },
+      { role: 'student' },
     );
-    const unsub = onSnapshot(usersQ, (snap) => {
-      const counts: ClassStudentCounts = { A: 0, B: 0, C: 0, D: 0 };
-      const ids = new Set<string>();
-      snap.docs.forEach(d => {
-        ids.add(d.id);
-        const cls = d.data().classId;
-        if (cls && counts[cls] !== undefined) counts[cls]++;
-      });
-      setClassStudents(counts);
-      setStudentIds(ids);
-      setDataLoading(false);
-    });
 
     return () => unsub();
   }, [courseId]);
