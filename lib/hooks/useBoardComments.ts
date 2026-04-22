@@ -12,6 +12,7 @@ import {
   postRepo,
   userRepo,
 } from '@/lib/repositories';
+import * as firebaseUserRepo from '@/lib/repositories/firebase/userRepo';
 import { useAuth } from './useAuth';
 import { useUser } from '@/lib/contexts';
 import type {
@@ -123,13 +124,19 @@ export const useCreateComment = (): UseCreateCommentReturn => {
           profile ? ctxClassType : undefined;
         let userRole: 'student' | 'professor' | undefined = profile?.role;
 
+        // UserContext profile 에서 못 받으면 Supabase 우회하고 Firebase 직접 조회 (글 작성 경로와 동일)
         if (!userNickname || userClassType === undefined) {
-          const rp = await userRepo.getNicknameAndClassId(user.uid);
+          const rp = await firebaseUserRepo.getNicknameAndClassId(user.uid);
           userNickname = userNickname || rp.nickname;
           userClassType = userClassType ?? rp.classId;
         }
+        // userClassType 이 null 이면 Firebase 한 번 더 시도 (Supabase profile 에서 받아 null 일 가능성)
+        if (userClassType === null) {
+          const rp = await firebaseUserRepo.getNicknameAndClassId(user.uid);
+          if (rp.classId) userClassType = rp.classId;
+        }
         if (!userRole) {
-          userRole = (await userRepo.getRole(user.uid)) ?? 'student';
+          userRole = (await firebaseUserRepo.getRole(user.uid)) ?? 'student';
         }
 
         console.log('[createComment] profile', {
