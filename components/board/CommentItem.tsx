@@ -370,13 +370,7 @@ function CommentItem({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`py-3 ${
-        comment.isAccepted && !isReply
-          ? 'px-3 mb-3 border-[5px] border-[#5C5C5C]'
-          : isReply
-            ? 'pl-4 bg-[#EDE8DF]'
-            : 'border-b border-dashed border-[#D4CFC4]'
-      }`}
+      className={`py-3 ${isReply ? 'pl-4 bg-[#EDE8DF]' : 'border-b border-dashed border-[#D4CFC4]'}`}
     >
       {/* 댓글 헤더 — 좌: 작성자·시간 / 우: 답글·좋아요 */}
       <div className="flex items-center justify-between mb-1">

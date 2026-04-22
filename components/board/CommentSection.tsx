@@ -314,12 +314,6 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     });
 
     rootComments.sort((a, b) => {
-      // 1) 채택된 댓글을 최상단으로 고정
-      const aAccepted = a.isAccepted ? 1 : 0;
-      const bAccepted = b.isAccepted ? 1 : 0;
-      if (aAccepted !== bAccepted) return bAccepted - aAccepted;
-
-      // 2) 좋아요 수 (본인 or 대댓글 중 최대값)
       const getMaxLikes = (comment: Comment): number => {
         const ownLikes = comment.likes || 0;
         const replyMaxLikes = comment.replies && comment.replies.length > 0
@@ -327,11 +321,10 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           : 0;
         return Math.max(ownLikes, replyMaxLikes);
       };
+
       const aMaxLikes = getMaxLikes(a);
       const bMaxLikes = getMaxLikes(b);
       if (bMaxLikes !== aMaxLikes) return bMaxLikes - aMaxLikes;
-
-      // 3) 최신순
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
 
@@ -472,7 +465,49 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             : '1rem',
         }}
       >
-        {/* 채택된 댓글은 CommentItem 자체가 초록 테두리로 강조 + 정렬 최상단 → 별도 박스 불필요 */}
+        {/* 채택된 댓글 상단 요약 박스 (원래 구조) */}
+        {acceptedComment && (
+          <div
+            className="mb-4 p-3 border-[3px]"
+            style={{ borderColor: '#1A1A1A', backgroundColor: '#FDFBF7' }}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                채택된 답변
+              </span>
+              <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
+                {(() => {
+                  const isAIComment = acceptedComment.authorId === 'gemini-ai';
+                  const roleFromMap = authorRoleMap.get(acceptedComment.authorId);
+                  const isProfessorComment = !isAIComment && (
+                    acceptedComment.authorRole === 'professor'
+                    || (acceptedComment.authorRole === undefined && !acceptedComment.authorClassType && (
+                      roleFromMap === 'professor'
+                      || (roleFromMap === undefined)
+                    ))
+                  );
+                  if (acceptedComment.authorClassType) {
+                    return `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`;
+                  }
+                  if (isAIComment) {
+                    return acceptedComment.authorNickname;
+                  }
+                  if (isProfessorComment) {
+                    const nick = authorNicknameMap.get(acceptedComment.authorId) || acceptedComment.authorNickname;
+                    return nick.includes('교수') ? nick : `${nick} 교수님`;
+                  }
+                  return acceptedComment.authorNickname;
+                })()}
+              </span>
+            </div>
+            <p
+              className="text-[15px] whitespace-pre-wrap leading-relaxed"
+              style={{ color: '#1A1A1A', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+            >
+              {acceptedComment.content}
+            </p>
+          </div>
+        )}
 
         {loading && (
           <div className="space-y-3">
