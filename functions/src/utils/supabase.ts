@@ -1665,6 +1665,9 @@ const USER_FIELD_MAP: Record<string, string> = {
   name: "name",
   role: "role",
   courseId: "course_id",
+  // Firestore 실제 필드명은 classId. classType 은 레거시/UI 변환 호환.
+  // 둘 다 같은 Supabase class_type 컬럼으로 매핑.
+  classId: "class_type",
   classType: "class_type",
   totalExp: "total_exp",
   level: "level",

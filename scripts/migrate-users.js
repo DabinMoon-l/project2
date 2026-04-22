@@ -78,7 +78,9 @@ function mapUserDoc(uid, d) {
     name: d.name || null,
     role,
     course_id: d.courseId || null,
-    class_type: d.classType || null,
+    // Firestore 실제 필드명은 classId (ProfileDrawer/useProfile 참고).
+    // 레거시 호환으로 classType 도 fallback.
+    class_type: d.classId || d.classType || null,
     total_exp: Number(d.totalExp) || 0,
     level: Number(d.level) || 1,
     rank: d.rank != null ? Number(d.rank) : null,
