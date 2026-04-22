@@ -10,3 +10,15 @@ project_id = "rabbitory"
 
 [functions.get-gemini-usage]
 verify_jwt = true
+
+# Wave 1-A: 게시판 onCall 3개
+# verify_jwt = false 인 이유: Supabase JWT 대신 Firebase Auth ID 토큰을
+# `_shared/auth.ts` 의 verifyFirebaseIdToken 으로 직접 검증하기 때문.
+[functions.accept-comment]
+verify_jwt = false
+
+[functions.delete-post]
+verify_jwt = false
+
+[functions.delete-thread]
+verify_jwt = false
