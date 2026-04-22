@@ -38,6 +38,8 @@
   "exclude": [
     "node_modules",
     "functions",
-    "scripts"
+    "scripts",
+    "supabase/functions",
+    "cloud-run-ai"
   ]
 }

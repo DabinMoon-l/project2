@@ -11,6 +11,7 @@
 import { httpsCallable, type HttpsCallableOptions } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import type { CloudFunctionMap } from './types';
+import { shouldUseEdge, callEdgeFunction } from './edgeRouter';
 
 /**
  * 타입 안전한 Cloud Function 호출
@@ -20,6 +21,8 @@ import type { CloudFunctionMap } from './types';
  * const result = await callFunction('spinRabbitGacha', { courseId: 'biology' });
  * // result 타입: RollResultData (자동 추론)
  * ```
+ *
+ * Phase 3 Wave 1 이후: `NEXT_PUBLIC_USE_EDGE_{함수명}=true` 이면 Supabase Edge Function 으로 라우팅.
  */
 export async function callFunction<K extends keyof CloudFunctionMap>(
   name: K,
@@ -28,6 +31,11 @@ export async function callFunction<K extends keyof CloudFunctionMap>(
     : [data: CloudFunctionMap[K]['input'], options?: HttpsCallableOptions]
 ): Promise<CloudFunctionMap[K]['output']> {
   const [data, options] = args;
+
+  if (shouldUseEdge(name)) {
+    return callEdgeFunction(name, data as CloudFunctionMap[K]['input']);
+  }
+
   const fn = httpsCallable<CloudFunctionMap[K]['input'], CloudFunctionMap[K]['output']>(
     functions,
     name,
