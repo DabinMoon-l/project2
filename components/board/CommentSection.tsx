@@ -448,10 +448,13 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       && comment.authorId !== user?.uid && comment.authorId !== 'gemini-ai';
   }, [isPostOwner, hasAccepted, user?.uid]);
 
-  // 채택된 댓글 찾기
+  // 채택된 댓글 찾기 — post.acceptedCommentId 가 아직 전파 안 됐어도 comment.isAccepted 로 fallback
   const acceptedComment = useMemo(() => {
-    if (!acceptedCommentId) return null;
-    return comments.find(c => c.id === acceptedCommentId) || null;
+    if (acceptedCommentId) {
+      const byId = comments.find(c => c.id === acceptedCommentId);
+      if (byId) return byId;
+    }
+    return comments.find(c => c.isAccepted && !c.parentId) || null;
   }, [acceptedCommentId, comments]);
 
   return (
