@@ -224,31 +224,18 @@ export const onPostCreate = onDocumentCreated(
         createdAt: post.createdAt?.toDate?.() || new Date(),
       });
 
-      // 학술 태그 또는 비공개 글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
+      // 학술 태그 또는 비공개 글이면 Gemini AI 자동답변 생성.
+      // 교수 계정도 답변 대상 — 학술 질문은 누가 올리든 콩콩이 답변, 비공개는 개인 대화방.
       if (post.tag === "학술" || post.isPrivate) {
-        // 1단계: 작성자 역할 조회 — 실패해도 AI 답변은 시도 (student 로 간주)
-        let authorRole: string | null = null;
         try {
-          const authorDoc = await db.collection("users").doc(userId).get();
-          authorRole = (authorDoc.data()?.role as string) || null;
-        } catch (roleErr) {
-          console.warn(`[onPostCreate] users/${userId} 조회 실패 — student 로 간주:`, roleErr);
-        }
-
-        if (authorRole === "professor") {
-          console.log(`교수님 게시글이므로 AI 자동답변 스킵: ${postId}`);
-        } else {
-          // 2단계: 실제 AI 답변 생성 (실패 원인 구분 위해 로깅 강화)
-          try {
-            await generateBoardAIReply(post, postId, GEMINI_API_KEY.value());
-            console.log(`[onPostCreate] AI 답변 생성 완료: ${postId} (isPrivate=${!!post.isPrivate}, tag=${post.tag || "-"})`);
-          } catch (aiError) {
-            const err = aiError as { message?: string; stack?: string; code?: string | number };
-            console.error(
-              `[onPostCreate] AI 자동답변 생성 실패: postId=${postId} isPrivate=${!!post.isPrivate} tag=${post.tag || "-"} courseId=${post.courseId || "-"} msg="${err?.message || aiError}" code=${err?.code || "-"}`,
-              err?.stack || "",
-            );
-          }
+          await generateBoardAIReply(post, postId, GEMINI_API_KEY.value());
+          console.log(`[onPostCreate] AI 답변 생성 완료: ${postId} (isPrivate=${!!post.isPrivate}, tag=${post.tag || "-"})`);
+        } catch (aiError) {
+          const err = aiError as { message?: string; stack?: string; code?: string | number };
+          console.error(
+            `[onPostCreate] AI 자동답변 생성 실패: postId=${postId} isPrivate=${!!post.isPrivate} tag=${post.tag || "-"} courseId=${post.courseId || "-"} msg="${err?.message || aiError}" code=${err?.code || "-"}`,
+            err?.stack || "",
+          );
         }
       }
 
@@ -551,11 +538,15 @@ export const onCommentCreate = onDocumentCreated(
 
         if (shouldTriggerAI) {
           try {
-            const authorDoc = await db.collection("users").doc(userId).get();
-            const authorRole = authorDoc.data()?.role;
-            const authorStudentId = authorDoc.data()?.studentId || "";
-
             // 비공개 글 일일 대화 한도 (사용자 메시지 100개/일, 25010423 제외)
+            let authorStudentId = "";
+            try {
+              const authorDoc = await db.collection("users").doc(userId).get();
+              authorStudentId = (authorDoc.data()?.studentId as string) || "";
+            } catch (roleErr) {
+              console.warn(`[onCommentCreate] users/${userId} 조회 실패 (무시):`, roleErr);
+            }
+
             if (postData.isPrivate && authorStudentId !== "25010423") {
               const todayStart = new Date();
               todayStart.setHours(0, 0, 0, 0);
@@ -570,11 +561,8 @@ export const onCommentCreate = onDocumentCreated(
               }
             }
 
-            if (authorRole === "professor") {
-              console.log(`교수님 댓글이므로 AI 응답 스킵: ${commentId}`);
-            }
-            // 루트 댓글 → 콩콩이가 대댓글로 응답 (학술 + 비공개 모두)
-            else if (!comment.parentId) {
+            // 루트 댓글 → 콩콩이가 대댓글로 응답 (학술 + 비공개 모두, 교수 포함)
+            if (!comment.parentId) {
               await generateAIReplyToComment(
                 postData,
                 postId,
@@ -1094,7 +1082,14 @@ async function generateBoardAIReply(
         scopeMaxLength,
       );
       if (scope && scope.content) {
-        courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래는 이 과목의 교과서 내용이야. 이 내용에 나오는 용어, 분류, 메커니즘, 비교를 답변의 뼈대로 삼아. scope에 해당 주제의 구체적인 설명(예: 특정 물질명, 구조 비교, 기전 차이 등)이 있으면 반드시 해당 내용을 답변에 포함해. scope에 없는 부분만 일반 지식으로 보충해.\n\n${scope.content}`;
+        courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래는 이 과목의 교과서 내용이야. 이 내용에 나오는 용어, 분류, 메커니즘, 비교를 답변의 뼈대로 삼아. scope에 해당 주제의 구체적인 설명(예: 특정 물질명, 구조 비교, 기전 차이 등)이 있으면 반드시 해당 내용을 답변에 포함해. scope에 없는 부분만 일반 지식으로 보충해.
+
+[중요 — scope 표기 규칙]
+- scope 아래의 "--- N장. 챕터명 ---" / "--- N장. 챕터명 (일부) ---" 는 시스템이 챕터 구분하려고 넣은 내부 마커야.
+- 답변에서 "1장에서 보면", "교과서 N장 일부에 따르면", "1장(일부) 에는" 같은 식으로 마커를 그대로 인용하지 마. 내용만 자연스럽게 녹여서 설명해.
+- 교과서 범위를 언급하고 싶으면 "우리 수업자료에 따르면" 정도로 말해.
+
+${scope.content}`;
         console.log(`[콩콩이] scope 로드: ${post.courseId}, 챕터=${scope.chaptersLoaded.join(",")}, ${scope.content.length}자`);
       }
     } catch (scopeErr) {
