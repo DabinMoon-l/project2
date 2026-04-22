@@ -226,18 +226,29 @@ export const onPostCreate = onDocumentCreated(
 
       // 학술 태그 또는 비공개 글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
       if (post.tag === "학술" || post.isPrivate) {
+        // 1단계: 작성자 역할 조회 — 실패해도 AI 답변은 시도 (student 로 간주)
+        let authorRole: string | null = null;
         try {
           const authorDoc = await db.collection("users").doc(userId).get();
-          const authorRole = authorDoc.data()?.role;
+          authorRole = (authorDoc.data()?.role as string) || null;
+        } catch (roleErr) {
+          console.warn(`[onPostCreate] users/${userId} 조회 실패 — student 로 간주:`, roleErr);
+        }
 
-          if (authorRole !== "professor") {
+        if (authorRole === "professor") {
+          console.log(`교수님 게시글이므로 AI 자동답변 스킵: ${postId}`);
+        } else {
+          // 2단계: 실제 AI 답변 생성 (실패 원인 구분 위해 로깅 강화)
+          try {
             await generateBoardAIReply(post, postId, GEMINI_API_KEY.value());
-          } else {
-            console.log(`교수님 게시글이므로 AI 자동답변 스킵: ${postId}`);
+            console.log(`[onPostCreate] AI 답변 생성 완료: ${postId} (isPrivate=${!!post.isPrivate}, tag=${post.tag || "-"})`);
+          } catch (aiError) {
+            const err = aiError as { message?: string; stack?: string; code?: string | number };
+            console.error(
+              `[onPostCreate] AI 자동답변 생성 실패: postId=${postId} isPrivate=${!!post.isPrivate} tag=${post.tag || "-"} courseId=${post.courseId || "-"} msg="${err?.message || aiError}" code=${err?.code || "-"}`,
+              err?.stack || "",
+            );
           }
-        } catch (aiError) {
-          // AI 답변 실패해도 게시글 작성은 성공으로 처리
-          console.error("AI 자동답변 생성 실패:", aiError);
         }
       }
 
