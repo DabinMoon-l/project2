@@ -15,18 +15,32 @@ import type { CloudFunctionMap } from './types';
 
 // CF 이름 → Edge Function URL path (kebab-case)
 const EDGE_PATH_MAP: Partial<Record<keyof CloudFunctionMap, string>> = {
+  // Wave 1-A
   acceptComment: 'accept-comment',
   deletePost: 'delete-post',
   deleteThread: 'delete-thread',
   getGeminiUsage: 'get-gemini-usage',
+  // Wave 1-B (공지)
+  markAnnouncementsRead: 'mark-announcements-read',
+  reactToAnnouncement: 'react-to-announcement',
+  submitPollSurvey: 'submit-poll-survey',
+  getPollResponses: 'get-poll-responses',
+  getPollResponsesBatch: 'get-poll-responses-batch',
 };
 
 // CF 이름 → env var key. 값이 'true' 이면 Edge 로.
 const EDGE_FLAG_MAP: Partial<Record<keyof CloudFunctionMap, string>> = {
+  // Wave 1-A
   acceptComment: 'NEXT_PUBLIC_USE_EDGE_ACCEPT_COMMENT',
   deletePost: 'NEXT_PUBLIC_USE_EDGE_DELETE_POST',
   deleteThread: 'NEXT_PUBLIC_USE_EDGE_DELETE_THREAD',
   getGeminiUsage: 'NEXT_PUBLIC_USE_EDGE_GET_GEMINI_USAGE',
+  // Wave 1-B (공지)
+  markAnnouncementsRead: 'NEXT_PUBLIC_USE_EDGE_MARK_ANNOUNCEMENTS_READ',
+  reactToAnnouncement: 'NEXT_PUBLIC_USE_EDGE_REACT_TO_ANNOUNCEMENT',
+  submitPollSurvey: 'NEXT_PUBLIC_USE_EDGE_SUBMIT_POLL_SURVEY',
+  getPollResponses: 'NEXT_PUBLIC_USE_EDGE_GET_POLL_RESPONSES',
+  getPollResponsesBatch: 'NEXT_PUBLIC_USE_EDGE_GET_POLL_RESPONSES_BATCH',
 };
 
 export function shouldUseEdge<K extends keyof CloudFunctionMap>(name: K): boolean {
