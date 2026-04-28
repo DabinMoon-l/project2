@@ -203,8 +203,8 @@ ${conversationHistory}`;
     ],
     generationConfig: {
       temperature: 0.7,
-      // board.ts와 동일: 학술 대댓글은 thinkingBudget(8192) + 8192 = 16384
-      maxOutputTokens: 16384,
+      // board.ts와 동일: 학술 대댓글은 thinkingBudget(8192) + 16384 = 24576 (넉넉히)
+      maxOutputTokens: 24576,
       thinkingConfig: { thinkingBudget: 8192 },
     },
   };

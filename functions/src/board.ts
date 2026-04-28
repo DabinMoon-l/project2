@@ -1271,8 +1271,9 @@ ${scope.content}`;
     }
   }
 
-  // 출력 토큰: 기본 8,192, 상세 16,384
-  const maxOutputTokens = isDetailed ? 16384 : 8192;
+  // 출력 토큰: 답변 잘림 방지 위해 넉넉히. 기본 16,384, 상세 24,576
+  // (Gemini 2.5 Flash 최대 65,536까지 가능. 사용량 적어 비용 영향 미미)
+  const maxOutputTokens = isDetailed ? 24576 : 16384;
 
   // 비공개 콩콩이는 thinking 끄기 (비용 5배 절감)
   const thinkingBudget = post.isPrivate ? 0 : 8192;
@@ -1578,13 +1579,14 @@ ${conversationHistory}`;
 
   // 비공개 콩콩이는 thinking 끄기 (비용 5배 절감)
   const thinkingBudget = post.isPrivate ? 0 : 8192;
+  // 대댓글 출력 토큰: 넉넉히 16,384 (잘림 방지). 학술 대댓글 = 8192 + 16384 = 24,576
   const requestBody = {
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: thinkingBudget + 8192,
+      maxOutputTokens: thinkingBudget + 16384,
       ...(thinkingBudget > 0 ? {
         thinkingConfig: {
           thinkingBudget,
