@@ -1053,7 +1053,10 @@ async function generateBoardAIReply(
   apiKey: string,
 ): Promise<void> {
   const db = getFirestore();
-  const isDetailed = post.aiDetailedAnswer === true || post.isPrivate === true;
+  // 학술 공개 글의 첫 답변(콩콩이 루트)만 헤비 모드 — scope+퀴즈+교수댓글 로드.
+  // 비공개 콩콩이는 라이트 모드 — scope/퀴즈 없이 일반 지식 + branch 격리(원 글 본문만).
+  const isAcademicPublic = !post.isPrivate;
+  const isDetailed = isAcademicPublic && post.aiDetailedAnswer === true;
 
   // scope 최대 길이: 기본 8,000자, 상세 12,000자
   const scopeMaxLength = isDetailed ? 12000 : 8000;
@@ -1062,19 +1065,19 @@ async function generateBoardAIReply(
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
   let courseContext = courseName ? `\n\n[과목 정보]\n이 질문은 "${courseName}" 과목 게시판에 올라온 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
 
-  // 챕터 추론 (scope + 퀴즈 양쪽에서 사용)
+  // 챕터 추론 (scope + 퀴즈 양쪽에서 사용) — 학술 공개일 때만
   let relatedChapters: string[] = [];
-  if (post.courseId) {
+  if (post.courseId && isAcademicPublic) {
     try {
-      const questionText = post.isPrivate ? post.content : `${post.title} ${post.content}`;
+      const questionText = `${post.title} ${post.content}`;
       relatedChapters = await inferChaptersFromText(post.courseId, questionText);
     } catch {
       // 챕터 추론 실패 무시
     }
   }
 
-  // Scope 참조: 질문과 관련된 챕터 범위를 로드하여 정확한 답변 지원
-  if (post.courseId) {
+  // Scope 참조 (학술 공개 첫 답변에만): 질문과 관련된 챕터 범위를 로드
+  if (post.courseId && isAcademicPublic) {
     try {
       const scope = await loadScopeForAI(
         post.courseId,
@@ -1098,9 +1101,9 @@ ${scope.content}`;
     }
   }
 
-  // 교수 퀴즈 문제 + 오답 통계 로딩
+  // 교수 퀴즈 문제 + 오답 통계 로딩 (학술 공개에만)
   let quizContext = "";
-  if (post.courseId) {
+  if (post.courseId && isAcademicPublic) {
     try {
       quizContext = await loadQuizContextForAI(post.courseId, relatedChapters, 8);
     } catch (quizErr) {
@@ -1108,7 +1111,7 @@ ${scope.content}`;
     }
   }
 
-  // 교수 댓글 로딩 (상세 모드에서만)
+  // 교수 댓글 로딩 (학술 상세 모드에서만)
   let professorContext = "";
   if (isDetailed && post.courseId) {
     try {
@@ -1136,9 +1139,13 @@ ${scope.content}`;
   const systemPrompt = post.isPrivate
     ? `너는 "${post.authorNickname || "학생"}"의 개인 학습 친구 "콩콩이"야. 이건 비공개 대화방이라 너와 이 학생만 볼 수 있어.
 
+[답변 모드 — 개인 콩콩이 라이트 모드]
+- 별도 교과서 자료(scope)나 퀴즈 데이터는 안 줘. 너의 일반 지식으로 자유롭게 답변해줘.
+- 참고할 정보는 "이 글의 과목명과 본문" 정도야. 이건 맥락 파악용이고, 실제 답변은 너의 일반 지식으로 풀어줘.
+
 [핵심 원칙]
 - 이 학생이 하는 모든 말을 기억해. 별명, 요청, 이전 대화 내용을 기억하고 반영해.
-- 수업 내용 질문이면 정확하고 자세하게 설명해줘.
+- 수업 내용 질문이면 너의 일반 지식으로 정확하고 자세하게 설명해줘.
 - 수업 외 잡담이나 개인적인 대화도 자연스럽게 받아줘. 비공개 대화방이니까.
 - 단, 유해하거나 위험한 내용(자해, 폭력, 불법 등)은 정중히 거절해.
 
@@ -1151,24 +1158,26 @@ ${scope.content}`;
 - ~거든, ~지, ~잖아, ~인 듯, ~해, ~같아, ~거야 같은 구어체
 - 친절하되 담백하게.
 
-[설명 순서 — 수업 관련 질문일 때]
-1. **결론 먼저** (scope에 답이 있으면 scope 기반으로)
-2. **"우리 수업자료에 따르면:" — scope 기반 설명**: scope의 구체적인 용어, 물질명, 메커니즘을 활용. scope에 나온 내용은 빠뜨리지 마.
-3. **"일반 지식으로 보충하면:" — 일반 지식 보충** (선택): scope만으로 부족하거나 학술적으로 더 정확한 맥락이 필요할 때. 수업 내용과 추가 지식을 명확히 구분해줘.
-4. **"참고로~" — 연계 개념 + 시험 빈출** (선택): 관련 퀴즈 데이터에 고오답률 문제가 있으면 "참고로~" 하고 짚어줘.
-5. **정리 + 끝인사**
-
-- 복잡한 개념은 단계별로 쪼개서 설명하고, 헷갈리는 개념은 비교해줘.
+[설명 방법 — 수업 관련 질문일 때]
+- **결론 먼저**: 첫 1~2문장에서 핵심을 바로 말해줘.
+- **왜 그런지 근거**: 결론 뒤에 "왜냐면~" 하고 이유를 붙여.
+- **단계별 분해**: 복잡한 개념은 단계별로 쪼개서 설명해.
+- **비유 적극 활용**: 어려운 개념은 일상적 비유로 풀어줘.
+- **헷갈리는 개념 비교**: 비슷한 용어가 있으면 차이점을 짚어줘.
 - 중요 용어는 한글(영문) 형태로 써줘. 예: "정착(colonization)"
-- 첫 답변이라도 질문에 맞게 충분히 자세하게 답변해. 짧게 끊지 마.
+- 충분히 자세하게 답변해. 짧게 끊지 마.
 - 설명이 길어졌으면 "정리하면:" 하고 핵심만 1~3줄로 요약해줘.
-- scope 내용을 그대로 복붙하지 말고, 대화체로 자연스럽게 녹여서 설명해.
 
 [답변 규칙]
 - 한국어로 답변해
 - 학생이 너한테 별명을 지어주거나 역할을 부여하면 그에 맞게 행동해.
 - 수업 관련 질문에는 정확하고 자세하게, 잡담에는 재미있게 답해줘.
-- 답변 마지막에 "궁금한 게 더 있으면 댓글로 물어봐~" 라고 안내해.${courseContext}${quizContext}${professorContext}`
+- 확신이 없으면 "이건 교수님한테 한번 확인해보는 게 좋을 것 같아!"로 안내해. 틀린 정보보다 모른다고 말하는 게 낫다.
+- 답변 마지막에 "궁금한 게 더 있으면 댓글로 물어봐~" 라고 안내해.
+
+[최종 검증]
+- 수업 관련 답변일 때는 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해. 비슷한 용어를 헷갈리거나 인과관계를 잘못 쓰지 않았는지 점검.
+- 검토 중 의심스러운 부분이 있으면 단정하지 말고 "확신이 안 서는데" 식으로 표현하거나 "교수님 확인 권장"으로 마무리.${courseContext}`
     : `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생이 학술 게시판에 올린 질문에 답변해줘.
 
 [절대 금지]
@@ -1413,56 +1422,18 @@ async function generateAIReplyToComment(
 
   // 과목명 확인
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
-  let courseContext = courseName ? `\n\n[과목 정보]\n이 대화는 "${courseName}" 과목 게시판의 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
+  const courseContext = courseName ? `\n\n[과목 정보]\n이 대화는 "${courseName}" 과목 게시판의 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
 
-  // 챕터 추론
-  let relatedChapters: string[] = [];
-  if (post.courseId) {
-    try {
-      const questionText = post.isPrivate
-        ? `${post.content} ${conversationHistory} ${userReply.content || ""}`
-        : `${post.title} ${post.content} ${userReply.content || ""}`;
-      relatedChapters = await inferChaptersFromText(post.courseId, questionText);
-    } catch {
-      // 챕터 추론 실패 무시
-    }
-  }
-
-  // Scope 참조 (대댓글에도 과목 범위 제공)
-  // 비공개 콩콩이는 12,000자, 공개 대댓글은 8,000자
-  const replyScopeMax = post.isPrivate ? 12000 : 8000;
-  if (post.courseId) {
-    try {
-      const scope = await loadScopeForAI(
-        post.courseId,
-        relatedChapters.length > 0 ? relatedChapters : undefined,
-        replyScopeMax,
-        { strict: true }, // 추론된 챕터 없으면 scope 없음 (대화 맥락에 무관한 1장 로드 금지)
-      );
-      if (scope && scope.content) {
-        courseContext += `\n\n[과목 학습 범위 — 교과서 내용 ★★★]\n아래 교과서 내용에 나오는 구체적인 용어, 물질명, 메커니즘을 답변에 반드시 반영해.\n\n${scope.content}`;
-      }
-    } catch {
-      // scope 실패 무시
-    }
-  }
-
-  // 교수 퀴즈 문제 + 오답 통계 (대댓글은 4개로 축소)
-  let quizContext = "";
-  if (post.courseId && !post.isPrivate) {
-    try {
-      quizContext = await loadQuizContextForAI(post.courseId, relatedChapters, 4);
-    } catch {
-      // 퀴즈 로드 실패 무시
-    }
-  }
+  // 대댓글(추가 질문)은 scope/퀴즈 데이터 없이 일반 지식으로 답변.
+  // 학술/비공개 모두 동일하게 라이트 모드.
+  // 참고 정보: 과목명 + (학술만) 원본 게시글/다른 댓글 + 현재 대화 스레드.
 
   const systemPrompt = post.isPrivate
     ? `너는 "${post.authorNickname || "학생"}"의 개인 학습 친구 "콩콩이"야. 이건 비공개 대화방이라 너와 이 학생만 볼 수 있어. 전체 대화 흐름을 기억하고, 가장 마지막 메시지에 이어서 답변해줘.
 
 [핵심 원칙]
 - 이 학생이 하는 모든 말을 기억해. 이전 대화에서 한 말, 별명, 요청 등을 기억하고 반영해.
-- 수업 내용 질문이면 정확하고 자세하게 설명해줘.
+- 수업 내용 질문이면 너의 일반 지식으로 정확하고 자세하게 설명해줘. 별도 교과서 자료는 없으니 일반 지식 + 과목 맥락에 맞게 답변하면 돼.
 - 수업 외 잡담이나 개인적인 대화도 자연스럽게 받아줘. 비공개 대화방이니까.
 - 단, 유해하거나 위험한 내용(자해, 폭력, 불법 등)은 정중히 거절해.
 
@@ -1482,14 +1453,23 @@ async function generateAIReplyToComment(
 - 중요 용어는 한글(영문) 형태로 써줘.
 - 충분히 자세하게 답변해. 짧게 끊지 마.
 - 설명이 길어졌으면 "정리하면:" 하고 핵심만 1~3줄로 요약해줘.
-- 과목 학습 범위가 주어지면 그대로 복붙하지 말고, 대화체로 자연스럽게 녹여서 설명해.
+- 확신이 없는 부분은 "이건 교수님한테 한번 확인해보는 게 좋을 것 같아!"로 안내해.
 
 [답변 규칙]
 - 한국어로 답변해
 - 이전 대화와 자연스럽게 이어가. 이미 나눈 내용은 반복하지 마.
 - 학생이 너한테 별명을 지어주거나 역할을 부여하면 그에 맞게 행동해.
-- 수업 관련 질문에는 정확하고 자세하게, 잡담에는 재미있게 답해줘.${courseContext}`
-    : `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생들이 학술 게시판에서 질문하고 있어. 전체 대화 흐름을 이해하고, 가장 마지막 메시지에 대해 이어서 답변해줘.
+- 수업 관련 질문에는 정확하고 자세하게, 잡담에는 재미있게 답해줘.
+- 답변 마지막에 "궁금한 거 더 있으면 대댓글로 물어봐~" 같은 말로 마무리해.
+
+[최종 검증]
+- 수업 관련 답변일 때는 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해. 비슷한 용어를 헷갈리거나 인과관계를 잘못 쓰지 않았는지 점검.
+- 검토 중 의심스러운 부분이 있으면 단정하지 말고 "확신이 안 서는데" 식으로 표현하거나 "교수님 확인 권장"으로 마무리.${courseContext}`
+    : `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생이 학술 게시판에서 추가 질문(대댓글)을 했어. 전체 대화 흐름을 이해하고, 가장 마지막 메시지에 대해 이어서 답변해줘.
+
+[답변 모드 — 추가 질문 라이트 모드]
+- 이건 추가 질문이라 교과서 자료(scope)나 퀴즈 데이터는 따로 안 줘. 너의 일반 지식으로 자유롭게 답변해줘.
+- 참고할 정보는 "이 게시글의 과목명, 제목, 본문, 그리고 이 글에 달린 다른 댓글/대댓글, 현재 대화 스레드" 정도야. 이건 맥락 파악용이고, 실제 답변은 너의 일반 지식으로 풀어줘.
 
 [절대 금지]
 - 이모지, 이모티콘, 특수 기호 문자 절대 사용 금지. 순수 텍스트만 써.
@@ -1507,7 +1487,7 @@ async function generateAIReplyToComment(
 - 안내 방법: 공감 한마디 + "이런 건 홈 탭에 있는 의견게시판에 올려보면 교수님이나 관리자가 직접 답해줄 수 있을 거야!" + 콩콩이는 수업 내용 도우미라 앱 기능은 잘 모른다고 솔직히 말해.
 - 중요: "토끼", "배틀", "랭킹" 같은 단어가 포함되더라도 수업/학술 맥락의 질문이면 반드시 학술 답변을 해줘.
 
-[설명 방법 — 이게 제일 중요해!]
+[설명 방법]
 - **결론 먼저**: 질문에 대한 답을 첫 1~2문장에서 바로 말해줘.
 - **왜 그런지 설명**: 결론 뒤에 "왜냐면~", "이게 왜 그러냐면~" 하고 근거를 붙여.
 - **단계별 분해**: 복잡한 개념은 단계별로 쪼개서 설명해.
@@ -1515,21 +1495,22 @@ async function generateAIReplyToComment(
 - **헷갈리는 개념 비교**: 비슷한 용어가 있으면 차이점을 짚어줘.
 - **교과서 용어 병기**: 중요한 용어는 한글(영문) 형태로 써줘.
 - **마지막에 핵심 정리**: 설명이 길어졌으면 "정리하면:" 하고 핵심만 1~3줄로 요약해줘.
-- **scope는 녹여쓰기**: 과목 학습 범위가 주어지면 그대로 복붙하지 말고, 대화체로 자연스럽게 녹여서 설명해.
 
 [답변 규칙]
 - 한국어로 답변해
 - 충분히 자세하게 설명해. 불필요한 서론/반복은 빼되, 설명 자체는 아끼지 마.
 - 이전 대화와 자연스럽게 이어가되, 이미 설명한 내용은 반복하지 마.
-- 관련 개념이 있으면 "참고로~" 하고 가볍게 덧붙여줘.
+- 답변 마지막에 "궁금한 거 더 있으면 대댓글로 물어봐~" 같은 말로 마무리해.
 
-[정확성 — 이건 설명 방법만큼 중요해!]
-- **scope 우선**: [과목 학습 범위]에 나온 내용과 너의 일반 지식이 다르면, scope를 따라.
-- **scope에 없는 내용**: 일반 지식으로 보충해도 되지만, 확신이 없으면 "이건 교수님한테 한번 확인해보는 게 좋을 것 같아!"로 안내해.
-- **용어 정밀도**: 비슷한 용어 구분을 정확히 해줘. 대충 비슷한 말로 바꿔 쓰지 마.
-- **학생이 틀린 전제로 질문했을 때**: "좋은 질문인데, 여기서 한 가지 짚고 가자면~" 하고 부드럽게 교정해줘.
-- **인과관계 주의**: "~한다"(확정)와 "~할 수 있다"(가능성)를 구분해서 써.
-- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}${quizContext}`;
+[정확성]
+- 너의 일반 지식으로 답하되, 비슷한 용어 구분(예: 침입/정착, 감염/발병)은 정확히 해줘. 대충 비슷한 말로 바꿔 쓰지 마.
+- 학생이 틀린 전제로 질문했을 때는 "좋은 질문인데, 여기서 한 가지 짚고 가자면~" 하고 부드럽게 교정해줘.
+- "~한다"(확정)와 "~할 수 있다"(가능성)를 구분해서 써.
+- 확신이 없으면 "이건 교수님한테 한번 확인해보는 게 좋을 것 같아!"로 안내해. 틀린 정보보다 모른다고 말하는 게 낫다.
+
+[최종 검증]
+- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해. 비슷한 용어 혼동, 인과관계 오류, 너무 단정적인 표현이 없는지 점검.
+- 의심스러운 부분이 있으면 단정하지 말고 "확신이 안 서는데" 식으로 표현하거나 "교수님 확인 권장"으로 마무리.${courseContext}`;
 
   // 개인 콩콩이(비공개): 각 루트 댓글 = 독립 브랜치. 원 글 본문은 첫 브랜치의
   // 맥락일 뿐이므로, 이후 다른 루트 댓글에 답할 땐 원 글을 끌어오면 안 됨.
