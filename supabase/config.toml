@@ -39,3 +39,16 @@ verify_jwt = false
 
 [functions.get-poll-responses-batch]
 verify_jwt = false
+
+# Wave 1-C: 게이미피케이션 onCall 4개 (rabbitGacha/rabbitEquip/rabbitLevelUp)
+[functions.spin-rabbit-gacha]
+verify_jwt = false
+
+[functions.claim-gacha-rabbit]
+verify_jwt = false
+
+[functions.equip-rabbit]
+verify_jwt = false
+
+[functions.level-up-rabbit]
+verify_jwt = false

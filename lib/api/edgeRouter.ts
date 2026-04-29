@@ -26,6 +26,11 @@ const EDGE_PATH_MAP: Partial<Record<keyof CloudFunctionMap, string>> = {
   submitPollSurvey: 'submit-poll-survey',
   getPollResponses: 'get-poll-responses',
   getPollResponsesBatch: 'get-poll-responses-batch',
+  // Wave 1-C (게이미피케이션)
+  spinRabbitGacha: 'spin-rabbit-gacha',
+  claimGachaRabbit: 'claim-gacha-rabbit',
+  equipRabbit: 'equip-rabbit',
+  levelUpRabbit: 'level-up-rabbit',
 };
 
 // CF 이름 → env var key. 값이 'true' 이면 Edge 로.
@@ -41,6 +46,11 @@ const EDGE_FLAG_MAP: Partial<Record<keyof CloudFunctionMap, string>> = {
   submitPollSurvey: 'NEXT_PUBLIC_USE_EDGE_SUBMIT_POLL_SURVEY',
   getPollResponses: 'NEXT_PUBLIC_USE_EDGE_GET_POLL_RESPONSES',
   getPollResponsesBatch: 'NEXT_PUBLIC_USE_EDGE_GET_POLL_RESPONSES_BATCH',
+  // Wave 1-C (게이미피케이션)
+  spinRabbitGacha: 'NEXT_PUBLIC_USE_EDGE_SPIN_RABBIT_GACHA',
+  claimGachaRabbit: 'NEXT_PUBLIC_USE_EDGE_CLAIM_GACHA_RABBIT',
+  equipRabbit: 'NEXT_PUBLIC_USE_EDGE_EQUIP_RABBIT',
+  levelUpRabbit: 'NEXT_PUBLIC_USE_EDGE_LEVEL_UP_RABBIT',
 };
 
 export function shouldUseEdge<K extends keyof CloudFunctionMap>(name: K): boolean {
