@@ -31,7 +31,7 @@
               "answers": {
                 "$userId": {
                   ".write": "auth != null && auth.uid === $userId && !data.exists()",
-                  ".validate": "newData.hasChildren(['answer', 'answeredAt'])"
+                  ".validate": "newData.hasChildren(['answer', 'answeredAt']) && newData.child('answer').isNumber() && newData.child('answer').val() >= 0 && newData.child('answer').val() <= 7 && newData.child('answer').val() == newData.child('answer').val() - newData.child('answer').val() % 1 && newData.child('answeredAt').isNumber() && newData.child('answeredAt').val() <= now + 1000 && newData.child('answeredAt').val() >= now - 60000"
                 }
               }
             }

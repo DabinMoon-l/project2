@@ -860,8 +860,18 @@ service cloud.firestore {
       // 읽기: 로그인 사용자 (교수 대시보드에서 조회)
       allow read: if isAuthenticated();
 
-      // 생성/수정: 로그인 사용자 (학생이 arrayUnion으로 자신 uid 추가)
-      allow create, update: if isAuthenticated();
+      // 생성: 본인 uid만 attendedUids에 1명 포함된 형태 (다른 학생 위변조 차단)
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasOnly(['attendedUids'])
+        && request.resource.data.attendedUids is list
+        && request.resource.data.attendedUids.toSet().hasOnly([request.auth.uid]);
+
+      // 수정: attendedUids 키만 수정 가능, 추가된 uid 집합이 본인 1명에 한정
+      allow update: if isAuthenticated()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendedUids'])
+        && request.resource.data.attendedUids.toSet()
+             .difference(resource.data.attendedUids.toSet())
+             .hasOnly([request.auth.uid]);
 
       // 삭제: 불가
       allow delete: if false;

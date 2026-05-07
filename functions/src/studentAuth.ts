@@ -287,6 +287,16 @@ export const registerStudent = onCall(
       throw new HttpsError("already-exists", "이미 가입된 학번입니다.");
     }
 
+    // 사전 등록된 반과 일치 여부 확인 (클라이언트 임의 변경 차단)
+    // enrolledStudents 에 classId 가 없는 레거시 데이터는 클라이언트 입력 신뢰.
+    if (enrolledData.classId && enrolledData.classId !== classId) {
+      throw new HttpsError(
+        "invalid-argument",
+        `등록된 반(${enrolledData.classId}반)으로 가입해주세요.`,
+      );
+    }
+    const enrolledClassId = (enrolledData.classId as string | undefined) ?? classId;
+
     // Firebase Auth 계정 생성
     const email = toInternalEmail(studentId);
     let userRecord;
@@ -331,12 +341,14 @@ export const registerStudent = onCall(
       const rabbitDoc = await transaction.get(rabbitRef);
 
       // WRITE 1: 유저 문서 생성
+      // enrolledData.name 우선 (교수가 사전 등록한 실명 보존),
+      // classId 도 enrolledClassId 사용 (위에서 검증된 값)
       transaction.set(userDocRef, {
         email,
         studentId,
-        name: name || enrolledData.name || nickname,
+        name: enrolledData.name || name || nickname,
         nickname,
-        classId,
+        classId: enrolledClassId,
         courseId,
         role: "student",
         totalExp: 0,
