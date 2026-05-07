@@ -248,7 +248,8 @@ describe('formatChapterLabel', () => {
 
   it('미생물학 포맷 확인', () => {
     expect(formatChapterLabel('microbiology', 'micro_1')).toBe('1·미생물과 미생물학');
-    expect(formatChapterLabel('microbiology', 'micro_11')).toBe('11·감염병의 예방과 대책');
+    // shortName 적용 (full: "감염병의 예방과 대책" → short: "감염병")
+    expect(formatChapterLabel('microbiology', 'micro_11')).toBe('11·감염병');
   });
 
   it('세부항목이 유효하지만 챕터 ID가 잘못되면 "미설정"', () => {
@@ -287,7 +288,8 @@ describe('generateCourseTags', () => {
     expect(tags).toHaveLength(11);
 
     expect(tags[0].value).toBe('1_미생물과 미생물학');
-    expect(tags[tags.length - 1].value).toBe('11_감염병의 예방과 대책');
+    // shortName 적용 (full: "감염병의 예방과 대책" → short: "감염병")
+    expect(tags[tags.length - 1].value).toBe('11_감염병');
   });
 
   it('null 과목이면 생물학 태그로 폴백한다', () => {
