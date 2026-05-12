@@ -19,11 +19,16 @@ interface Props {
   courseId: string;
 }
 
-const PRESETS = [
-  { label: '오늘', days: 0 },
-  { label: '7일', days: 7 },
-  { label: '14일', days: 14 },
-  { label: '30일', days: 30 },
+type PresetKey = 'today' | 'd7' | 'd14' | 'm1' | 'm2' | 'm3' | 'custom';
+
+const PRESETS: { key: PresetKey; label: string }[] = [
+  { key: 'today', label: '오늘' },
+  { key: 'd7', label: '7일' },
+  { key: 'd14', label: '14일' },
+  { key: 'm1', label: '한 달' },
+  { key: 'm2', label: '두 달' },
+  { key: 'm3', label: '세 달' },
+  { key: 'custom', label: '직접 설정' },
 ];
 
 const KST_OFFSET = 9 * 60 * 60 * 1000;
@@ -36,10 +41,34 @@ function kstMidnightDaysAgo(daysAgo: number): Date {
   return new Date(kstNow.getTime() - KST_OFFSET);
 }
 
+// KST 자정 monthsAgo개월 전
+function kstMidnightMonthsAgo(monthsAgo: number): Date {
+  const kstNow = new Date(Date.now() + KST_OFFSET);
+  kstNow.setUTCHours(0, 0, 0, 0);
+  kstNow.setUTCMonth(kstNow.getUTCMonth() - monthsAgo);
+  return new Date(kstNow.getTime() - KST_OFFSET);
+}
+
 function kstEndOfToday(): Date {
   const kstNow = new Date(Date.now() + KST_OFFSET);
   kstNow.setUTCHours(23, 59, 59, 999);
   return new Date(kstNow.getTime() - KST_OFFSET);
+}
+
+// 'YYYY-MM-DD' input value → KST 자정 Date
+function parseKstDate(value: string, endOfDay = false): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  // KST 자정으로 만들기 (UTC 기준 전날 15:00)
+  const kst = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+  if (endOfDay) kst.setUTCHours(23, 59, 59, 999);
+  return new Date(kst.getTime() - KST_OFFSET);
+}
+
+// Date → KST 'YYYY-MM-DD'
+function toKstInputValue(date: Date): string {
+  const kst = new Date(date.getTime() + KST_OFFSET);
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`;
 }
 
 function downloadCsv(filename: string, lines: string[]) {
@@ -72,17 +101,34 @@ export default function RawDataAnalyzer({ courseId }: Props) {
   const [chartType, setChartType] = useState<ChartType>('line');
   const [xAxis, setXAxis] = useState<XAxis>('date');
   const [selectedMetrics, setSelectedMetrics] = useState<YMetric[]>(['uniqueUsers', 'totalDurationMin']);
-  const [presetDays, setPresetDays] = useState(7);
+  const [preset, setPreset] = useState<PresetKey>('d7');
+  // 직접 설정 초기값: 7일 전 ~ 오늘
+  const [customStart, setCustomStart] = useState<string>(() => toKstInputValue(kstMidnightDaysAgo(7)));
+  const [customEnd, setCustomEnd] = useState<string>(() => toKstInputValue(new Date()));
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const [showMetricMenu, setShowMetricMenu] = useState(false);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
 
-  // presetDays만 의존하는 단순 Date — useMemo 없이 매 렌더 새로 만들어도 가벼움.
-  // 단, useRawStatsQuery는 startMs/endMs(숫자) 의존이라 객체 ID는 무관.
-  const startDate = kstMidnightDaysAgo(presetDays);
-  const endDate = kstEndOfToday();
+  // 프리셋 → (startDate, endDate). 단순 Date 생성이라 매 렌더해도 가벼움.
+  let startDate: Date;
+  let endDate: Date = kstEndOfToday();
+  switch (preset) {
+    case 'today': startDate = kstMidnightDaysAgo(0); break;
+    case 'd7': startDate = kstMidnightDaysAgo(7); break;
+    case 'd14': startDate = kstMidnightDaysAgo(14); break;
+    case 'm1': startDate = kstMidnightMonthsAgo(1); break;
+    case 'm2': startDate = kstMidnightMonthsAgo(2); break;
+    case 'm3': startDate = kstMidnightMonthsAgo(3); break;
+    case 'custom': {
+      const s = parseKstDate(customStart, false);
+      const e = parseKstDate(customEnd, true);
+      startDate = s ?? kstMidnightDaysAgo(7);
+      if (e) endDate = e;
+      break;
+    }
+  }
 
   const { pageViews, loading, error, fetchedCount } = useRawStatsQuery(courseId, startDate, endDate);
 
@@ -152,11 +198,11 @@ export default function RawDataAnalyzer({ courseId }: Props) {
           <div className="flex gap-1.5 flex-wrap">
             {PRESETS.map(p => (
               <button
-                key={p.label}
+                key={p.key}
                 type="button"
-                onClick={() => setPresetDays(p.days)}
+                onClick={() => setPreset(p.key)}
                 className={`px-3 py-1 text-[11px] font-bold border transition-colors ${
-                  presetDays === p.days
+                  preset === p.key
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                     : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#D4CFC4]'
                 }`}
@@ -165,6 +211,32 @@ export default function RawDataAnalyzer({ courseId }: Props) {
               </button>
             ))}
           </div>
+
+          {/* 직접 설정일 때 날짜 input 표시 */}
+          {preset === 'custom' && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[9px] font-bold text-[#5C5C5C] mb-1">시작일</label>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="w-full px-2 py-1 text-[11px] border border-[#D4CFC4] bg-[#F5F0E8] text-[#1A1A1A]"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-[#5C5C5C] mb-1">종료일</label>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="w-full px-2 py-1 text-[11px] border border-[#D4CFC4] bg-[#F5F0E8] text-[#1A1A1A]"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 차트 타입 + X축 */}
