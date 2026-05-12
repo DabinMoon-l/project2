@@ -17,6 +17,7 @@ import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 
 import ClassComparison from '@/components/professor/stats/ClassComparison';
 import RadarChart from '@/components/professor/stats/RadarChart';
+import RawDataAnalyzer from '@/components/professor/stats/RawDataAnalyzer';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import StudentListView from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
@@ -122,6 +123,7 @@ export default function ProfessorStatsPage() {
   // 바텀시트 상태
   const [atRiskSheetOpen, setAtRiskSheetOpen] = useState(false);
   const [clusterSheetOpen, setClusterSheetOpen] = useState(false);
+  const [rawDataSheetOpen, setRawDataSheetOpen] = useState(false);
   const [selectedClusterClass, setSelectedClusterClass] = useState<string | null>(null);
   const [selectedClusterType, setSelectedClusterType] = useState<string | null>(null);
 
@@ -504,9 +506,9 @@ export default function ProfessorStatsPage() {
 
       <div className={`px-4 pt-3 space-y-6 ${isWide ? 'flex-1 flex flex-col' : ''}`}>
 
-        {/* 요약 카드 2개 (가운데 정렬 + 숫자 크게) */}
+        {/* 요약 카드 4개 (가운데 정렬 + 숫자 크게) */}
         {data && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-4 gap-2">
             {/* 참여학생 */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -617,6 +619,21 @@ export default function ProfessorStatsPage() {
                   </>
                 )}
               </AnimatePresence>
+            </motion.div>
+
+            {/* 데이터 분석 (raw 그래프/표/CSV) */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.15 }}
+              className="p-3 border border-[#D4CFC4] cursor-pointer hover:border-[#1A1A1A] transition-colors flex flex-col items-center justify-center"
+              onClick={() => setRawDataSheetOpen(true)}
+            >
+              <svg className="w-8 h-8 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 3v18h18M7 14l3-3 4 4 5-6" />
+              </svg>
+              <p className="text-[11px] font-bold text-[#5C5C5C] mt-1">데이터 분석</p>
             </motion.div>
           </div>
         )}
@@ -811,6 +828,18 @@ export default function ProfessorStatsPage() {
         isOpen={detailOpen}
         onClose={() => setDetailOpen(false)}
       />
+
+      {/* 데이터 분석 바텀시트 */}
+      <MobileBottomSheet
+        open={rawDataSheetOpen}
+        onClose={() => setRawDataSheetOpen(false)}
+        maxHeight="90vh"
+        transparent
+      >
+        <div className="px-4 pb-6">
+          <RawDataAnalyzer courseId={courseId} />
+        </div>
+      </MobileBottomSheet>
 
       {/* 리포트 바텀시트 */}
       <MobileBottomSheet open={reportSheetOpen} onClose={() => setReportSheetOpen(false)} maxHeight="80vh">
