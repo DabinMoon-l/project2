@@ -231,6 +231,13 @@ export default function ProfessorStatsPage() {
     students.map(s => ({ uid: s.uid, classId: s.classId, averageScore: s.quizStats.averageScore })),
   [students]);
 
+  // RawDataAnalyzer용 uid → 실명/닉네임/학번 매핑
+  const userInfoMap = useMemo(() => {
+    const map = new Map<string, { name?: string; nickname?: string; studentId?: string }>();
+    students.forEach(s => map.set(s.uid, { name: s.name, nickname: s.nickname, studentId: s.studentId }));
+    return map;
+  }, [students]);
+
   // 클러스터 바텀시트용 학생 필터
   const clusterStudentList = useMemo(() => {
     if (!selectedClusterClass || !selectedClusterType || !extraData.clusterData) return [];
@@ -837,7 +844,7 @@ export default function ProfessorStatsPage() {
         transparent
       >
         <div className="px-4 pb-6">
-          <RawDataAnalyzer courseId={courseId} />
+          <RawDataAnalyzer courseId={courseId} userMap={userInfoMap} />
         </div>
       </MobileBottomSheet>
 

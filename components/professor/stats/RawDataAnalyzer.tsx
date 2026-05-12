@@ -15,8 +15,16 @@ import {
 
 type ChartType = 'line' | 'bar' | 'table';
 
+interface UserInfo {
+  name?: string;
+  nickname?: string;
+  studentId?: string;
+}
+
 interface Props {
   courseId: string;
+  /** uid → 실명/닉네임 매핑 (Raw CSV에 표시) */
+  userMap?: Map<string, UserInfo>;
 }
 
 type PresetKey = 'today' | 'd7' | 'd14' | 'm1' | 'm2' | 'm3' | 'custom';
@@ -97,7 +105,7 @@ const ALL_CLASSES = ['A', 'B', 'C', 'D'];
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS);
 const DAY_LABEL = ['월', '화', '수', '목', '금', '토', '일'];
 
-export default function RawDataAnalyzer({ courseId }: Props) {
+export default function RawDataAnalyzer({ courseId, userMap }: Props) {
   const [chartType, setChartType] = useState<ChartType>('line');
   const [xAxis, setXAxis] = useState<XAxis>('date');
   const [selectedMetrics, setSelectedMetrics] = useState<YMetric[]>(['uniqueUsers', 'totalDurationMin']);
@@ -157,13 +165,17 @@ export default function RawDataAnalyzer({ courseId }: Props) {
 
   const handleExportRawCsv = () => {
     if (pageViews.length === 0) return;
-    const headers = ['날짜', '시간', '요일', '유저ID', '반', '카테고리', '경로', '체류시간(초)', '세션ID'];
+    const headers = ['날짜', '시간', '요일', '학번', '실명', '닉네임', '유저ID', '반', '카테고리', '경로', '체류시간(초)', '세션ID'];
     const lines = [headers.join(',')];
     pageViews.forEach(r => {
+      const info = userMap?.get(r.userId);
       const cells = [
         r.date,
         r.hour,
         DAY_LABEL[r.dayOfWeek] || '',
+        info?.studentId || '',
+        info?.name || '',
+        info?.nickname || '',
         r.userId,
         r.classId,
         CATEGORY_LABELS[r.category] || r.category,
