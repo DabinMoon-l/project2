@@ -284,11 +284,15 @@ async function computeStats(raw: RawCache, source: QuestionSource, courseId: str
         }
       }
 
+      // 챕터 ID 로 직접 태깅된 문제 점수 (detailId 없는 경우)
       const chapterScores = chapterBucket[chapter.id]
         ? Object.values(chapterBucket[chapter.id]).map((arr: number[]) => mean(arr))
         : [];
-      const allScores = details.length > 0
-        ? details.flatMap(d => d.scores)
+      // 세부단원이 정의돼 있어도 실제 점수가 비어있을 수 있어 길이 기준으로 폴백
+      // (교수가 chapterId 만 태깅하고 chapterDetailId 를 비워둔 경우 → chapterBucket 은 챕터 ID 키로만 쌓임)
+      const detailScores = details.flatMap(d => d.scores);
+      const allScores = detailScores.length > 0
+        ? [...detailScores, ...chapterScores]
         : chapterScores;
 
       chapterStats.push({
