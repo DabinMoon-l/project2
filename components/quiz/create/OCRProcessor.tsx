@@ -211,7 +211,10 @@ async function pdfToImages(file: File): Promise<{ images: string[]; combinedImag
     pageCanvases.push(canvas);
   }
 
-  /** 캔버스 배열 → 1개 합친 이미지 */
+  // Clova OCR은 width/height가 10~8000px만 허용. 안전 마진을 두어 7800으로 캡.
+  const MAX_DIM = 7800;
+
+  /** 캔버스 배열 → 1개 합친 이미지 (8000px 한계 초과 시 자동 축소) */
   const combineCanvases = (canvases: HTMLCanvasElement[]): string => {
     let totalHeight = 0;
     let maxWidth = 0;
@@ -219,26 +222,45 @@ async function pdfToImages(file: File): Promise<{ images: string[]; combinedImag
       totalHeight += c.height;
       maxWidth = Math.max(maxWidth, c.width);
     }
+    // 가장 큰 변이 한계를 넘으면 비율 유지하며 축소
+    const scale = Math.min(1, MAX_DIM / Math.max(totalHeight, maxWidth));
+    const finalWidth = Math.max(1, Math.floor(maxWidth * scale));
+    const finalHeight = Math.max(1, Math.floor(totalHeight * scale));
+
     const combined = document.createElement('canvas');
-    combined.width = maxWidth;
-    combined.height = totalHeight;
+    combined.width = finalWidth;
+    combined.height = finalHeight;
     const ctx = combined.getContext('2d');
     if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       let y = 0;
       for (const c of canvases) {
-        ctx.drawImage(c, 0, y);
-        y += c.height;
+        const w = c.width * scale;
+        const h = c.height * scale;
+        ctx.drawImage(c, 0, y, w, h);
+        y += h;
       }
     }
     return combined.toDataURL('image/png');
   };
 
-  // 청크별 합친 이미지 (5페이지씩)
-  const CHUNK_SIZE = 5;
+  // 청크 분할 — 누적 height가 MAX_DIM을 넘기 직전에 끊어 OCR 한계 준수
+  // (페이지가 길거나 scale이 커서 단일 페이지가 MAX_DIM을 넘는 경우는 combineCanvases가 축소 처리)
   const chunkImages: string[] = [];
-  for (let i = 0; i < pageCanvases.length; i += CHUNK_SIZE) {
-    const chunk = pageCanvases.slice(i, i + CHUNK_SIZE);
-    chunkImages.push(combineCanvases(chunk));
+  let currentChunk: HTMLCanvasElement[] = [];
+  let currentHeight = 0;
+  for (const c of pageCanvases) {
+    if (currentChunk.length > 0 && currentHeight + c.height > MAX_DIM) {
+      chunkImages.push(combineCanvases(currentChunk));
+      currentChunk = [];
+      currentHeight = 0;
+    }
+    currentChunk.push(c);
+    currentHeight += c.height;
+  }
+  if (currentChunk.length > 0) {
+    chunkImages.push(combineCanvases(currentChunk));
   }
 
   return {
