@@ -2,48 +2,48 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
+  motion,
+  AnimatePresence,
   useMotionValue,
   useSpring,
 } from 'framer-motion';
+import { useCourse } from '@/lib/contexts';
+import { useRabbitDoc } from '@/lib/hooks/useRabbit';
+import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { OrbitalCharacter } from './OrbitalCharacter';
 import { useHomeScale } from './useHomeScale';
 import { BASE_ORBIT_RX, BASE_ORBIT_RY, BASE_CHAR_SIZE, BASE_ORBIT_Y_SHIFT, SWIPE_THRESHOLD } from './characterBoxConstants';
 
-/* 교수님 홈에 표시할 토끼 후보 (rabbitId 0-indexed) */
-const PROFESSOR_RABBIT_POOL = [21, 26, 56, 58, 59, 61];
-
-/** 풀에서 랜덤 2마리 선택 */
-function pickTwo(): [number, number] {
-  const pool = [...PROFESSOR_RABBIT_POOL];
-  const i1 = Math.floor(Math.random() * pool.length);
-  const id1 = pool[i1];
-  pool.splice(i1, 1);
-  const i2 = Math.floor(Math.random() * pool.length);
-  const id2 = pool[i2];
-  return [id1, id2];
-}
+/* 토끼 총 마릿수 (rabbitId 0~79) */
+const TOTAL_RABBITS = 80;
 
 /**
- * 교수님 홈 캐릭터 박스 — 궤도 캐러셀 (이름/도감 없음)
+ * 교수님 홈 캐릭터 박스 — 80마리 전체 순환 궤도 캐러셀
+ *
+ * - 첫 마운트: 랜덤 N → 슬롯 [N, N+1]
+ * - 스와이프 회전: 한 번 돌릴 때마다 슬롯이 한 칸씩 시프트
+ *   ([N, N+1] → [N+1, N+2] → [N+2, N+3] ...)
+ * - 80번 다음은 0번으로 순환 (wrap-around)
+ * - 앞쪽 토끼의 닉네임(해당 과목 기준)을 사진 아래 칩으로 표시
  */
 export default function ProfessorCharacterBox() {
-  const [equipped, setEquipped] = useState<number[]>([]);
+  const { userCourseId } = useCourse();
   const scale = useHomeScale();
 
-  // 스케일 적용된 궤도 파라미터
-  const ORBIT_RX = Math.round(BASE_ORBIT_RX * scale);
-  const ORBIT_RY = Math.round(BASE_ORBIT_RY * scale);
-  const CHAR_SIZE = Math.round(BASE_CHAR_SIZE * scale);
+  // 교수 홈은 학생 홈과 달리 도감/EXP/스탯이 없어 공간이 넉넉 → 토끼·궤도 1.3배 부스트
+  const PROFESSOR_SCALE = 1.3;
+  const ORBIT_RX = Math.round(BASE_ORBIT_RX * scale * PROFESSOR_SCALE);
+  const ORBIT_RY = Math.round(BASE_ORBIT_RY * scale * PROFESSOR_SCALE);
+  const CHAR_SIZE = Math.round(BASE_CHAR_SIZE * scale * PROFESSOR_SCALE);
   const CHAR_HALF = CHAR_SIZE / 2;
-  const ORBIT_Y_SHIFT = Math.round(BASE_ORBIT_Y_SHIFT * scale);
+  const ORBIT_Y_SHIFT = Math.round(BASE_ORBIT_Y_SHIFT * scale * PROFESSOR_SCALE);
 
-  useEffect(() => {
-    setEquipped(pickTwo());
-  }, []);
-
-  // 캐러셀
+  // 두 슬롯의 rabbitId — null=아직 결정 전
+  const [slots, setSlots] = useState<[number, number] | null>(null);
+  // 어느 슬롯이 앞쪽인지 (0 또는 1)
   const [activeIndex, setActiveIndex] = useState(0);
+
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const swipeDir = useRef<'h' | 'v' | null>(null);
@@ -54,17 +54,30 @@ export default function ProfessorCharacterBox() {
   const rotationMV = useMotionValue(Math.PI / 2);
   const springRotation = useSpring(rotationMV, { stiffness: 100, damping: 18 });
 
-  const slotCount = equipped.length;
+  // 첫 마운트 — 80마리 중 랜덤 N 한 마리 + 그 다음 번호 자동 배치
+  useEffect(() => {
+    const n = Math.floor(Math.random() * TOTAL_RABBITS);
+    setSlots([n, (n + 1) % TOTAL_RABBITS]);
+  }, []);
 
-  // 공전 실행
+  // 공전 — 양방향 스와이프 모두 "다음 번호로 전진"
+  // 회전 시: activeIndex 토글 + 새로 뒤로 간 슬롯의 ID를 앞 ID+1로 교체 → 사실상 한 칸 시프트
   const doOrbitSwap = useCallback((dx: number) => {
-    if (slotCount <= 1) return;
-    if (Math.abs(dx) > SWIPE_THRESHOLD) {
-      rotationTarget.current += (dx < 0 ? 1 : -1) * Math.PI;
-      rotationMV.set(rotationTarget.current);
-      setActiveIndex(prev => (prev === 0 ? 1 : 0));
-    }
-  }, [slotCount, rotationMV]);
+    if (Math.abs(dx) <= SWIPE_THRESHOLD) return;
+    rotationTarget.current += (dx < 0 ? 1 : -1) * Math.PI;
+    rotationMV.set(rotationTarget.current);
+    setActiveIndex(prev => {
+      const next = prev === 0 ? 1 : 0;
+      setSlots(curr => {
+        if (!curr) return curr;
+        const newSlots: [number, number] = [curr[0], curr[1]];
+        // 새 뒤쪽 슬롯(=prev)의 토끼를 (새 앞쪽 슬롯 ID + 1)로 교체
+        newSlots[prev] = (curr[next] + 1) % TOTAL_RABBITS;
+        return newSlots;
+      });
+      return next;
+    });
+  }, [rotationMV]);
 
   // 모바일 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -89,11 +102,10 @@ export default function ProfessorCharacterBox() {
 
   // PC 마우스 드래그
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if (slotCount <= 1) return;
     isDragging.current = true;
     touchStartX.current = scaleCoord(e.clientX);
     e.preventDefault();
-  }, [slotCount]);
+  }, []);
 
   useEffect(() => {
     const handleMouseUp = (e: MouseEvent) => {
@@ -105,10 +117,18 @@ export default function ProfessorCharacterBox() {
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [doOrbitSwap]);
 
+  // 앞쪽 토끼의 닉네임 + 최초 발견자(이름 지은 사람) 조회
+  const frontRabbitId = slots ? slots[activeIndex] : null;
+  const { rabbit: frontRabbitDoc } = useRabbitDoc(userCourseId, frontRabbitId);
+  const frontDisplayName = frontRabbitId === null
+    ? null
+    : computeRabbitDisplayName(frontRabbitDoc?.name, 1, frontRabbitId);
+  const namedBy = frontRabbitDoc?.name ? frontRabbitDoc?.firstDiscovererName : null;
+
   const containerW = ORBIT_RX * 2 + CHAR_SIZE;
   const containerH = ORBIT_RY * 2 + CHAR_SIZE;
 
-  if (equipped.length === 0) return null;
+  if (!slots) return null;
 
   return (
     <div className="flex flex-col items-center w-full">
@@ -142,10 +162,10 @@ export default function ProfessorCharacterBox() {
           }}
         />
 
-        {/* 공전 캐릭터 2마리 */}
-        {equipped.map((rabbitId, idx) => (
+        {/* 공전 캐릭터 2마리 — key는 슬롯 위치 고정(인스턴스 보존), rabbitId만 갱신 */}
+        {slots.map((rabbitId, idx) => (
           <OrbitalCharacter
-            key={`${rabbitId}-${idx}`}
+            key={`slot-${idx}`}
             rabbitId={rabbitId}
             springRotation={springRotation}
             charIndex={idx}
@@ -154,6 +174,31 @@ export default function ProfessorCharacterBox() {
             charSize={CHAR_SIZE}
           />
         ))}
+      </div>
+
+      {/* 토끼 이름 칩 — 닉네임 + 지은이 */}
+      <div style={{ marginTop: Math.round(120 * scale), position: 'relative', top: Math.round(16 * scale) }}>
+        <AnimatePresence mode="wait">
+          {frontDisplayName && (
+            <motion.div
+              key={`${frontRabbitId}-${frontDisplayName}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="px-5 py-2 flex flex-col items-center gap-0.5 bg-black/30 border border-white/10 rounded-2xl backdrop-blur-xl"
+            >
+              <span className="text-base font-bold text-white tracking-wide leading-none">
+                {frontDisplayName}
+              </span>
+              {namedBy && (
+                <span className="text-[11px] font-medium text-white/60 tracking-wide leading-none">
+                  by {namedBy}
+                </span>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
