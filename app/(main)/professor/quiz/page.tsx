@@ -308,7 +308,9 @@ export default function ProfessorQuizListPage() {
       courseId: data.courseId,
       targetClass: data.targetClass || 'all',
       difficulty: data.difficulty || 'normal',
-      isPublished: data.isPublished ?? true,
+      // 비공개 기준 단일화: isPublished 가 명시되어 있으면 그 값, 없으면 isPublic 폴백, 둘 다 없으면 false
+      // (학생 자작 → 교수 서재 이동처럼 isPublished 필드가 없는 옛 문서가 카러셀에 잘못 노출되던 버그 방지)
+      isPublished: data.isPublished ?? data.isPublic ?? false,
       questions: data.questions || [],
       questionCount: data.questionCount || 0,
       creatorUid: data.creatorUid || data.creatorId || '',
