@@ -10,23 +10,40 @@ interface SplashScreenProps {
 
 /**
  * 스플래시 화면 컴포넌트
- * 앱 진입 시 2.5초간 로고를 보여주고 메인 콘텐츠로 전환
- * 가로모드(태블릿): 스플래시 건너뛰기
+ * - PC 환경(hover+fine pointer 또는 1024px+ landscape): 항상 건너뛰기
+ * - 모바일: localStorage(`splash_seen`) 기록 후 첫 진입에만 표시 — 새로고침·재방문 시엔 즉시 건너뛰기
  */
+const SPLASH_SEEN_KEY = 'splash_seen_v1';
+
 export default function SplashScreen({ children }: SplashScreenProps) {
-  const [showSplash, setShowSplash] = useState(true);
+  // 첫 렌더부터 결정: SSR 중에는 항상 false(스플래시 안 보임), 클라이언트 마운트 시 조건 평가
+  const [showSplash, setShowSplash] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const isWide = useWideMode();
 
   useEffect(() => {
     setIsClient(true);
 
-    // 가로모드: 스플래시 즉시 건너뛰기
-    if (window.matchMedia('(orientation: landscape) and (min-width: 1024px)').matches) {
-      setShowSplash(false);
+    // PC 환경 식별: 큰 가로 화면(태블릿/데스크탑) 또는 마우스 hover가 가능한 환경
+    const isLandscapeLarge = window.matchMedia('(orientation: landscape) and (min-width: 1024px)').matches;
+    const isDesktopInput = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (isLandscapeLarge || isDesktopInput) {
+      // PC: 항상 건너뛰기
       return;
     }
 
+    // 모바일: 이미 본 적 있으면 건너뛰기
+    try {
+      if (localStorage.getItem(SPLASH_SEEN_KEY)) {
+        return;
+      }
+      // 첫 진입 — 스플래시 표시 + 본 기록 저장
+      localStorage.setItem(SPLASH_SEEN_KEY, String(Date.now()));
+    } catch {
+      // localStorage 접근 불가(시크릿 모드 등) — 그대로 표시
+    }
+
+    setShowSplash(true);
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
@@ -39,8 +56,8 @@ export default function SplashScreen({ children }: SplashScreenProps) {
     if (isWide && showSplash) setShowSplash(false);
   }, [isWide, showSplash]);
 
-  // 서버 사이드 렌더링 중에는 children만 렌더링
-  if (!isClient) {
+  // 서버 사이드 렌더링 중이거나 스플래시 자체가 비활성(PC 또는 재방문 모바일)이면 children만 즉시 렌더링
+  if (!isClient || !showSplash) {
     return <>{children}</>;
   }
 
