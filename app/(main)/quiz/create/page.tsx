@@ -1362,8 +1362,10 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
       await addDoc(collection(db, 'quizzes'), cleanedQuizData);
 
       // EXP 토스트 표시 — 실제 지급은 CF onQuizCreate에서 수행
-      const earnedExp = cleanedQuizData.isPublic ? EXP_REWARDS.QUIZ_CREATE : EXP_REWARDS.QUIZ_AI_SAVE;
-      showExpToast(earnedExp, '퀴즈 생성');
+      // 이 페이지는 type='custom' 고정 (AI 저장과 다름). 비공개 35 / 공개 50 대칭.
+      const earnedExp = cleanedQuizData.isPublic ? EXP_REWARDS.QUIZ_CREATE : EXP_REWARDS.QUIZ_CUSTOM_PRIVATE;
+      const expLabel = cleanedQuizData.isPublic ? '퀴즈 만들기(공개)' : '퀴즈 만들기(비공개)';
+      showExpToast(earnedExp, expLabel);
 
       // 저장된 초안 삭제
       deleteDraft();
