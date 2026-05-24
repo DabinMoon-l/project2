@@ -635,14 +635,58 @@ export default function ProfessorLibraryTab({
           </div>
         ) : (
           <div className="space-y-2">
-            {questions.map((q: Record<string, unknown>, idx: number) => (
-              <PreviewQuestionCard
-                key={(q.id as string) || `q${idx}`}
-                question={q}
-                questionNumber={idx + 1}
-                feedbackData={feedbackByQuestion.get(idx + 1)}
-              />
-            ))}
+            {(() => {
+              // 결합형 그룹화: 같은 combinedGroupId 문제들은 하위 카드들에 공통 지문 정보 주입
+              const processedGroupIds = new Set<string>();
+              const items: React.ReactNode[] = [];
+              let displayNum = 0;
+
+              questions.forEach((q: Record<string, unknown>, idx: number) => {
+                const groupId = q.combinedGroupId as string | undefined;
+                if (groupId) {
+                  if (processedGroupIds.has(groupId)) return;
+                  processedGroupIds.add(groupId);
+                  const groupMembers = questions.filter((qq: Record<string, unknown>) => qq.combinedGroupId === groupId);
+                  // 첫 멤버에서 공통 지문 정보 추출
+                  const firstMember = groupMembers.find((m: Record<string, unknown>) => m.combinedIndex === 0) || groupMembers[0];
+                  groupMembers.forEach((member: Record<string, unknown>, mIdx: number) => {
+                    displayNum++;
+                    // 첫 카드만 공통 지문/문제 정보를 함께 보여줌
+                    const merged = mIdx === 0
+                      ? {
+                          ...member,
+                          commonQuestion: firstMember.commonQuestion,
+                          passage: firstMember.passage,
+                          passageType: firstMember.passageType,
+                          passageImage: firstMember.passageImage,
+                          koreanAbcItems: firstMember.koreanAbcItems,
+                          passageMixedExamples: firstMember.passageMixedExamples,
+                        }
+                      : member;
+                    items.push(
+                      <PreviewQuestionCard
+                        key={(member.id as string) || `q${idx}-${mIdx}`}
+                        question={merged}
+                        questionNumber={displayNum}
+                        feedbackData={feedbackByQuestion.get(displayNum)}
+                      />
+                    );
+                  });
+                } else {
+                  displayNum++;
+                  items.push(
+                    <PreviewQuestionCard
+                      key={(q.id as string) || `q${idx}`}
+                      question={q}
+                      questionNumber={displayNum}
+                      feedbackData={feedbackByQuestion.get(displayNum)}
+                    />
+                  );
+                }
+              });
+
+              return items;
+            })()}
           </div>
         )}
 

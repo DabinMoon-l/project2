@@ -18,6 +18,72 @@ const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PreviewQuestion = Record<string, any>;
 
+/** 혼합 보기 블록 렌더링 헬퍼 (text/labeled/gana/bullet/image/grouped 모두 지원) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function MixedBlocksRenderer({ blocks }: { blocks: any[] }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderItem = (block: any) => {
+    if (block.type === 'text' && block.content?.trim()) {
+      return <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{renderInlineMarkdown(block.content)}</p>;
+    }
+    if (block.type === 'labeled' && Array.isArray(block.items)) {
+      return (
+        <div className="space-y-0.5">
+          {block.items.filter((i: { content?: string }) => i.content?.trim()).map((item: { label: string; content: string }) => (
+            <p key={item.label} className="text-xs text-[#1A1A1A]">
+              <span className="font-bold mr-1">{item.label}.</span>{item.content}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    if (block.type === 'gana' && Array.isArray(block.items)) {
+      return (
+        <div className="space-y-0.5">
+          {block.items.filter((i: { content?: string }) => i.content?.trim()).map((item: { label: string; content: string }) => (
+            <p key={item.label} className="text-xs text-[#1A1A1A]">
+              <span className="font-bold mr-1">({item.label})</span>{item.content}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    if (block.type === 'bullet' && Array.isArray(block.items)) {
+      return (
+        <div className="space-y-0.5">
+          {block.items.filter((i: { content?: string }) => i.content?.trim()).map((item: { id: string; content: string }, idx: number) => (
+            <p key={`${item.id}-${idx}`} className="text-xs text-[#1A1A1A]">
+              <span className="mr-1">◦</span>{item.content}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    if (block.type === 'image' && block.imageUrl) {
+      return <img src={block.imageUrl} alt="제시문 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />;
+    }
+    if (block.type === 'grouped' && Array.isArray(block.children)) {
+      return (
+        <div className="space-y-1 p-1.5 border border-[#1A1A1A]">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {block.children.map((child: any) => (
+            <div key={child.id}>{renderItem(child)}</div>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {blocks.map((block) => (
+        <div key={block.id}>{renderItem(block)}</div>
+      ))}
+    </div>
+  );
+}
+
 export default function PreviewQuestionCard({
   question,
   questionNumber,
@@ -40,6 +106,25 @@ export default function PreviewQuestionCard({
   useEffect(() => {
     if (isEditMode) setIsExpanded(true);
   }, [isEditMode]);
+
+  // 선지별 해설이 있으면 정답 선지 아코디언 기본 열림 (학생 result 화면과 동일 동작)
+  useEffect(() => {
+    if (isEditMode) return;
+    if (question.type !== 'multiple') return;
+    if (!Array.isArray(question.choiceExplanations) || !question.choiceExplanations.some((e: string) => e)) return;
+    const choiceCount = (question.choices || []).length || 4;
+    const normalize = (a: number): number => (a >= choiceCount ? a - 1 : a);
+    const correctIndices: number[] = Array.isArray(question.answer)
+      ? question.answer.map((a: number) => normalize(a))
+      : typeof question.answer === 'number' && question.answer >= 0
+        ? [normalize(question.answer)]
+        : [];
+    const next = new Set<number>();
+    correctIndices.forEach(idx => {
+      if (!isNaN(idx) && question.choiceExplanations[idx]) next.add(idx);
+    });
+    if (next.size > 0) setExpandedChoices(next);
+  }, [question, isEditMode]);
 
   return (
     <motion.div
@@ -121,6 +206,77 @@ export default function PreviewQuestionCard({
                   {question.imageDescription && (
                     <p className="text-xs text-[#5C5C5C] mt-1">{question.imageDescription}</p>
                   )}
+                </div>
+              )}
+
+              {/* 공통 문제 (결합형) */}
+              {question.commonQuestion && (
+                <div className="mb-2 p-2 border border-[#8B6914] bg-[#FFF8E1]">
+                  <p className="text-[10px] font-bold text-[#8B6914] mb-1">공통 문제</p>
+                  <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">
+                    {renderInlineMarkdown(question.commonQuestion)}
+                  </p>
+                </div>
+              )}
+
+              {/* 공통 지문 (결합형의 passageMixedExamples / passage / koreanAbcItems) */}
+              {(question.passage || question.passageImage || (Array.isArray(question.koreanAbcItems) && question.koreanAbcItems.length > 0) || (Array.isArray(question.passageMixedExamples) && question.passageMixedExamples.length > 0)) && (
+                <div className="mb-2 p-2 border border-[#8B6914] bg-[#FFF8E1]">
+                  <p className="text-[10px] font-bold text-[#8B6914] mb-1">
+                    {question.passageType === 'korean_abc' ? '보기' : '공통 지문'}
+                  </p>
+                  {question.passage && question.passageType !== 'korean_abc' && question.passageType !== 'mixed' && (
+                    <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">
+                      {renderInlineMarkdown(question.passage)}
+                    </p>
+                  )}
+                  {question.passageType === 'korean_abc' && Array.isArray(question.koreanAbcItems) && (
+                    <div className="space-y-0.5">
+                      {question.koreanAbcItems.map((itm: string, idx: number) => (
+                        <p key={`kabc-${idx}`} className="text-xs text-[#1A1A1A]">
+                          <span className="font-bold mr-1">{['ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ'][idx]}.</span>{itm}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {Array.isArray(question.passageMixedExamples) && question.passageMixedExamples.length > 0 && (
+                    <MixedBlocksRenderer blocks={question.passageMixedExamples} />
+                  )}
+                  {question.passageImage && (
+                    <img src={question.passageImage} alt="공통 이미지" className="mt-2 max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+                  )}
+                </div>
+              )}
+
+              {/* 발문 */}
+              {(question.passagePrompt || question.bogi?.questionText) && (
+                <div className="mb-2 p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
+                  <p className="text-xs text-[#1A1A1A]">
+                    {question.passagePrompt}
+                    {question.passagePrompt && question.bogi?.questionText && ' '}
+                    {question.bogi?.questionText}
+                  </p>
+                </div>
+              )}
+
+              {/* 일반 제시문 (mixedExamples - 객관식 보기 가나다 등) */}
+              {Array.isArray(question.mixedExamples) && question.mixedExamples.length > 0 && (
+                <div className="mb-2 p-2 border border-[#8B6914] bg-[#FFF8E1]">
+                  <MixedBlocksRenderer blocks={question.mixedExamples} />
+                </div>
+              )}
+
+              {/* <보기> 박스 (bogi) */}
+              {question.bogi?.items && question.bogi.items.some((i: { content?: string }) => i.content?.trim()) && (
+                <div className="mb-2 p-2 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                  <div className="space-y-0.5">
+                    {question.bogi.items.filter((i: { content?: string }) => i.content?.trim()).map((item: { label: string; content: string }) => (
+                      <p key={`bogi-${item.label}`} className="text-xs text-[#1A1A1A]">
+                        <span className="font-bold mr-1">{item.label}.</span>
+                        {item.content}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
 

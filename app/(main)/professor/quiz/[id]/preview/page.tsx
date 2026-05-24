@@ -209,6 +209,25 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [expandedChoices, setExpandedChoices] = useState<Set<string>>(new Set());
 
+  // 선지별 해설이 있으면 정답 선지 아코디언 기본 열림 (학생 result 화면과 동일 동작)
+  useEffect(() => {
+    if (!questions || questions.length === 0) return;
+    const defaultExpanded = new Set<string>();
+    questions.forEach((q) => {
+      if (q.type !== 'multiple' || !q.choiceExplanations?.some(e => e)) return;
+      const correctStr = q.correctAnswer?.toString() || '';
+      const correctIndices = correctStr.includes(',')
+        ? correctStr.split(',').map(s => parseInt(s.trim(), 10))
+        : [parseInt(correctStr, 10)];
+      correctIndices.forEach(idx => {
+        if (!isNaN(idx) && q.choiceExplanations?.[idx]) {
+          defaultExpanded.add(`${q.id}-${idx}`);
+        }
+      });
+    });
+    if (defaultExpanded.size > 0) setExpandedChoices(defaultExpanded);
+  }, [questions]);
+
   // 수정 모드 상태
   const [isEditMode, setIsEditMode] = useState(false);
   const [rawQuizData, setRawQuizData] = useState<RawQuizData | null>(null);
