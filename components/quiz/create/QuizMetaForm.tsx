@@ -43,7 +43,7 @@ interface QuizMetaFormProps {
 // ============================================================
 
 /** 제목 최대 글자수 */
-const TITLE_MAX_LENGTH = 10;
+const TITLE_MAX_LENGTH = 15;
 
 /** 사용자 직접 입력 태그 최대 글자수 */
 const CUSTOM_TAG_MAX_LENGTH = 10;

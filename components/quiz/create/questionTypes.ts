@@ -112,9 +112,9 @@ export type PassageType = 'text' | 'korean_abc';
 export const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 /**
- * (가)(나)(다) 라벨 순서 (가~바까지 6개)
+ * (가)(나)(다) 라벨 순서 (가~아까지 8개)
  */
-export const GANA_LABELS = ['가', '나', '다', '라', '마', '바'];
+export const GANA_LABELS = ['가', '나', '다', '라', '마', '바', '사', '아'];
 
 /**
  * ㄱㄴㄷ식 보기 항목 (결합형 공통 지문용)
