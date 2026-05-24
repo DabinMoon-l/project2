@@ -352,7 +352,9 @@ interface Quiz {
   title: string;          // 퀴즈 제목
   questions: unknown[];   // 문제 목록
   isPublic?: boolean;     // 공개 여부
-  type?: string;          // 퀴즈 타입 (ai-generated 등)
+  type?: string;          // 퀴즈 타입 (custom / ai-generated 등)
+  isAiGenerated?: boolean; // AI 생성 마커 (type 외 추가 식별자)
+  uploadedAt?: unknown;   // AI 생성 시 업로드 시각 (있으면 AI 출처)
   rewarded?: boolean;     // 생성 보상 지급 여부
   publicRewarded?: boolean; // 공개 전환 보상 지급 여부
 }
@@ -360,8 +362,10 @@ interface Quiz {
 /**
  * 퀴즈 생성 시 경험치 지급
  *
- * - 커스텀 퀴즈 (isPublic: true): 50 EXP
- * - AI 퀴즈 서재 저장 (isPublic: false): 25 EXP
+ * - 커스텀 공개 저장 (type=custom, isPublic=true): 50 EXP "퀴즈 만들기(공개)"
+ * - 커스텀 비공개 저장 (type=custom, isPublic=false): 35 EXP "퀴즈 만들기(비공개)"
+ *   → 나중에 공개 토글 +15 = 총 50 으로 공개 저장과 대칭
+ * - AI 서재 저장 (isAiGenerated/type=ai-generated/uploadedAt 존재): 25 EXP "AI 퀴즈 서재 저장"
  */
 export const onQuizCreate = onDocumentCreated(
   {
@@ -390,10 +394,29 @@ export const onQuizCreate = onDocumentCreated(
       return;
     }
 
-    // 커스텀(공개) vs AI(서재) 구분
-    const isAiSave = quiz.isPublic === false;
-    const expReward = isAiSave ? EXP_REWARDS.QUIZ_AI_SAVE : EXP_REWARDS.QUIZ_CREATE;
-    const reason = isAiSave ? "AI 퀴즈 서재 저장" : "퀴즈 생성";
+    // AI 출처 / 학생 자작 / 교수 등 기타 구분
+    const isAiSave = quiz.isAiGenerated === true
+      || quiz.type === "ai-generated"
+      || !!quiz.uploadedAt;
+    const isCustom = quiz.type === "custom";
+
+    let expReward: number;
+    let reason: string;
+    if (isAiSave) {
+      expReward = EXP_REWARDS.QUIZ_AI_SAVE;
+      reason = "AI 퀴즈 서재 저장";
+    } else if (isCustom && quiz.isPublic === false) {
+      // 학생 자작 비공개 — 공개 토글(+15) 시 합 50 으로 공개 저장과 대칭
+      expReward = EXP_REWARDS.QUIZ_CUSTOM_PRIVATE;
+      reason = "퀴즈 만들기(비공개)";
+    } else if (isCustom) {
+      expReward = EXP_REWARDS.QUIZ_CREATE;
+      reason = "퀴즈 만들기(공개)";
+    } else {
+      // 교수/기타 — 기존 동작 유지 (이번 작업 범위 밖)
+      expReward = quiz.isPublic === false ? EXP_REWARDS.QUIZ_AI_SAVE : EXP_REWARDS.QUIZ_CREATE;
+      reason = quiz.isPublic === false ? "AI 퀴즈 서재 저장" : "퀴즈 생성";
+    }
 
     const db = getFirestore();
 
