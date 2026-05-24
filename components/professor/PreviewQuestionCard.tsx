@@ -91,13 +91,16 @@ export default function PreviewQuestionCard({
   editData,
   onEditChange,
   feedbackData,
+  hideCommonPassage,
 }: {
   question: PreviewQuestion;
-  questionNumber: number;
+  questionNumber: number | string;
   isEditMode?: boolean;
   editData?: { text?: string; choices?: string[]; explanation?: string; choiceExplanations?: string[] };
   onEditChange?: (field: string, value: string | string[] | number) => void;
   feedbackData?: { counts: Record<string, number>; otherTexts: string[] };
+  /** 그룹 컨테이너 안에 들어갈 때 — 공통 문제·공통 지문은 컨테이너 헤더에서 표시되므로 카드 안에서는 생략 */
+  hideCommonPassage?: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedChoices, setExpandedChoices] = useState<Set<number>>(new Set());
@@ -209,8 +212,8 @@ export default function PreviewQuestionCard({
                 </div>
               )}
 
-              {/* 공통 문제 (결합형) */}
-              {question.commonQuestion && (
+              {/* 공통 문제 (결합형) — 그룹 컨테이너에서 표시할 때는 카드 내 생략 */}
+              {!hideCommonPassage && question.commonQuestion && (
                 <div className="mb-2 p-2 border border-[#8B6914] bg-[#FFF8E1]">
                   <p className="text-[10px] font-bold text-[#8B6914] mb-1">공통 문제</p>
                   <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">
@@ -219,8 +222,8 @@ export default function PreviewQuestionCard({
                 </div>
               )}
 
-              {/* 공통 지문 (결합형의 passageMixedExamples / passage / koreanAbcItems) */}
-              {(question.passage || question.passageImage || (Array.isArray(question.koreanAbcItems) && question.koreanAbcItems.length > 0) || (Array.isArray(question.passageMixedExamples) && question.passageMixedExamples.length > 0)) && (
+              {/* 공통 지문 (결합형의 passageMixedExamples / passage / koreanAbcItems) — 그룹 컨테이너에서 표시할 때 카드 내 생략 */}
+              {!hideCommonPassage && (question.passage || question.passageImage || (Array.isArray(question.koreanAbcItems) && question.koreanAbcItems.length > 0) || (Array.isArray(question.passageMixedExamples) && question.passageMixedExamples.length > 0)) && (
                 <div className="mb-2 p-2 border border-[#8B6914] bg-[#FFF8E1]">
                   <p className="text-[10px] font-bold text-[#8B6914] mb-1">
                     {question.passageType === 'korean_abc' ? '보기' : '공통 지문'}

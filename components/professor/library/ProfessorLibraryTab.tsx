@@ -636,50 +636,127 @@ export default function ProfessorLibraryTab({
         ) : (
           <div className="space-y-2">
             {(() => {
-              // 결합형 그룹화: 같은 combinedGroupId 문제들은 하위 카드들에 공통 지문 정보 주입
+              // 결합형 그룹화: 같은 combinedGroupId 문제들을 그룹 박스로 묶고,
+              // 박스 상단에 공통 문제·공통 지문 표시 + 하위 카드들 좌측 인덴트
               const processedGroupIds = new Set<string>();
               const items: React.ReactNode[] = [];
-              let displayNum = 0;
+              let groupNum = 0;
+
+              const renderPassageMixed = (blocks: unknown[]): React.ReactNode => (
+                <div className="space-y-1.5">
+                  {blocks.map((blkUnknown, bIdx) => {
+                    const block = blkUnknown as { id?: string; type?: string; content?: string; items?: { label: string; content: string }[]; imageUrl?: string };
+                    const key = block.id || `blk-${bIdx}`;
+                    if (block.type === 'text' && block.content?.trim()) {
+                      return <p key={key} className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>;
+                    }
+                    if ((block.type === 'gana' || block.type === 'labeled') && Array.isArray(block.items)) {
+                      return (
+                        <div key={key} className="space-y-0.5">
+                          {block.items.filter(i => i.content?.trim()).map((item) => (
+                            <p key={item.label} className="text-xs text-[#1A1A1A]">
+                              <span className="font-bold mr-1">
+                                {block.type === 'gana' ? `(${item.label})` : `${item.label}.`}
+                              </span>{item.content}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (block.type === 'bullet' && Array.isArray(block.items)) {
+                      return (
+                        <div key={key} className="space-y-0.5">
+                          {block.items.filter(i => i.content?.trim()).map((item, iIdx) => (
+                            <p key={`${key}-${iIdx}`} className="text-xs text-[#1A1A1A]">
+                              <span className="mr-1">◦</span>{item.content}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (block.type === 'image' && block.imageUrl) {
+                      return <img key={key} src={block.imageUrl} alt="공통 지문 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />;
+                    }
+                    return null;
+                  })}
+                </div>
+              );
 
               questions.forEach((q: Record<string, unknown>, idx: number) => {
                 const groupId = q.combinedGroupId as string | undefined;
                 if (groupId) {
                   if (processedGroupIds.has(groupId)) return;
                   processedGroupIds.add(groupId);
+                  groupNum++;
+                  const currentGroupNum = groupNum;
                   const groupMembers = questions.filter((qq: Record<string, unknown>) => qq.combinedGroupId === groupId);
-                  // 첫 멤버에서 공통 지문 정보 추출
-                  const firstMember = groupMembers.find((m: Record<string, unknown>) => m.combinedIndex === 0) || groupMembers[0];
-                  groupMembers.forEach((member: Record<string, unknown>, mIdx: number) => {
-                    displayNum++;
-                    // 첫 카드만 공통 지문/문제 정보를 함께 보여줌
-                    const merged = mIdx === 0
-                      ? {
-                          ...member,
-                          commonQuestion: firstMember.commonQuestion,
-                          passage: firstMember.passage,
-                          passageType: firstMember.passageType,
-                          passageImage: firstMember.passageImage,
-                          koreanAbcItems: firstMember.koreanAbcItems,
-                          passageMixedExamples: firstMember.passageMixedExamples,
-                        }
-                      : member;
-                    items.push(
-                      <PreviewQuestionCard
-                        key={(member.id as string) || `q${idx}-${mIdx}`}
-                        question={merged}
-                        questionNumber={displayNum}
-                        feedbackData={feedbackByQuestion.get(displayNum)}
-                      />
-                    );
-                  });
+                  const firstMember = (groupMembers.find((m: Record<string, unknown>) => m.combinedIndex === 0) || groupMembers[0]) as Record<string, unknown>;
+                  const hasCommonPassage =
+                    !!firstMember.passage ||
+                    !!firstMember.passageImage ||
+                    (Array.isArray(firstMember.koreanAbcItems) && firstMember.koreanAbcItems.length > 0) ||
+                    (Array.isArray(firstMember.passageMixedExamples) && firstMember.passageMixedExamples.length > 0);
+
+                  items.push(
+                    <div key={groupId} className="border-2 border-[#8B6914] bg-[#FFF8E1] rounded-lg p-3 space-y-2">
+                      {/* 그룹 헤더 */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+                          Q{currentGroupNum}
+                        </span>
+                        <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold bg-[#8B6914] text-[#F5F0E8]">
+                          결합형
+                        </span>
+                        <span className="text-[11px] text-[#5C5C5C]">({groupMembers.length}문제)</span>
+                      </div>
+                      {/* 공통 문제 */}
+                      {firstMember.commonQuestion ? (
+                        <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">
+                          {firstMember.commonQuestion as string}
+                        </p>
+                      ) : null}
+                      {/* 공통 지문 */}
+                      {hasCommonPassage && (
+                        <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8] space-y-1.5">
+                          {!!firstMember.passage && firstMember.passageType !== 'korean_abc' && firstMember.passageType !== 'mixed' && (
+                            <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{firstMember.passage as string}</p>
+                          )}
+                          {firstMember.passageType === 'korean_abc' && Array.isArray(firstMember.koreanAbcItems) && (
+                            <div className="space-y-0.5">
+                              {(firstMember.koreanAbcItems as string[]).map((itm, kIdx) => (
+                                <p key={`kabc-${kIdx}`} className="text-xs text-[#1A1A1A]">
+                                  <span className="font-bold mr-1">{['ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ'][kIdx]}.</span>{itm}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {Array.isArray(firstMember.passageMixedExamples) && renderPassageMixed(firstMember.passageMixedExamples as unknown[])}
+                          {firstMember.passageImage ? (
+                            <img src={firstMember.passageImage as string} alt="공통 지문 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+                          ) : null}
+                        </div>
+                      )}
+                      {/* 하위 문제 카드들 (좌측 인덴트) */}
+                      <div className="space-y-1.5 pl-2 border-l-2 border-[#8B6914]">
+                        {groupMembers.map((member: Record<string, unknown>, mIdx: number) => (
+                          <PreviewQuestionCard
+                            key={(member.id as string) || `q${idx}-${mIdx}`}
+                            question={member}
+                            questionNumber={`${currentGroupNum}-${mIdx + 1}`}
+                            hideCommonPassage
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
                 } else {
-                  displayNum++;
+                  groupNum++;
                   items.push(
                     <PreviewQuestionCard
                       key={(q.id as string) || `q${idx}`}
                       question={q}
-                      questionNumber={displayNum}
-                      feedbackData={feedbackByQuestion.get(displayNum)}
+                      questionNumber={groupNum}
+                      feedbackData={feedbackByQuestion.get(groupNum)}
                     />
                   );
                 }
