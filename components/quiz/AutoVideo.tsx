@@ -12,7 +12,16 @@ export function getDifficultyVideo(difficulty: string): string {
 }
 
 // 자동재생 비디오 — 에러 복구 + 탭 전환 대응
-function AutoVideoInner({ src, className }: { src: string; className?: string }) {
+function AutoVideoInner({
+  src,
+  className,
+  poster,
+}: {
+  src: string;
+  className?: string;
+  /** 비디오 로드 전 표시할 정적 이미지. 첫 프레임 캡쳐로 검은 화면 방지 */
+  poster?: string;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   const retryCountRef = useRef(0);
 
@@ -62,6 +71,8 @@ function AutoVideoInner({ src, className }: { src: string; className?: string })
       loop
       muted
       playsInline
+      preload="auto"
+      poster={poster ?? src.replace(/\.mp4$/, '.jpg')}
       className={className}
       style={{ backgroundColor: '#000' }}
       onError={handleError}
