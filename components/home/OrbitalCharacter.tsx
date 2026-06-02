@@ -48,7 +48,7 @@ export function OrbitalCharacter({
       <FloatingWrapper seed={charIndex}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <motion.img
-          src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
+          src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.webp`}
           alt=""
           width={charSize}
           height={Math.round(charSize * (969 / 520))}
