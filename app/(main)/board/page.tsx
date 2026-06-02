@@ -20,7 +20,7 @@ import { useHomeScale } from '@/components/home/useHomeScale';
 import PostDetailPage from './[id]/page';
 import WritePage from './write/page';
 /** 기본 토끼 이미지 경로 */
-const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
+const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.webp';
 
 /** 게시글 통계 줄 (좌=태그, 우=아이콘) */
 function PostStats({ post, tag, isPrivate }: { post: Post; tag?: string; isPrivate?: boolean }) {
@@ -842,7 +842,7 @@ export default function BoardPage() {
                 className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap h-[2.5rem] flex items-center justify-center"
               >
                 {(() => {
-                  const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || 'BIOLOGY';
+                  const name = (courseList.find(c => c.id === selectedCourseId)?.nameEn || 'Biology').toUpperCase();
                   const isLong = name.length > 10;
                   return <span className={isLong ? 'text-[1.6rem] md:text-4xl' : 'text-[1.85rem] md:text-5xl'}>{name}</span>;
                 })()}

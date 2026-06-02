@@ -157,7 +157,7 @@ function RabbitCharacter({
   isSwapping?: boolean;
   isHit?: boolean;
 }) {
-  const src = `/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`;
+  const src = `/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.webp`;
   const size = isOpponent ? 110 : 120;
 
   return (
