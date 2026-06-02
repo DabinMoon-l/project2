@@ -290,7 +290,7 @@ function MainLayoutGrid({
     if (isWide && isHomeActive) {
       const html = document.documentElement.style;
       const body = document.body.style;
-      html.backgroundImage = 'url(/images/home-wide.png)';
+      html.backgroundImage = 'url(/images/home-wide.webp)';
       html.backgroundSize = 'cover';
       html.backgroundPosition = 'center top';
       html.backgroundRepeat = 'no-repeat';
@@ -332,7 +332,7 @@ function MainLayoutGrid({
               position: 'fixed',
               top: 0, bottom: 0, left: 0, right: 0,
               zIndex: 44,
-              backgroundImage: 'url(/images/home-wide.png)',
+              backgroundImage: 'url(/images/home-wide.webp)',
               backgroundSize: 'cover',
               backgroundPosition: 'center top',
               backgroundRepeat: 'no-repeat',
@@ -483,7 +483,7 @@ function MainLayoutGrid({
               <div className="absolute top-0 bottom-0" style={{
                 left: '-240px',
                 width: '100vw',
-                backgroundImage: 'url(/images/home-wide.png)',
+                backgroundImage: 'url(/images/home-wide.webp)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center top',
               }} />

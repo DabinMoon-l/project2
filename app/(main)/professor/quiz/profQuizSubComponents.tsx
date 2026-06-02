@@ -766,7 +766,7 @@ export function CourseRibbonHeader({
   const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
-  const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
+  const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.webp';
   const ribbonScale = course?.quizRibbonScale || 1;
 
   const goToPrev = () => {

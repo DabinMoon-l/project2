@@ -41,9 +41,9 @@ export const FILTER_OPTIONS: { value: ReviewFilter; label: string }[] = [
 
 /** 난이도별 이미지 */
 export const DIFFICULTY_IMAGES: Record<string, string> = {
-  easy: '/images/difficulty-easy.png',
-  normal: '/images/difficulty-normal.png',
-  hard: '/images/difficulty-hard.png',
+  easy: '/images/difficulty-easy.webp',
+  normal: '/images/difficulty-normal.webp',
+  hard: '/images/difficulty-hard.webp',
 };
 
 /** 난이도 라벨 */

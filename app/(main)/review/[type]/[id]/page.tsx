@@ -139,8 +139,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   // 과목별 리본 이미지
   // 교수: quiz(archive) 리본, 학생 solved/퀴즈 경유: quiz 리본, 나머지: review 리본
   const ribbonImage = (isProfessor || folderType === 'solved' || fromQuizPage)
-    ? (userCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.png')
-    : (userCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png');
+    ? (userCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.webp')
+    : (userCourse?.reviewRibbonImage || '/images/biology-review-ribbon.webp');
   const ribbonScale = (isProfessor || folderType === 'solved' || fromQuizPage)
     ? (userCourse?.quizRibbonScale || 1)
     : (userCourse?.reviewRibbonScale || 1);

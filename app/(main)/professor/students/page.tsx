@@ -427,7 +427,7 @@ function StudentsRibbonHeader({
   const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
-  const ribbonImage = course?.studentsRibbonImage || '/images/biology-students-ribbon.png';
+  const ribbonImage = course?.studentsRibbonImage || '/images/biology-students-ribbon.webp';
   const ribbonScale = course?.studentsRibbonScale || 1;
 
   const goToPrev = () => {

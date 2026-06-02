@@ -118,7 +118,7 @@ export function CompletedBadge({ size = 'normal' }: { size?: 'normal' | 'small' 
 
   return (
     <Image
-      src="/images/completed-badge.png"
+      src="/images/completed-badge.webp"
       alt="완료"
       width={size === 'small' ? 80 : 112}
       height={size === 'small' ? 80 : 112}
