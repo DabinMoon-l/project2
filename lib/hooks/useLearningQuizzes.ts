@@ -186,7 +186,11 @@ export function useLearningQuizzes() {
       }
 
       // 2. 퀴즈 문서 업데이트 (기존 태그와 난이도 유지)
-      // 출제자 본인 풀이를 참여자 수 / 평균 점수에 반영
+      // 출제자가 본인 퀴즈를 실제로 풀이한 적 있을 때만 통계에 반영.
+      // (학생 자작 비공개 → 공개 전환은 보통 안 풀이한 상태라 0점 참여 1명 버그를 만들었음)
+      const existingUserScore = quizData.userScores?.[user.uid];
+      const hasUserScored =
+        typeof existingUserScore === 'number' || typeof quizData.score === 'number';
       const isAiType = quizData.type === 'ai-generated';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: Record<string, any> = {
@@ -194,20 +198,29 @@ export function useLearningQuizzes() {
         isPublic: true,
         tags: tags || quizData.tags || [],
         difficulty: quizData.difficulty || 'medium',
-        [`userScores.${user.uid}`]: score,
-        participantCount: 1,
-        averageScore: score,
         uploadedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
+      if (hasUserScored) {
+        const finalScore =
+          typeof existingUserScore === 'number' ? existingUserScore : score;
+        updateData[`userScores.${user.uid}`] = finalScore;
+        updateData.participantCount = 1;
+        updateData.averageScore = finalScore;
+      } else {
+        // 본인이 풀이한 적 없음 → 참여 0명 + 평균 0 으로 초기화
+        updateData.participantCount = 0;
+        updateData.averageScore = 0;
+      }
       if (isAiType) updateData.isAiGenerated = true;
       await quizRepo.updateQuizRaw(quizId, updateData);
 
-      // 분산 카운터 + quiz_completions 초기화 (출제자 점수 반영)
-      // CF에서 quiz_agg 샤드 + quiz_completions 생성 → recordAttempt와 정합성 유지
-      callFunction('initCreatorStats', { quizId }).catch((e) =>
-        console.warn('출제자 통계 초기화 실패 (무시 가능):', e)
-      );
+      // 출제자 본인 풀이 기록 있을 때만 분산 카운터 + quiz_completions 초기화
+      if (hasUserScored) {
+        callFunction('initCreatorStats', { quizId }).catch((e) =>
+          console.warn('출제자 통계 초기화 실패 (무시 가능):', e)
+        );
+      }
 
       // 3. reviews 컬렉션에 각 문제 일괄 저장 (batchAddReviews)
       const reviewsToAdd: Record<string, unknown>[] = [];

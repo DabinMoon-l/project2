@@ -58,8 +58,20 @@ export const initCreatorStats = onCall(
       throw new HttpsError("permission-denied", "본인이 만든 퀴즈만 가능합니다.");
     }
 
-    // 출제자 점수 가져오기
-    const score = quizData.userScores?.[userId] ?? quizData.score ?? 0;
+    // 출제자가 실제로 풀이한 적 있는지 확인 — 없으면 통계 반영 안 함
+    // (공개 전환만 했을 뿐 안 풀이한 자작 퀴즈의 0점 1명 참여 버그 방지)
+    const userScoreRaw = quizData.userScores?.[userId];
+    const hasUserScored =
+      typeof userScoreRaw === "number" || typeof quizData.score === "number";
+
+    if (!hasUserScored) {
+      console.log(
+        `[initCreatorStats] 출제자 풀이 기록 없음 → 통계 반영 안 함: quiz=${quizId} user=${userId}`
+      );
+      return;
+    }
+
+    const score = (userScoreRaw as number | undefined) ?? quizData.score ?? 0;
     const correctCount = quizData.correctCount ?? 0;
     const totalCount = quizData.totalQuestions ?? quizData.questions?.length ?? 0;
 
