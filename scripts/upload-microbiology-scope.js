@@ -33,7 +33,7 @@ function parseChapters(content) {
 
     const chapterRawContent = content.slice(startIndex, endIndex).trim();
 
-    // sub-chapter 파싱: "### N-M. 이름" 패턴 (예: ### 5-3. 나선균군)
+    // 1단계 sub-chapter: "### N-M. 이름" (예: ### 5-3. 나선균군)
     const subChapterRegex = new RegExp(
       `^###\\s*${chapterNumber}-(\\d+)[.\\s]+(.+?)$`,
       "gm"
@@ -41,7 +41,6 @@ function parseChapters(content) {
     const subMatches = [...chapterRawContent.matchAll(subChapterRegex)];
 
     if (subMatches.length === 0) {
-      // sub-chapter 없는 챕터 — 기존처럼 통째로 저장
       chapters.push({
         chapterId: `ch_${chapterNumber}`,
         chapterNumber,
@@ -53,10 +52,9 @@ function parseChapters(content) {
       continue;
     }
 
-    // sub-chapter 있는 챕터 — 메인(개요) + sub-chapter 들로 분리
+    // sub-chapter 있음 → 메인(개요) + sub들
     const firstSubIndex = subMatches[0].index;
     const mainContent = chapterRawContent.slice(0, firstSubIndex).trim();
-
     chapters.push({
       chapterId: `ch_${chapterNumber}`,
       chapterNumber,
@@ -67,26 +65,66 @@ function parseChapters(content) {
     });
 
     for (let j = 0; j < subMatches.length; j++) {
-      const subMatch = subMatches[j];
-      const subNumber = subMatch[1];
-      const subName = subMatch[2].trim();
-      const subStart = subMatch.index;
+      const sm = subMatches[j];
+      const subNumber = sm[1];
+      const subName = sm[2].trim();
+      const subStart = sm.index;
       const subEnd =
-        j < subMatches.length - 1
-          ? subMatches[j + 1].index
-          : chapterRawContent.length;
-      const subContent = chapterRawContent.slice(subStart, subEnd).trim();
+        j < subMatches.length - 1 ? subMatches[j + 1].index : chapterRawContent.length;
+      const subRawContent = chapterRawContent.slice(subStart, subEnd).trim();
       const subKey = `${chapterNumber}_${subNumber}`;
 
+      // 2단계 sub-sub-chapter: "#### N-M-L. 이름" (예: #### 7-1-2. 헤르페스바이러스과)
+      const subSubRegex = new RegExp(
+        `^####\\s*${chapterNumber}-${subNumber}-(\\d+)[.\\s]+(.+?)$`,
+        "gm"
+      );
+      const subSubMatches = [...subRawContent.matchAll(subSubRegex)];
+
+      if (subSubMatches.length === 0) {
+        chapters.push({
+          chapterId: `ch_${subKey}`,
+          chapterNumber: subKey,
+          chapterName: subName,
+          parentChapterNumber: chapterNumber,
+          content: subRawContent,
+          keywords: extractKeywordsFromContent(subRawContent),
+          wordCount: subRawContent.length,
+        });
+        continue;
+      }
+
+      // 2단계 있음 → sub-chapter(개요) + sub-sub들 분리
+      const firstSubSubIndex = subSubMatches[0].index;
+      const subMainContent = subRawContent.slice(0, firstSubSubIndex).trim();
       chapters.push({
         chapterId: `ch_${subKey}`,
         chapterNumber: subKey,
         chapterName: subName,
         parentChapterNumber: chapterNumber,
-        content: subContent,
-        keywords: extractKeywordsFromContent(subContent),
-        wordCount: subContent.length,
+        content: subMainContent,
+        keywords: extractKeywordsFromContent(subMainContent),
+        wordCount: subMainContent.length,
       });
+
+      for (let k = 0; k < subSubMatches.length; k++) {
+        const ssm = subSubMatches[k];
+        const subSubKey = `${chapterNumber}_${subNumber}_${ssm[1]}`;
+        const ssStart = ssm.index;
+        const ssEnd =
+          k < subSubMatches.length - 1 ? subSubMatches[k + 1].index : subRawContent.length;
+        const ssContent = subRawContent.slice(ssStart, ssEnd).trim();
+
+        chapters.push({
+          chapterId: `ch_${subSubKey}`,
+          chapterNumber: subSubKey,
+          chapterName: ssm[2].trim(),
+          parentChapterNumber: subKey,
+          content: ssContent,
+          keywords: extractKeywordsFromContent(ssContent),
+          wordCount: ssContent.length,
+        });
+      }
     }
   }
   return chapters;
@@ -143,15 +181,18 @@ async function main() {
 
   removeCommonKeywords(chapters);
 
-  const mainChapters = chapters.filter((c) => !c.parentChapterNumber);
-  const subChapters = chapters.filter((c) => c.parentChapterNumber);
+  const depthOf = (c) => (c.chapterNumber.match(/_/g) || []).length;
+  const mainChapters = chapters.filter((c) => depthOf(c) === 0);
+  const subChapters = chapters.filter((c) => depthOf(c) === 1);
+  const subSubChapters = chapters.filter((c) => depthOf(c) === 2);
 
   console.log(
-    `\n[파싱 결과] 메인 ${mainChapters.length}개 + sub ${subChapters.length}개 = ${chapters.length}개 도큐먼트`
+    `\n[파싱 결과] 메인 ${mainChapters.length} + sub ${subChapters.length} + sub-sub ${subSubChapters.length} = ${chapters.length}개 도큐먼트`
   );
   let total = 0;
   for (const ch of chapters) {
-    const prefix = ch.parentChapterNumber ? "    └ " : "  ";
+    const d = depthOf(ch);
+    const prefix = d === 2 ? "        └─ " : d === 1 ? "    └ " : "  ";
     console.log(
       `${prefix}${ch.chapterNumber}. ${ch.chapterName}: ${ch.wordCount}자, 키워드 ${ch.keywords.length}개`
     );
@@ -197,7 +238,7 @@ async function main() {
 
   await batch.commit();
   console.log(
-    `✅ 업로드 완료: 메인 ${mainChapters.length}장 + sub ${subChapters.length}개, ${total}자`
+    `✅ 업로드 완료: 메인 ${mainChapters.length}장 + sub ${subChapters.length}개 + sub-sub ${subSubChapters.length}개, ${total}자`
   );
 }
 

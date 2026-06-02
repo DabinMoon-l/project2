@@ -154,17 +154,17 @@ export const uploadCourseScope = onCall(
 );
 
 /**
- * Markdown 내용을 챕터별로 파싱
+ * Markdown 내용을 챕터별로 파싱 — 3계층 지원
  *
- * - 메인 챕터: `## Chapter N.` 또는 `## N.`/`## N장.` 패턴
- * - sub-chapter: 메인 챕터 본문 안의 `### N-M.` 패턴 (예: `### 5-3. 나선균군`)
- *   → 메인 챕터 본문은 첫 sub-chapter 이전까지(학습목표/개요)만, 이후는 별도 sub 도큐먼트로 저장
+ * - 메인 챕터: `## Chapter N.` 또는 `## N.`/`## N장.`
+ * - 1단계 sub: `### N-M.` (예: `### 5-3. 나선균군`)
+ * - 2단계 sub-sub: `#### N-M-L.` (예: `#### 7-1-2. 헤르페스바이러스과`)
+ *
+ * 각 계층의 메인 도큐먼트는 첫 하위 헤딩 이전까지(개요)만, 하위는 별도 도큐먼트로 분리.
  */
 function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
   const chapters: Omit<ChapterScope, "updatedAt">[] = [];
 
-  // ## 숫자. 또는 ## 숫자장. 또는 ## Chapter 숫자. 패턴으로 챕터 구분
-  // 예: ## 3. 세포손상, ## 8장. 순환장애, ## Chapter 01. 미생물과 미생물학
   const chapterRegex = /^##\s*(?:Chapter\s+)?0*(\d+)(?:장)?[.\s]+(.+?)$/gm;
   const matches = [...content.matchAll(chapterRegex)];
 
@@ -174,10 +174,9 @@ function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
     const chapterName = match[2].trim();
     const startIndex = match.index!;
     const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
-
     const chapterRawContent = content.slice(startIndex, endIndex).trim();
 
-    // sub-chapter 패턴 — 예: ### 5-3. 나선균군
+    // 1단계 sub-chapter
     const subChapterRegex = new RegExp(
       `^###\\s*${chapterNumber}-(\\d+)[.\\s]+(.+?)$`,
       "gm"
@@ -196,10 +195,8 @@ function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
       continue;
     }
 
-    // sub-chapter 존재 → 메인(개요) + sub 로 분리
     const firstSubIndex = subMatches[0].index!;
     const mainContent = chapterRawContent.slice(0, firstSubIndex).trim();
-
     chapters.push({
       chapterId: `ch_${chapterNumber}`,
       chapterNumber,
@@ -211,23 +208,64 @@ function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
 
     for (let j = 0; j < subMatches.length; j++) {
       const sm = subMatches[j];
+      const subNumber = sm[1];
+      const subName = sm[2].trim();
       const subStart = sm.index!;
       const subEnd =
-        j < subMatches.length - 1
-          ? subMatches[j + 1].index!
-          : chapterRawContent.length;
-      const subContent = chapterRawContent.slice(subStart, subEnd).trim();
-      const subKey = `${chapterNumber}_${sm[1]}`;
+        j < subMatches.length - 1 ? subMatches[j + 1].index! : chapterRawContent.length;
+      const subRawContent = chapterRawContent.slice(subStart, subEnd).trim();
+      const subKey = `${chapterNumber}_${subNumber}`;
 
+      // 2단계 sub-sub-chapter
+      const subSubRegex = new RegExp(
+        `^####\\s*${chapterNumber}-${subNumber}-(\\d+)[.\\s]+(.+?)$`,
+        "gm"
+      );
+      const subSubMatches = [...subRawContent.matchAll(subSubRegex)];
+
+      if (subSubMatches.length === 0) {
+        chapters.push({
+          chapterId: `ch_${subKey}`,
+          chapterNumber: subKey,
+          chapterName: subName,
+          parentChapterNumber: chapterNumber,
+          content: subRawContent,
+          keywords: extractKeywordsFromContent(subRawContent),
+          wordCount: subRawContent.length,
+        });
+        continue;
+      }
+
+      const firstSubSubIndex = subSubMatches[0].index!;
+      const subMainContent = subRawContent.slice(0, firstSubSubIndex).trim();
       chapters.push({
         chapterId: `ch_${subKey}`,
         chapterNumber: subKey,
-        chapterName: sm[2].trim(),
+        chapterName: subName,
         parentChapterNumber: chapterNumber,
-        content: subContent,
-        keywords: extractKeywordsFromContent(subContent),
-        wordCount: subContent.length,
+        content: subMainContent,
+        keywords: extractKeywordsFromContent(subMainContent),
+        wordCount: subMainContent.length,
       });
+
+      for (let k = 0; k < subSubMatches.length; k++) {
+        const ssm = subSubMatches[k];
+        const subSubKey = `${chapterNumber}_${subNumber}_${ssm[1]}`;
+        const ssStart = ssm.index!;
+        const ssEnd =
+          k < subSubMatches.length - 1 ? subSubMatches[k + 1].index! : subRawContent.length;
+        const ssContent = subRawContent.slice(ssStart, ssEnd).trim();
+
+        chapters.push({
+          chapterId: `ch_${subSubKey}`,
+          chapterNumber: subSubKey,
+          chapterName: ssm[2].trim(),
+          parentChapterNumber: subKey,
+          content: ssContent,
+          keywords: extractKeywordsFromContent(ssContent),
+          wordCount: ssContent.length,
+        });
+      }
     }
   }
 
@@ -437,30 +475,26 @@ export async function loadScopeForAI(
   const allKeywords: string[] = [];
   const chaptersLoaded: string[] = [];
 
-  // 메인 챕터 → sub-chapter 순서로 정렬 (예: 5, 5_1, 5_2, ..., 6)
+  // 챕터 번호로 정렬 (parts 단위 lexicographic, 짧은 것이 먼저 → 메인 → sub → sub-sub)
+  // 예: 5 < 5_1 < 5_1_1 < 5_2 < 6
   const sortedChapters = chaptersSnapshot.docs
     .map(doc => doc.data() as ChapterScope)
     .sort((a, b) => {
-      const aMain = parseInt(a.parentChapterNumber ?? a.chapterNumber);
-      const bMain = parseInt(b.parentChapterNumber ?? b.chapterNumber);
-      if (aMain !== bMain) return aMain - bMain;
-      // 같은 부모 챕터: 메인 도큐먼트가 먼저, sub 는 번호순
-      if (!a.parentChapterNumber) return -1;
-      if (!b.parentChapterNumber) return 1;
-      const aSub = parseInt(a.chapterNumber.split("_")[1] ?? "0");
-      const bSub = parseInt(b.chapterNumber.split("_")[1] ?? "0");
-      return aSub - bSub;
+      const aParts = a.chapterNumber.split("_").map((p) => parseInt(p, 10));
+      const bParts = b.chapterNumber.split("_").map((p) => parseInt(p, 10));
+      const len = Math.max(aParts.length, bParts.length);
+      for (let i = 0; i < len; i++) {
+        const av = aParts[i] ?? -1; // 짧은 쪽이 먼저 (-1 < 자연수)
+        const bv = bParts[i] ?? -1;
+        if (av !== bv) return av - bv;
+      }
+      return 0;
     });
 
-  // 대상 챕터 필터링
-  // 공통 규칙:
-  //   1. 메인 챕터 번호("5") 지정 → 그 챕터의 메인 + 모든 sub 포함
-  //   2. sub-chapter 번호("5_3") 지정 → 해당 sub + 부모 메인 도큐먼트(개요) 포함
-  //   3. selectedDetails (예: ["micro_5_1"]) 는 courseId prefix 제거 후 sub-chapter 번호로 변환되어 (2) 와 동일하게 처리
-  //   4. 둘 다 없으면 전체
-  let filteredChapters: ChapterScope[];
-
-  // selectedDetails 가 있으면 targetChapters 대신 우선 적용
+  // 대상 챕터 필터링 — 자손/조상 양방향 매칭으로 3계층 자동 지원
+  //   target "7"     ↔ chapterNumber: 7, 7_1, 7_1_2, 7_2 등 모두
+  //   target "7_1"   ↔ chapterNumber: 7 (조상), 7_1, 7_1_X 자손 모두
+  //   target "7_1_2" ↔ chapterNumber: 7 (조상), 7_1 (조상), 7_1_2 만
   let effectiveTargets: string[] | undefined;
   if (hasSelectedDetails) {
     const prefix = `${courseId}_`;
@@ -471,33 +505,24 @@ export async function loadScopeForAI(
     effectiveTargets = targetChapters;
   }
 
+  let filteredChapters: ChapterScope[];
   if (effectiveTargets && effectiveTargets.length > 0) {
-    const explicit = new Set(effectiveTargets);
-    const fullParents = new Set<string>();   // 메인 챕터 번호 → 모든 sub 포함
-    const parentMains = new Set<string>();   // sub-chapter 번호 → 부모 메인 도큐먼트 자동 포함
-
-    for (const t of effectiveTargets) {
-      if (t.includes("_")) {
-        parentMains.add(t.split("_")[0]);
-      } else {
-        fullParents.add(t);
-      }
-    }
-
-    filteredChapters = sortedChapters.filter(c => {
-      if (explicit.has(c.chapterNumber)) return true;
-      if (c.parentChapterNumber && fullParents.has(c.parentChapterNumber)) return true;
-      if (!c.parentChapterNumber && parentMains.has(c.chapterNumber)) return true;
-      return false;
-    });
+    filteredChapters = sortedChapters.filter(c =>
+      effectiveTargets!.some(
+        (t) =>
+          c.chapterNumber === t ||
+          c.chapterNumber.startsWith(`${t}_`) ||   // c가 t의 자손
+          t.startsWith(`${c.chapterNumber}_`)      // c가 t의 조상
+      )
+    );
   } else {
     filteredChapters = sortedChapters;
   }
 
   for (const chapter of filteredChapters) {
-    // sub-chapter("5_3")는 "5-3." 형식, 메인 챕터는 "5장." 형식으로 라벨
+    // sub-chapter("5_3" → "5-3", "7_1_2" → "7-1-2"), 메인 챕터는 "5장." 형식
     const label = chapter.parentChapterNumber
-      ? chapter.chapterNumber.replace("_", "-")
+      ? chapter.chapterNumber.replace(/_/g, "-")
       : `${chapter.chapterNumber}장`;
 
     // 최대 길이 체크
