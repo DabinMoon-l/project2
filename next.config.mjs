@@ -1,11 +1,15 @@
 import withPWA from "next-pwa";
 import defaultCache from "next-pwa/cache.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Turbopack 설정 (workspace root 경고 해결)
+  // Turbopack 설정 — root 는 절대 경로 필수 (상대 경로 '.' 는 Vercel 빌드 시 /vercel/path0 폴백 경고 발생)
   turbopack: {
-    root: '.',
+    root: __dirname,
   },
   // CDN 캐시 헤더 — 정적 에셋 + 이미지
   async headers() {
@@ -96,6 +100,32 @@ const pwaConfig = withPWA({
     {
       urlPattern: /\.(?:mp4|webm|ogg)$/i,
       handler: "NetworkOnly",
+    },
+    // 정적 이미지 자산 (토끼/리본/아이콘 등) — CacheFirst 30일
+    //   • HTTP 헤더는 1년 immutable 이지만 SW 캐시가 없으면 모바일 브라우저 캐시 삭제 시 재다운로드
+    //   • CacheFirst SW 캐시로 PWA 설치 후 영구 보존 → 첫 진입 외 추가 다운로드 0
+    //   • 토끼 80마리(rabbit/rabbit_profile) + 리본/난이도/홈 이미지 ~150MB 분량 영향
+    {
+      urlPattern: ({ url, sameOrigin }) =>
+        sameOrigin &&
+        /^\/(rabbit|rabbit_profile|rabbit_thumb|images|icons|lottie|items|notice)\//.test(url.pathname) &&
+        /\.(png|jpe?g|webp|avif|gif|svg)$/i.test(url.pathname),
+      handler: "CacheFirst",
+      options: {
+        cacheName: "static-images",
+        expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    // Next.js 이미지 최적화 결과 (/_next/image?url=...) — CacheFirst 30일
+    {
+      urlPattern: /^\/_next\/image\?/i,
+      handler: "CacheFirst",
+      options: {
+        cacheName: "next-images",
+        expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
     },
     // Next.js 페이지 네비게이션 — StaleWhileRevalidate로 전환:
     //   • 캐시에서 즉시 응답 → iOS PWA cold reload·저속 네트워크에서 빈 화면 시간 최소화
