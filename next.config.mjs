@@ -47,6 +47,13 @@ const nextConfig = {
         ],
       },
       {
+        // 비디오 (난이도/로그인/캐릭터 배경) — 1년 캐시, poster jpg 포함
+        source: '/videos/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
         // API 라우트 — 랭킹/레이더 CDN 캐시 (5분 edge, 10분 stale)
         source: '/api/cache/:path*',
         headers: [
