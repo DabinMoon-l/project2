@@ -31,18 +31,63 @@ function parseChapters(content) {
     const startIndex = match.index;
     const endIndex = i < matches.length - 1 ? matches[i + 1].index : content.length;
 
-    const chapterContent = content.slice(startIndex, endIndex).trim();
-    const wordCount = chapterContent.length;
-    const keywords = extractKeywordsFromContent(chapterContent);
+    const chapterRawContent = content.slice(startIndex, endIndex).trim();
+
+    // sub-chapter 파싱: "### N-M. 이름" 패턴 (예: ### 5-3. 나선균군)
+    const subChapterRegex = new RegExp(
+      `^###\\s*${chapterNumber}-(\\d+)[.\\s]+(.+?)$`,
+      "gm"
+    );
+    const subMatches = [...chapterRawContent.matchAll(subChapterRegex)];
+
+    if (subMatches.length === 0) {
+      // sub-chapter 없는 챕터 — 기존처럼 통째로 저장
+      chapters.push({
+        chapterId: `ch_${chapterNumber}`,
+        chapterNumber,
+        chapterName,
+        content: chapterRawContent,
+        keywords: extractKeywordsFromContent(chapterRawContent),
+        wordCount: chapterRawContent.length,
+      });
+      continue;
+    }
+
+    // sub-chapter 있는 챕터 — 메인(개요) + sub-chapter 들로 분리
+    const firstSubIndex = subMatches[0].index;
+    const mainContent = chapterRawContent.slice(0, firstSubIndex).trim();
 
     chapters.push({
       chapterId: `ch_${chapterNumber}`,
       chapterNumber,
       chapterName,
-      content: chapterContent,
-      keywords,
-      wordCount,
+      content: mainContent,
+      keywords: extractKeywordsFromContent(mainContent),
+      wordCount: mainContent.length,
     });
+
+    for (let j = 0; j < subMatches.length; j++) {
+      const subMatch = subMatches[j];
+      const subNumber = subMatch[1];
+      const subName = subMatch[2].trim();
+      const subStart = subMatch.index;
+      const subEnd =
+        j < subMatches.length - 1
+          ? subMatches[j + 1].index
+          : chapterRawContent.length;
+      const subContent = chapterRawContent.slice(subStart, subEnd).trim();
+      const subKey = `${chapterNumber}_${subNumber}`;
+
+      chapters.push({
+        chapterId: `ch_${subKey}`,
+        chapterNumber: subKey,
+        chapterName: subName,
+        parentChapterNumber: chapterNumber,
+        content: subContent,
+        keywords: extractKeywordsFromContent(subContent),
+        wordCount: subContent.length,
+      });
+    }
   }
   return chapters;
 }
@@ -98,10 +143,18 @@ async function main() {
 
   removeCommonKeywords(chapters);
 
-  console.log(`\n[파싱 결과] ${chapters.length}개 챕터`);
+  const mainChapters = chapters.filter((c) => !c.parentChapterNumber);
+  const subChapters = chapters.filter((c) => c.parentChapterNumber);
+
+  console.log(
+    `\n[파싱 결과] 메인 ${mainChapters.length}개 + sub ${subChapters.length}개 = ${chapters.length}개 도큐먼트`
+  );
   let total = 0;
   for (const ch of chapters) {
-    console.log(`  ${ch.chapterNumber}장. ${ch.chapterName}: ${ch.wordCount}자, 키워드 ${ch.keywords.length}개`);
+    const prefix = ch.parentChapterNumber ? "    └ " : "  ";
+    console.log(
+      `${prefix}${ch.chapterNumber}. ${ch.chapterName}: ${ch.wordCount}자, 키워드 ${ch.keywords.length}개`
+    );
     total += ch.wordCount;
   }
   console.log(`  전체: ${total}자`);
@@ -113,15 +166,24 @@ async function main() {
 
   console.log(`\n[업로드 시작] courseScopes/${COURSE_ID}`);
 
-  const batch = db.batch();
+  // 기존 chapters 컬렉션 정리 — sub-chapter 추가/제거 시 stale 도큐먼트 잔류 방지
   const scopeRef = db.collection("courseScopes").doc(COURSE_ID);
+  const existing = await scopeRef.collection("chapters").get();
+  if (!existing.empty) {
+    const cleanupBatch = db.batch();
+    for (const doc of existing.docs) cleanupBatch.delete(doc.ref);
+    await cleanupBatch.commit();
+    console.log(`  (기존 ${existing.size}개 도큐먼트 삭제)`);
+  }
+
+  const batch = db.batch();
 
   batch.set(scopeRef, {
     courseId: COURSE_ID,
     courseName: COURSE_NAME,
-    totalChapters: chapters.length,
+    totalChapters: mainChapters.length,
     totalWordCount: total,
-    availableChapters: chapters.map((c) => c.chapterNumber),
+    availableChapters: mainChapters.map((c) => c.chapterNumber),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -134,7 +196,9 @@ async function main() {
   }
 
   await batch.commit();
-  console.log(`✅ 업로드 완료: ${chapters.length}개 챕터, ${total}자`);
+  console.log(
+    `✅ 업로드 완료: 메인 ${mainChapters.length}장 + sub ${subChapters.length}개, ${total}자`
+  );
 }
 
 main()
