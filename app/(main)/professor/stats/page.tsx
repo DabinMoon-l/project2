@@ -673,15 +673,7 @@ export default function ProfessorStatsPage() {
             transition={{ duration: 0.3 }}
             className={isWide ? 'flex-1 flex flex-col space-y-8' : 'space-y-8'}
           >
-            {/* [DEBUG] 챕터 분석 0점 디버깅 — 확인 후 제거 예정 */}
-            <div className="p-2 text-[10px] font-mono bg-yellow-100 border border-yellow-400 break-all">
-              <div>🔧 DEBUG | course={courseId} | source={source}</div>
-              <div>totalStudents={data.totalStudents} | totalAttempts={data.totalAttempts} | profMean={data.professorMean.toFixed(1)}</div>
-              <div>classStats: {data.classStats.map(c => `${c.classId}=${c.mean.toFixed(0)}(${c.studentCount}명)`).join(' / ')}</div>
-              <div>chapterStats.length={data.chapterStats.length}</div>
-              <div>chapters: {data.chapterStats.map(c => `${c.chapterId}=${c.mean.toFixed(0)}`).join(' / ')}</div>
-            </div>
-            <div className={isWide ? 'flex-1 min-h-0' : ''}>
+<div className={isWide ? 'flex-1 min-h-0' : ''}>
               <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} fillHeight={isWide} />
             </div>
             {/* 세로모드에서만 2쪽에 표시 (가로모드에서는 3쪽 디테일 패널) */}
@@ -913,7 +905,7 @@ function DashboardRibbonHeader({
   const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
-  const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.png';
+  const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.webp';
   const ribbonScale = course?.dashboardRibbonScale || 1;
 
   const goToPrev = () => {

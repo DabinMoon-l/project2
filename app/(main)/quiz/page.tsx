@@ -70,7 +70,7 @@ function QuizListPageContent() {
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
-  const ribbonImage = currentCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
+  const ribbonImage = currentCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.webp';
   const ribbonScale = currentCourse?.quizRibbonScale || 1;
   const ribbonOffsetY = currentCourse?.quizRibbonOffsetY || 0;
 

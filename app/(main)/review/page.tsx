@@ -68,7 +68,7 @@ function ReviewPageContent() {
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
-  const ribbonImage = currentCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png';
+  const ribbonImage = currentCourse?.reviewRibbonImage || '/images/biology-review-ribbon.webp';
   const ribbonScale = currentCourse?.reviewRibbonScale || 1;
 
   // URL 쿼리 파라미터에서 초기 필터값 가져오기 (기본값: 서재)
