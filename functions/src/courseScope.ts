@@ -26,6 +26,12 @@ export interface ChapterScope {
   content: string;           // 챕터 전체 내용
   keywords: string[];        // 주요 키워드
   wordCount: number;
+  /**
+   * sub-chapter 도큐먼트인 경우 부모 챕터 번호.
+   * 예: ch_5_3 → parentChapterNumber = "5".
+   * 메인 챕터 도큐먼트(ch_5 등)에는 존재하지 않음.
+   */
+  parentChapterNumber?: string;
   updatedAt: FirebaseFirestore.Timestamp;
 }
 
@@ -90,21 +96,30 @@ export const uploadCourseScope = onCall(
       // 챕터 간 공통 단어 제거 (노이즈 방지)
       removeCommonKeywords(chapters);
 
-      const batch = db.batch();
+      // 기존 chapters 컬렉션 정리 — sub-chapter 추가/제거 시 stale 도큐먼트 잔류 방지
       const scopeRef = db.collection("courseScopes").doc(courseId);
+      const existing = await scopeRef.collection("chapters").get();
+      if (!existing.empty) {
+        const cleanupBatch = db.batch();
+        for (const doc of existing.docs) cleanupBatch.delete(doc.ref);
+        await cleanupBatch.commit();
+      }
 
-      // 메인 문서 저장
+      const batch = db.batch();
+      const mainChapters = chapters.filter(c => !c.parentChapterNumber);
+
+      // 메인 문서 저장 (totalChapters/availableChapters 는 메인 챕터 기준)
       const scopeData: Omit<CourseScope, "updatedAt"> & { updatedAt: FieldValue } = {
         courseId,
         courseName,
-        totalChapters: chapters.length,
+        totalChapters: mainChapters.length,
         totalWordCount: chapters.reduce((sum, c) => sum + c.wordCount, 0),
-        availableChapters: chapters.map(c => c.chapterNumber),
+        availableChapters: mainChapters.map(c => c.chapterNumber),
         updatedAt: FieldValue.serverTimestamp(),
       };
       batch.set(scopeRef, scopeData);
 
-      // 챕터별 저장
+      // 챕터/sub-chapter 저장
       for (const chapter of chapters) {
         const chapterRef = scopeRef.collection("chapters").doc(chapter.chapterId);
         batch.set(chapterRef, {
@@ -115,7 +130,7 @@ export const uploadCourseScope = onCall(
 
       await batch.commit();
 
-      console.log(`[Scope 업로드] ${courseName}: ${chapters.length}개 챕터, ${scopeData.totalWordCount}자`);
+      console.log(`[Scope 업로드] ${courseName}: 메인 ${mainChapters.length}장 + sub ${chapters.length - mainChapters.length}개, ${scopeData.totalWordCount}자`);
 
       return {
         success: true,
@@ -140,6 +155,10 @@ export const uploadCourseScope = onCall(
 
 /**
  * Markdown 내용을 챕터별로 파싱
+ *
+ * - 메인 챕터: `## Chapter N.` 또는 `## N.`/`## N장.` 패턴
+ * - sub-chapter: 메인 챕터 본문 안의 `### N-M.` 패턴 (예: `### 5-3. 나선균군`)
+ *   → 메인 챕터 본문은 첫 sub-chapter 이전까지(학습목표/개요)만, 이후는 별도 sub 도큐먼트로 저장
  */
 function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
   const chapters: Omit<ChapterScope, "updatedAt">[] = [];
@@ -156,20 +175,60 @@ function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
     const startIndex = match.index!;
     const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
 
-    const chapterContent = content.slice(startIndex, endIndex).trim();
-    const wordCount = chapterContent.length;
+    const chapterRawContent = content.slice(startIndex, endIndex).trim();
 
-    // 키워드 추출 (⭐ 표시된 항목, 굵은 글씨 등)
-    const keywords = extractKeywordsFromContent(chapterContent);
+    // sub-chapter 패턴 — 예: ### 5-3. 나선균군
+    const subChapterRegex = new RegExp(
+      `^###\\s*${chapterNumber}-(\\d+)[.\\s]+(.+?)$`,
+      "gm"
+    );
+    const subMatches = [...chapterRawContent.matchAll(subChapterRegex)];
+
+    if (subMatches.length === 0) {
+      chapters.push({
+        chapterId: `ch_${chapterNumber}`,
+        chapterNumber,
+        chapterName,
+        content: chapterRawContent,
+        keywords: extractKeywordsFromContent(chapterRawContent),
+        wordCount: chapterRawContent.length,
+      });
+      continue;
+    }
+
+    // sub-chapter 존재 → 메인(개요) + sub 로 분리
+    const firstSubIndex = subMatches[0].index!;
+    const mainContent = chapterRawContent.slice(0, firstSubIndex).trim();
 
     chapters.push({
       chapterId: `ch_${chapterNumber}`,
       chapterNumber,
       chapterName,
-      content: chapterContent,
-      keywords,
-      wordCount,
+      content: mainContent,
+      keywords: extractKeywordsFromContent(mainContent),
+      wordCount: mainContent.length,
     });
+
+    for (let j = 0; j < subMatches.length; j++) {
+      const sm = subMatches[j];
+      const subStart = sm.index!;
+      const subEnd =
+        j < subMatches.length - 1
+          ? subMatches[j + 1].index!
+          : chapterRawContent.length;
+      const subContent = chapterRawContent.slice(subStart, subEnd).trim();
+      const subKey = `${chapterNumber}_${sm[1]}`;
+
+      chapters.push({
+        chapterId: `ch_${subKey}`,
+        chapterNumber: subKey,
+        chapterName: sm[2].trim(),
+        parentChapterNumber: chapterNumber,
+        content: subContent,
+        keywords: extractKeywordsFromContent(subContent),
+        wordCount: subContent.length,
+      });
+    }
   }
 
   return chapters;
@@ -336,6 +395,12 @@ interface LoadScopeOptions {
    * 질문과 무관한 챕터로 답변 품질이 떨어짐. 신규 호출은 strict=true 권장.
    */
   strict?: boolean;
+  /**
+   * 세부단원 ID 목록 (예: ["micro_5_1", "micro_5_3"]).
+   * 전달되면 해당 sub-chapter 들만 로드 (+ 부모 챕터의 개요 메인 도큐먼트).
+   * targetChapters 보다 우선 — 5장 전체 대신 5_1, 5_3 만 콕 집어 로드.
+   */
+  selectedDetails?: string[];
 }
 
 export async function loadScopeForAI(
@@ -344,9 +409,13 @@ export async function loadScopeForAI(
   maxLength: number = 15000,
   options?: LoadScopeOptions,
 ): Promise<{ content: string; keywords: string[]; chaptersLoaded: string[] } | null> {
-  // strict 모드: targetChapters 가 비어있으면 전체 로드 대신 null 반환.
-  // 질문과 무관한 1장만 "(일부)" 로 실리는 부작용 방지.
-  if (options?.strict && (!targetChapters || targetChapters.length === 0)) {
+  // strict 모드: targetChapters / selectedDetails 둘 다 비어있으면 전체 로드 대신 null.
+  const hasSelectedDetails = !!(options?.selectedDetails && options.selectedDetails.length > 0);
+  if (
+    options?.strict &&
+    !hasSelectedDetails &&
+    (!targetChapters || targetChapters.length === 0)
+  ) {
     return null;
   }
 
@@ -368,30 +437,81 @@ export async function loadScopeForAI(
   const allKeywords: string[] = [];
   const chaptersLoaded: string[] = [];
 
-  // 챕터 번호 순 정렬
+  // 메인 챕터 → sub-chapter 순서로 정렬 (예: 5, 5_1, 5_2, ..., 6)
   const sortedChapters = chaptersSnapshot.docs
     .map(doc => doc.data() as ChapterScope)
-    .sort((a, b) => parseInt(a.chapterNumber) - parseInt(b.chapterNumber));
+    .sort((a, b) => {
+      const aMain = parseInt(a.parentChapterNumber ?? a.chapterNumber);
+      const bMain = parseInt(b.parentChapterNumber ?? b.chapterNumber);
+      if (aMain !== bMain) return aMain - bMain;
+      // 같은 부모 챕터: 메인 도큐먼트가 먼저, sub 는 번호순
+      if (!a.parentChapterNumber) return -1;
+      if (!b.parentChapterNumber) return 1;
+      const aSub = parseInt(a.chapterNumber.split("_")[1] ?? "0");
+      const bSub = parseInt(b.chapterNumber.split("_")[1] ?? "0");
+      return aSub - bSub;
+    });
 
   // 대상 챕터 필터링
-  const filteredChapters = targetChapters && targetChapters.length > 0
-    ? sortedChapters.filter(c => targetChapters.includes(c.chapterNumber))
-    : sortedChapters;
+  // 공통 규칙:
+  //   1. 메인 챕터 번호("5") 지정 → 그 챕터의 메인 + 모든 sub 포함
+  //   2. sub-chapter 번호("5_3") 지정 → 해당 sub + 부모 메인 도큐먼트(개요) 포함
+  //   3. selectedDetails (예: ["micro_5_1"]) 는 courseId prefix 제거 후 sub-chapter 번호로 변환되어 (2) 와 동일하게 처리
+  //   4. 둘 다 없으면 전체
+  let filteredChapters: ChapterScope[];
+
+  // selectedDetails 가 있으면 targetChapters 대신 우선 적용
+  let effectiveTargets: string[] | undefined;
+  if (hasSelectedDetails) {
+    const prefix = `${courseId}_`;
+    effectiveTargets = options!.selectedDetails!.map(id =>
+      id.startsWith(prefix) ? id.slice(prefix.length) : id
+    );
+  } else if (targetChapters && targetChapters.length > 0) {
+    effectiveTargets = targetChapters;
+  }
+
+  if (effectiveTargets && effectiveTargets.length > 0) {
+    const explicit = new Set(effectiveTargets);
+    const fullParents = new Set<string>();   // 메인 챕터 번호 → 모든 sub 포함
+    const parentMains = new Set<string>();   // sub-chapter 번호 → 부모 메인 도큐먼트 자동 포함
+
+    for (const t of effectiveTargets) {
+      if (t.includes("_")) {
+        parentMains.add(t.split("_")[0]);
+      } else {
+        fullParents.add(t);
+      }
+    }
+
+    filteredChapters = sortedChapters.filter(c => {
+      if (explicit.has(c.chapterNumber)) return true;
+      if (c.parentChapterNumber && fullParents.has(c.parentChapterNumber)) return true;
+      if (!c.parentChapterNumber && parentMains.has(c.chapterNumber)) return true;
+      return false;
+    });
+  } else {
+    filteredChapters = sortedChapters;
+  }
 
   for (const chapter of filteredChapters) {
+    // sub-chapter("5_3")는 "5-3." 형식, 메인 챕터는 "5장." 형식으로 라벨
+    const label = chapter.parentChapterNumber
+      ? chapter.chapterNumber.replace("_", "-")
+      : `${chapter.chapterNumber}장`;
+
     // 최대 길이 체크
     if (allContent.length + chapter.content.length > maxLength) {
-      // 남은 공간만큼만 추가
       const remaining = maxLength - allContent.length;
       if (remaining > 500) {
-        allContent += `\n\n--- ${chapter.chapterNumber}장. ${chapter.chapterName} (일부) ---\n`;
+        allContent += `\n\n--- ${label}. ${chapter.chapterName} (일부) ---\n`;
         allContent += chapter.content.slice(0, remaining - 100);
         chaptersLoaded.push(chapter.chapterNumber);
       }
       break;
     }
 
-    allContent += `\n\n--- ${chapter.chapterNumber}장. ${chapter.chapterName} ---\n`;
+    allContent += `\n\n--- ${label}. ${chapter.chapterName} ---\n`;
     allContent += chapter.content;
     allKeywords.push(...chapter.keywords);
     chaptersLoaded.push(chapter.chapterNumber);
