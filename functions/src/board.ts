@@ -437,14 +437,14 @@ export const onCommentCreate = onDocumentCreated(
       const postData = postDoc.exists ? postDoc.data() as Post : null;
 
       // 비공개 글(나만의 콩콩이): rate limit 면제 (콩콩이와 자연스러운 대화 위해)
-      // EXP는 공개 댓글과 동일하게 지급
+      // EXP는 지급하지 않음 (개인 학습용 — 보상 어뷰징 방지)
       const isPrivate = !!postData?.isPrivate;
 
       if (!isPrivate) {
         await enforceRateLimit(userId, "COMMENT", commentId);
       }
 
-      const expReward = EXP_REWARDS.COMMENT_CREATE;
+      const expReward = isPrivate ? 0 : EXP_REWARDS.COMMENT_CREATE;
       const reason = "댓글 작성";
 
       const commentExpPayload = await db.runTransaction<SupabaseExpPayload | null>(
@@ -458,12 +458,17 @@ export const onCommentCreate = onDocumentCreated(
 
           const userDoc = await readUserForExp(transaction, userId);
 
-          // WRITE — rewarded 마킹
+          // WRITE — rewarded 마킹 (재실행 방지용, EXP 지급 여부와 무관)
           transaction.update(snapshot.ref, {
             rewarded: true,
             rewardedAt: FieldValue.serverTimestamp(),
             expRewarded: expReward,
           });
+
+          // 비공개 글(나만의 콩콩이)은 EXP 미지급
+          if (isPrivate) {
+            return null;
+          }
 
           if (userDoc) {
             const { supabasePayload } = addExpInTransaction(
