@@ -9,6 +9,7 @@ import { getMessaging } from "firebase-admin/messaging";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
+  onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 
 // ============================================
@@ -329,19 +330,28 @@ export const sendNotificationToClass = onCall(
 // ============================================
 
 /**
- * 새 퀴즈 생성 시 알림 전송
+ * 새 퀴즈 공개 시 알림 전송
+ *
+ * onDocumentWritten으로 변경 — 생성 시 바로 공개 + 비공개→공개 전환 모두 대응.
+ * 비공개→공개 전환만 알림 (공개→비공개 전환, 이미 공개 상태 수정은 알림 X).
  */
-export const onNewQuizCreated = onDocumentCreated(
+export const onNewQuizCreated = onDocumentWritten(
   {
     document: "quizzes/{quizId}",
     region: "asia-northeast3",
   },
   async (event) => {
-    const quizData = event.data?.data();
+    const afterSnap = event.data?.after;
+    if (!afterSnap?.exists) return; // 삭제된 경우
+    const quizData = afterSnap.data();
     if (!quizData) return;
 
-    // 공개된 퀴즈만 알림
+    // 현재 공개 상태가 아니면 알림 X (공개→비공개 전환 포함)
     if (!quizData.isPublished) return;
+
+    // 이미 공개였던 퀴즈의 단순 수정은 알림 X (비공개→공개 전환만 알림)
+    const beforeSnap = event.data?.before;
+    if (beforeSnap?.exists && beforeSnap.data()?.isPublished) return;
 
     // 교수님이 올린 퀴즈만 알림 (custom, ai-generated 제외)
     if (quizData.type === "custom" || quizData.type === "ai-generated") return;
