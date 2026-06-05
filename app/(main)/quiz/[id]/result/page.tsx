@@ -132,9 +132,14 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
     try {
       setIsLoading(true);
 
-      // 먼저 저장된 결과 데이터가 있는지 확인
+      // 서버에 이미 제출 완료된 퀴즈인지 확인 (새로고침/재방문 시 중복 제출 방지)
+      const alreadyCompleted = await quizRepo.isQuizCompleted(quizId, user.uid);
+
+      // 저장된 결과 캐시 — 단, 서버에 완료 기록이 있을 때만 신뢰.
+      // (학기 전환·관리자 리셋 등으로 서버 기록만 지워지고 localStorage 캐시가 남으면
+      //  매번 캐시가 가로채 recordAttempt가 안 불려 영영 저장이 안 되던 버그 방지)
       const storedResult = localStorage.getItem(`quiz_result_${quizId}`);
-      if (storedResult) {
+      if (storedResult && alreadyCompleted) {
         try {
           const cachedResult = JSON.parse(storedResult);
           if (cachedResult.questionResults && cachedResult.questionResults.length > 0) {
@@ -174,10 +179,10 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
         } catch (e) {
           console.error('캐시된 결과 파싱 오류:', e);
         }
+      } else if (storedResult && !alreadyCompleted) {
+        // 서버엔 완료 기록이 없는데 캐시만 남은 경우(외부 리셋 등) → stale 캐시 제거 후 정상 채점/기록
+        localStorage.removeItem(`quiz_result_${quizId}`);
       }
-
-      // 서버에 이미 제출 완료된 퀴즈인지 확인 (새로고침/재방문 시 중복 제출 방지)
-      const alreadyCompleted = await quizRepo.isQuizCompleted(quizId, user.uid);
 
       const answersParam = searchParams.get('answers');
       let userAnswers: string[] = [];
