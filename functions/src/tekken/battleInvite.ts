@@ -11,8 +11,8 @@
  *
  * 만료: expiresAt = createdAt + 3000ms. 클라이언트 측 3초 타이머 + CF 서버 시간 검증.
  *
- * 바쁨 판정: presence/{courseId}/{receiverUid}.currentActivity 가
- * '퀴즈 풀이' | '배틀' | '연타 미니게임' 중 하나면 신청 불가.
+ * 바쁨 판정: presence/{courseId}/{receiverUid}.busy === true 면 신청 불가
+ * (busy = 가로모드 3쪽 잠금 또는 실제 퀴즈 풀이/출제 화면 — useActivityTracker가 기록).
  * 차단: 수신자 appSettings.privacy.allowBattleInvites === false 면 불가.
  */
 
@@ -36,15 +36,6 @@ const INVITE_TTL_MS = 3_000;
  * 클라이언트 타이머는 여전히 3초로 표시되어 UX 긴박감은 유지.
  */
 const SERVER_GRACE_MS = 3_000;
-
-/** 수신자가 "바쁨"으로 판정되는 활동 */
-const BUSY_ACTIVITIES = new Set([
-  "퀴즈 풀이",
-  "배틀",
-  "연타 미니게임",
-  // 가로모드 3쪽 잠금 (퀴즈/복습/만들기 진행 중)을 useActivityTracker 가 반영
-  "집중 학습",
-]);
 
 interface InviteRecord {
   id: string;
@@ -169,12 +160,12 @@ export const sendBattleInvite = onCall(
       .once("value");
     const presence = presenceSnap.val() as {
       online?: boolean;
-      currentActivity?: string;
+      busy?: boolean;
     } | null;
     if (!presence?.online) {
       throw new HttpsError("failed-precondition", "상대가 접속 중이 아닙니다.");
     }
-    if (presence.currentActivity && BUSY_ACTIVITIES.has(presence.currentActivity)) {
+    if (presence.busy === true) {
       throw new HttpsError("failed-precondition", "상대가 지금 다른 활동 중입니다.");
     }
 

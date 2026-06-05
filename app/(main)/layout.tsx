@@ -519,8 +519,8 @@ function MilestoneWrapper({ isProfessor, children }: { isProfessor: boolean; chi
 }
 
 /**
- * 접속 추적 (presence) — providers 안쪽에서 호출해 isLocked(3쪽 잠금)까지
- * presence.currentActivity 에 반영. 가로모드에서 3쪽 잠긴 상태면 '집중 학습'.
+ * 접속 추적 (presence) — providers 안쪽에서 호출해 isLocked(3쪽 잠금)을
+ * presence.busy(배틀 차단용)에 반영. currentActivity는 4탭(홈/퀴즈/복습/게시판) 위치만.
  */
 function PresenceSync() {
   const { userCourseId } = useCourse();

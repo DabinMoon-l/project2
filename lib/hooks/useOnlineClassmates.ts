@@ -20,7 +20,6 @@ import {
 import { getRtdb } from '@/lib/firebase';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
-const BUSY_ACTIVITIES = new Set(['퀴즈 풀이', '배틀', '연타 미니게임', '집중 학습']);
 /** 5분 이내 활동 신호가 없으면 오프라인 간주. onDisconnect(60~90s)로 못 잡히는 잔존 정리 */
 const ONLINE_FRESHNESS_MS = 5 * 60 * 1000;
 
@@ -89,7 +88,7 @@ export function useOnlineClassmates(
   const [baseMap, setBaseMap] = useState<Record<string, BaseInfo>>({});
   const [rabbitMetaMap, setRabbitMetaMap] = useState<Record<string, RabbitMeta>>({});
   const [presenceMap, setPresenceMap] = useState<
-    Record<string, { online: boolean; currentActivity: string | null }>
+    Record<string, { online: boolean; currentActivity: string | null; busy: boolean }>
   >({});
   const [loading, setLoading] = useState(false);
 
@@ -137,16 +136,17 @@ export function useOnlineClassmates(
     const unsub = onValue(rtdbRef(getRtdb(), `presence/${courseId}`), (snap) => {
       const raw = (snap.val() || {}) as Record<
         string,
-        { online?: boolean; lastActiveAt?: number; currentActivity?: string }
+        { online?: boolean; lastActiveAt?: number; currentActivity?: string; busy?: boolean }
       >;
       const now = Date.now();
-      const map: Record<string, { online: boolean; currentActivity: string | null }> = {};
+      const map: Record<string, { online: boolean; currentActivity: string | null; busy: boolean }> = {};
       Object.entries(raw).forEach(([uid, v]) => {
         const fresh = typeof v?.lastActiveAt === 'number'
           && now - v.lastActiveAt < ONLINE_FRESHNESS_MS;
         map[uid] = {
           online: !!v?.online && fresh,
           currentActivity: v?.currentActivity || null,
+          busy: v?.busy === true,
         };
       });
       setPresenceMap(map);
@@ -168,7 +168,7 @@ export function useOnlineClassmates(
         rabbitName: meta?.displayName || '토끼',
         rabbitLevel: meta?.level || 1,
         currentActivity: pres.currentActivity,
-        isBusy: !!pres.currentActivity && BUSY_ACTIVITIES.has(pres.currentActivity),
+        isBusy: pres.busy,
       });
     });
     list.sort((a, b) => Number(a.isBusy) - Number(b.isBusy) || a.nickname.localeCompare(b.nickname));

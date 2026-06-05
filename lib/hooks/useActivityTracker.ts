@@ -6,32 +6,26 @@ import { ref as rtdbRef, set, update, onDisconnect, serverTimestamp as rtdbServe
 import { doc, setDoc, arrayUnion, db } from '@/lib/repositories';
 import { getRtdb } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 
 const UPDATE_INTERVAL = 120_000; // 120초
 
-// 경로 기반 현재 활동 판정
+// 경로 기반 현재 활동 — 학생 4탭(홈/퀴즈/복습/게시판) 중 하나로만 판정.
+// 교수 학생탭 presence 표시는 항상 이 4개 중 하나여야 함.
+// (가로모드 3쪽 잠금/홈오버레이 같은 패널 상태는 위치 표시에 섞지 않음 → busy로 분리)
 function getCurrentActivity(pathname: string): string {
-  if (pathname.startsWith('/quiz/create')) return '퀴즈 출제';
-  if (/^\/quiz\/[^/]+/.test(pathname)) return '퀴즈 풀이';
-  if (pathname === '/quiz') return '퀴즈 탐색';
+  if (pathname.startsWith('/quiz')) return '퀴즈';
   if (pathname.startsWith('/review')) return '복습';
   if (pathname.startsWith('/board')) return '게시판';
-  if (pathname === '/' || pathname === '/professor') return '홈';
-  if (pathname.startsWith('/professor')) return '교수 대시보드';
-  if (pathname.startsWith('/profile') || pathname.startsWith('/settings')) return '설정';
-  return '탐색 중';
+  return '홈'; // '/', '/professor', '/profile', '/settings' 등 나머지 전부 홈
 }
 
-/** 가로모드 + 3쪽 잠금 상태 → '집중 학습' (바쁨으로 판정). 그 외엔 pathname 기반. */
-function resolveActivity(pathname: string, isLocked: boolean, isHomeOverlayOpen: boolean): string {
-  if (isLocked) return '집중 학습';
-  // 홈 오버레이는 '홈 경로' 일 때만 "홈"으로 판정.
-  // 가로모드에서 오버레이 context 가 true 로 유지되는 경우, 학생이 게시판/퀴즈 등
-  // 다른 탭으로 이동해도 "홈"으로 잘못 표시되던 버그 방지.
-  const isHomePath = pathname === '/' || pathname === '/professor';
-  if (isHomePath && isHomeOverlayOpen) return '홈';
-  return getCurrentActivity(pathname);
+// 배틀 신청 차단용 '바쁨' 판정 — 위치(currentActivity)와 분리해 presence.busy로 별도 기록.
+// 가로모드 3쪽 잠금(isLocked: 퀴즈/복습/만들기 진행) 또는 실제 풀이/출제 화면이면 바쁨.
+function isBusyState(pathname: string, isLocked: boolean): boolean {
+  if (isLocked) return true;
+  if (pathname.startsWith('/quiz/create')) return true; // 퀴즈 출제
+  if (/^\/quiz\/[^/]+/.test(pathname)) return true;      // 퀴즈 풀이/결과
+  return false;
 }
 
 /**
@@ -55,7 +49,6 @@ function resolveActivity(pathname: string, isLocked: boolean, isHomeOverlayOpen:
 export function useActivityTracker(courseId?: string, isProfessor?: boolean, isLocked?: boolean) {
   const { user } = useAuth();
   const pathname = usePathname();
-  const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onDisconnectCancelRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -64,13 +57,15 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean, isL
     if (!user?.uid || !courseId || isProfessor) return;
 
     const presenceRef = rtdbRef(getRtdb(), `presence/${courseId}/${user.uid}`);
-    const activity = resolveActivity(pathname, !!isLocked, isHomeOverlayOpen);
+    const activity = getCurrentActivity(pathname);
+    const busy = isBusyState(pathname, !!isLocked);
 
     const writeOnline = () => {
       set(presenceRef, {
         online: true,
         lastActiveAt: rtdbServerTimestamp(),
         currentActivity: activity,
+        busy,
       }).catch(() => {});
     };
 
@@ -111,7 +106,7 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean, isL
       onDisconnectCancelRef.current?.();
       onDisconnectCancelRef.current = null;
     };
-  }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen, isLocked]);
+  }, [user?.uid, courseId, isProfessor, pathname, isLocked]);
 
   // 일일 접속 기록 (학생만, 하루 1회)
   // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion
