@@ -549,6 +549,70 @@ export async function loadScopeForAI(
   };
 }
 
+/** 배틀 풀 생성용 — 세부단원 하나의 scope 단위 */
+export interface ScopeSubChapter {
+  /** scope 챕터 번호 (예: "7_1_1") */
+  chapterNumber: string;
+  /** 챕터명 (예: "폭스바이러스과") */
+  chapterName: string;
+  /** 교과서 본문 (truncation 없는 원문 전체) */
+  content: string;
+  /** 추출 키워드 */
+  keywords: string[];
+}
+
+/**
+ * 배틀 풀 생성용 — 특정 상위 챕터에 속한 모든 scope 노드를 "세부단원별로" 반환
+ *
+ * loadScopeForAI는 여러 챕터를 하나로 이어 붙이고 maxLength에서 잘라버리므로,
+ * 병원체(세부단원)별로 scope를 100% 전달하려면 노드를 개별적으로 받아야 한다.
+ * 이 함수는 truncation 없이 각 노드의 원문 전체를 그대로 반환한다.
+ *
+ * 예) topChapter="7" → [7, 7_1, 7_1_1(폭스), 7_1_2(헤르페스), ..., 7_2_1(인플루엔자), ...]
+ *     계층 순서(상위 → 하위)로 정렬.
+ *
+ * @param courseId  과목 ID
+ * @param topChapter 상위 챕터 번호 (예: "7", "micro_7"의 경우 "7")
+ * @returns 계층 순으로 정렬된 세부단원 배열 (scope 없으면 빈 배열)
+ */
+export async function loadScopeSubChaptersForAI(
+  courseId: string,
+  topChapter: string,
+): Promise<ScopeSubChapter[]> {
+  const db = getFirestore();
+  const scopeRef = db.collection("courseScopes").doc(courseId);
+  const chaptersSnapshot = await scopeRef.collection("chapters").get();
+  if (chaptersSnapshot.empty) return [];
+
+  // topChapter 자신 + 그 자손 노드만 (예: "7", "7_1", "7_1_1" …)
+  const nodes = chaptersSnapshot.docs
+    .map((doc) => doc.data() as ChapterScope)
+    .filter(
+      (c) =>
+        c.chapterNumber === topChapter ||
+        c.chapterNumber.startsWith(`${topChapter}_`),
+    )
+    .sort((a, b) => {
+      // 계층 순 정렬: 파트 단위 숫자 비교 (짧은 쪽=상위가 먼저)
+      const aParts = a.chapterNumber.split("_").map((p) => parseInt(p, 10));
+      const bParts = b.chapterNumber.split("_").map((p) => parseInt(p, 10));
+      const len = Math.max(aParts.length, bParts.length);
+      for (let i = 0; i < len; i++) {
+        const av = aParts[i] ?? -1; // 짧은 쪽이 먼저 (-1 < 자연수)
+        const bv = bParts[i] ?? -1;
+        if (av !== bv) return av - bv;
+      }
+      return 0;
+    });
+
+  return nodes.map((c) => ({
+    chapterNumber: c.chapterNumber,
+    chapterName: c.chapterName,
+    content: c.content || "",
+    keywords: c.keywords || [],
+  }));
+}
+
 /**
  * 업로드된 텍스트에서 관련 챕터 추론
  *

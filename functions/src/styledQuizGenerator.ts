@@ -457,7 +457,10 @@ export async function loadScopeForQuiz(
       console.log(`[loadScopeForQuiz] 태그 기반 챕터 확정: ${forcedChapters.join(",")}`);
     }
 
-    const maxScopeLength = 12000;
+    // scope 100% 전달: 추론된 챕터의 교과서 내용이 잘리지 않도록 충분히 크게.
+    // (가장 큰 단일 챕터 scope ~32000자 → 인접 챕터 포함 여유까지 확보)
+    // Gemini 컨텍스트(~100만 토큰)에 비하면 미미하므로 비용/품질 부담 없음.
+    const maxScopeLength = 60000;
 
     // 추론된 챕터만 Scope 로드 (발문 근거)
     const scopeData = await loadScopeForAI(
@@ -795,8 +798,9 @@ function buildScopeContextPrompt(context: StyleContext, hasProfessorPrompt: bool
 
   const { content, chaptersLoaded } = context.scope;
 
-  // professorPrompt가 있으면 scope를 8000자로 축소 (프롬프트 주제에 집중하도록)
-  const maxLen = hasProfessorPrompt ? 8000 : 12000;
+  // scope 100% 전달이 원칙. 단 professorPrompt(출제 지시)가 있으면
+  // 해당 주제에 집중시키기 위해 다소 줄여서 전달 (그래도 잘리지 않을 만큼 충분히 큼).
+  const maxLen = hasProfessorPrompt ? 30000 : 60000;
 
   return `
 ## 참고 자료 (⛔ 발문 출제 금지 — 선지 검증 전용)

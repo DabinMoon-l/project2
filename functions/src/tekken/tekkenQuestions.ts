@@ -12,6 +12,14 @@ import type { GeneratedQuestion, PregenCache, TekkenDifficulty } from "./tekkenT
 import { COURSE_NAMES } from "./tekkenTypes";
 
 /**
+ * 프롬프트에 넣을 Scope 최대 길이(자).
+ * - B 방식(풀 생성)에서는 세부단원 scope를 통째로 주입하므로 보통 이보다 작아 잘리지 않는다.
+ * - 라이브 매칭 폴백(loadScopeForAI 경유)에서도 잘림을 최소화하기 위한 안전 상한.
+ * Gemini 컨텍스트(~100만 토큰)에 비하면 미미하다.
+ */
+const MAX_BATTLE_SCOPE_CHARS = 30000;
+
+/**
  * 선지 셔플 — 정답 위치를 랜덤으로 재배치 (Gemini의 2번 편향 방지)
  */
 function shuffleChoices(
@@ -488,12 +496,16 @@ ${focusGuide}
     }
   }
 
-  // 과목 학습 범위 (Scope — 정확성 검증용)
+  // 과목 학습 범위 (Scope — 출제 범위의 절대 기준)
   if (scopeContent) {
-    prompt += `\n## 과목 학습 범위 (정확성 검증용)
-아래 내용에서 정확한 개념과 용어를 확인하세요.
+    prompt += `\n## 📚 학습 범위 (Scope) — 출제의 절대 기준
+⚠️ 아래 학습 범위는 학생이 **수업에서 실제로 배운 내용 전부**입니다. 문제는 반드시 이 범위 **안에서만** 출제하세요.
+- Scope에 나오는 개념·병원체·용어로만 문제와 선지를 구성하세요.
+- Scope에 없는 외부 지식(범위 밖 병원체, 안 배운 검사·기법, 세부 수치 등)은 출제하지 마세요. 학생이 배우지 않은 내용입니다.
+- 정답·오답 선지 모두 이 Scope 내용만으로 정오를 판별할 수 있어야 합니다.
+- Scope에서 비중 있게·상세히 서술된 핵심 병원체일수록 더 비중 있게 출제하세요.
 
-${scopeContent.slice(0, 8000)}
+${scopeContent.slice(0, MAX_BATTLE_SCOPE_CHARS)}
 `;
   }
 
@@ -502,10 +514,12 @@ ${scopeContent.slice(0, 8000)}
     prompt += `\n${chapterIndex}\n`;
   }
 
-  // 미생물학 임상 중심 규칙
+  // 미생물학 — 병원체 중심 (단, 어디까지나 Scope 범위 안에서)
   if (courseName.includes("미생물")) {
-    prompt += `\n[미생물학 특별 규칙]
-- 간호학과 학생 대상이므로 임상에서 실제로 접하는 병원성 미생물(MRSA, VRE, 결핵균, HIV, HBV, 칸디다 등)을 우선 다루세요
+    prompt += `\n[미생물학 출제 방향]
+- 미생물학은 병원체를 다루는 과목입니다. 위 Scope에 등장하는 **병원체(세균·바이러스·진균·원충)의 특징·병원성·임상**을 중심으로 출제하세요.
+- 즉 병원체의 구조·분류, 병원성 인자, 전파·감염, 대표 질환 등 Scope에 서술된 내용을 묻습니다. (특정 주제만 편중하지 말고 Scope에 나온 만큼 골고루)
+- 단, 이는 어디까지나 Scope 범위 내일 때만입니다. Scope에 없는 병원체·개념은 절대 출제하지 마세요.
 `;
   }
 
@@ -576,6 +590,10 @@ ${scopeContent.slice(0, 8000)}
  * styledQuizGenerator와 동일 수준 컨텍스트 활용:
  * - 과목 개요 + 챕터 커리큘럼 + 포커스 가이드 + Scope + 교수 스타일
  * - existingTexts로 배치 간 중복 방지
+ *
+ * @param scopeOverride 지정 시 loadScopeForAI 대신 이 scope 본문을 그대로 사용한다.
+ *   풀 생성(B 방식)에서 세부단원(병원체) scope를 100% 주입하기 위한 용도.
+ *   undefined면 기존처럼 targetChapters 범위 scope를 로드한다(라이브 매칭 경로).
  */
 export async function generateBattleQuestions(
   courseId: string,
@@ -583,17 +601,22 @@ export async function generateBattleQuestions(
   count: number = 10,
   chapters?: string[],
   difficulty: TekkenDifficulty = "medium",
-  existingTexts: string[] = []
+  existingTexts: string[] = [],
+  scopeOverride?: string,
 ): Promise<GeneratedQuestion[]> {
   const targetChapters = chapters || getTekkenChapters(courseId);
   const courseName = COURSE_NAMES[courseId] || "생물학";
 
-  // scope + focusGuide + 교수 스타일/키워드 병렬 로드
+  // focusGuide + 교수 스타일/키워드 로드.
+  // scope는 scopeOverride가 있으면 그것을 쓰고, 없으면 챕터 범위 scope를 로드.
   const [scopeData, focusGuide, profStyle] = await Promise.all([
-    loadScopeForAI(courseId, targetChapters, 8000),
+    scopeOverride !== undefined
+      ? Promise.resolve(null)
+      : loadScopeForAI(courseId, targetChapters, MAX_BATTLE_SCOPE_CHARS),
     Promise.resolve(getFocusGuide(courseId, targetChapters)),
     loadProfessorStyle(courseId),
   ]);
+  const scopeContent = scopeOverride !== undefined ? scopeOverride : (scopeData?.content || null);
 
   const prompt = buildEnhancedBattlePrompt(
     courseName,
@@ -602,7 +625,7 @@ export async function generateBattleQuestions(
     difficulty,
     count,
     focusGuide,
-    scopeData?.content || null,
+    scopeContent,
     profStyle.profile,
     profStyle.keywords,
     profStyle.questionBank,

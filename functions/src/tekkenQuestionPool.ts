@@ -27,6 +27,7 @@ import {
   type GeneratedQuestion,
 } from "./tekkenBattle";
 import type { TekkenDifficulty, TekkenPoolTask } from "./tekken/tekkenTypes";
+import { loadScopeSubChaptersForAI, type ScopeSubChapter } from "./courseScope";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -59,23 +60,90 @@ function getCurrentSemesterCourses(): string[] {
 const TARGET_PER_CHAPTER = 150;
 /** 배치당 문제 수 (Gemini 1회 호출) */
 const BATCH_SIZE = 15;
-/** 배치 간 대기 (ms) */
+/** 배치/청크 간 대기 (ms) — Gemini rate limit 완화 */
 const BATCH_DELAY_MS = 3000;
-/** 보충 라운드 최대 횟수 */
-const MAX_SUPPLEMENT_ROUNDS = 3;
+/** 배틀 풀 난이도 (easy 제거 — 선지 소거가 너무 쉬움) */
+const POOL_DIFFICULTY: TekkenDifficulty = "medium";
 
-/** 난이도 배분: medium 100% (easy 제거 — 선지 소거가 너무 쉬움) */
-const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[] = [
-  { difficulty: "medium", ratio: 1.0 },
-];
+// ── 세부단원(병원체) 단위 생성 (B 방식) ──
+// scope를 세부단원별로 100% 전달하기 위해, 상위 챕터 scope를 작은 "생성 청크"로 쪼갠다.
+// 큰 병원체는 단독 청크, 작은 병원체끼리는 한 청크로 묶어 각 호출에 충분한 학습자료를 보장한다.
+
+/** 생성 청크 1개의 목표 scope 길이(자). 이보다 작은 인접 세부단원은 합쳐 한 청크로. */
+const CHUNK_TARGET_CHARS = 3500;
+/** 이 길이 미만의 scope 노드는 헤더성(예: "DNA 바이러스")으로 보고 단독 생성 대상에서 제외 */
+const MIN_NODE_CHARS = 50;
+/** 청크당 최소/최대 문제 수 (한 병원체에 너무 적거나, 한 청크가 챕터를 독점하지 않도록) */
+const MIN_QUESTIONS_PER_CHUNK = 5;
+const MAX_QUESTIONS_PER_CHUNK = 25;
+
+/** 생성 청크 — 세부단원 scope를 모아 한 번에 출제할 단위 */
+interface GenerationChunk {
+  /** 표시용 라벨 (예: "7-2-1") */
+  label: string;
+  /** 대표 세부단원 번호 (저장 시 subChapter 태그 — 추적용) */
+  subChapter: string;
+  /** 이 청크에 주입할 scope 본문. null이면 generator가 직접 챕터 scope를 로드(폴백). */
+  content: string | null;
+}
+
+/**
+ * 세부단원 목록을 "생성 청크"로 묶는다.
+ * - 헤더성 빈 노드(내용 < MIN_NODE_CHARS)는 제외
+ * - 인접 세부단원을 CHUNK_TARGET_CHARS 한도까지 합쳐 한 청크로 (작은 병원체끼리 묶임)
+ * - 큰 세부단원은 자연히 단독 청크가 된다
+ */
+function buildGenerationChunks(subs: ScopeSubChapter[]): GenerationChunk[] {
+  const chunks: GenerationChunk[] = [];
+  let cur: GenerationChunk | null = null;
+
+  for (const s of subs) {
+    const body = (s.content || "").trim();
+    if (body.length < MIN_NODE_CHARS) continue; // 헤더성 노드 스킵
+    const label = s.chapterNumber.replace(/_/g, "-");
+    const piece = `[${label} ${s.chapterName}]\n${body}`;
+
+    // 현재 청크에 더하면 한도 초과 → 현재 청크 마감하고 새로 시작
+    if (cur && cur.content && cur.content.length + piece.length > CHUNK_TARGET_CHARS) {
+      chunks.push(cur);
+      cur = null;
+    }
+    if (!cur) {
+      cur = { label, subChapter: s.chapterNumber, content: "" };
+    }
+    cur.content = cur.content ? `${cur.content}\n\n${piece}` : piece;
+  }
+  if (cur && cur.content) chunks.push(cur);
+  return chunks;
+}
+
+/**
+ * 청크별 문제 수 배분 — scope 길이에 비례, [MIN, MAX]로 클램프.
+ * content=null 단일 폴백 청크면 전량 배정.
+ */
+function allocateBudgets(chunks: GenerationChunk[], targetSize: number): number[] {
+  if (chunks.length === 1 && chunks[0].content === null) return [targetSize];
+  const lens = chunks.map((c) => (c.content ? c.content.length : 0));
+  const totalLen = lens.reduce((a, b) => a + b, 0) || 1;
+  return chunks.map((_, i) => {
+    const raw = Math.round(targetSize * (lens[i] / totalLen));
+    return Math.max(MIN_QUESTIONS_PER_CHUNK, Math.min(MAX_QUESTIONS_PER_CHUNK, raw));
+  });
+}
 
 // ── 챕터별 풀 생성 ──
 
 /**
- * 단일 챕터의 문제 풀 생성
+ * 단일 (상위)챕터의 문제 풀 생성 — B 방식(세부단원/병원체별 100% scope 주입)
  *
- * 150 medium = 150문제 / 챕터
- * 배치 15개씩, 3초 대기 → 약 90초/챕터
+ * 1) 해당 챕터의 scope를 세부단원별로 로드
+ * 2) 작은 세부단원은 합쳐 "생성 청크" 구성
+ * 3) 청크마다 그 scope만 주입해 generateBattleQuestions 호출
+ *    → 모든 병원체가 고르게 커버되고, 각 문제는 해당 scope 100% 안에서만 출제됨
+ * 4) scope가 없거나(과목에 scope 미등록) 세부 구조가 없으면 기존 방식으로 폴백
+ *
+ * 저장되는 chapter 필드는 항상 상위 챕터 번호(예: "5") — 학생의 챕터 선택/추출과 호환.
+ * subChapter 필드로 어느 병원체에서 나왔는지 추적할 수 있다.
  */
 export async function replenishChapterPool(
   courseId: string,
@@ -93,23 +161,23 @@ export async function replenishChapterPool(
   // runId: 이 생성 라운드의 고유 식별자 (무중단 교체 시 old/new 구분용)
   const currentRunId = runId || `run_${Date.now()}_ch${chapter}`;
 
-  // Firestore 배치 저장 헬퍼
+  // Firestore 배치 저장 헬퍼 (subChapter 추적 태그 포함)
   const saveQuestions = async (
     questions: GeneratedQuestion[],
-    difficulty: TekkenDifficulty,
+    subChapter: string,
     batchLabel: string,
-  ) => {
+  ): Promise<number> => {
     if (questions.length === 0) return 0;
     const withExplanation = questions.filter(
-      q => q.explanation && q.choiceExplanations && q.choiceExplanations.length > 0
+      (q) => q.explanation && q.choiceExplanations && q.choiceExplanations.length > 0,
     );
     if (withExplanation.length < questions.length) {
-      console.log(`[풀] ${courseId}/ch${chapter}/${difficulty}: 해설 없는 문제 ${questions.length - withExplanation.length}개 제외`);
+      console.log(`[풀] ${courseId}/ch${chapter}/${subChapter}: 해설 없는 문제 ${questions.length - withExplanation.length}개 제외`);
     }
     if (withExplanation.length === 0) return 0;
 
     const writeBatch = db.batch();
-    const batchId = `${Date.now()}_${difficulty}_ch${chapter}_${batchLabel}`;
+    const batchId = `${Date.now()}_ch${chapter}_${batchLabel}`;
     for (const q of withExplanation) {
       const docRef = questionsRef.doc();
       writeBatch.set(docRef, {
@@ -117,8 +185,9 @@ export async function replenishChapterPool(
         type: q.type,
         choices: q.choices,
         correctAnswer: q.correctAnswer,
-        difficulty,  // 요청한 난이도 강제 적용 (Gemini 응답 무시)
-        chapter,  // 생성 요청 챕터 고정 (Gemini chapterId는 접두사/오류 가능성)
+        difficulty: POOL_DIFFICULTY,
+        chapter,        // 상위 챕터 고정 (학생 챕터 선택/추출과 호환)
+        subChapter,     // 출처 세부단원 (추적용)
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
         runId: currentRunId,
@@ -131,62 +200,54 @@ export async function replenishChapterPool(
     return withExplanation.length;
   };
 
-  // 난이도별 생성
-  for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
-    const budget = Math.round(targetSize * ratio);
+  // 1. 세부단원 scope 로드 → 생성 청크 구성
+  const subChapters = await loadScopeSubChaptersForAI(courseId, chapter);
+  let chunks = buildGenerationChunks(subChapters);
+
+  // scope 없음/플랫 → 폴백: generator가 직접 챕터 scope 로드
+  if (chunks.length === 0) {
+    console.log(`[풀] ${courseId}/ch${chapter}: 세부단원 scope 없음 → 챕터 통째 생성으로 폴백`);
+    chunks = [{ label: `ch${chapter}`, subChapter: chapter, content: null }];
+  }
+
+  // 2. 청크별 문제 수 배분 (scope 길이 비례)
+  const budgets = allocateBudgets(chunks, targetSize);
+
+  // 3. 청크(병원체)별 생성
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const budget = budgets[i];
     if (budget <= 0) continue;
 
-    let difficultyAdded = 0;
+    let chunkAdded = 0;
     const batches = Math.ceil(budget / BATCH_SIZE);
-
     for (let b = 0; b < batches; b++) {
-      const batchCount = Math.min(BATCH_SIZE, budget - difficultyAdded);
+      const batchCount = Math.min(BATCH_SIZE, budget - chunkAdded);
       if (batchCount <= 0) break;
-
       try {
         const questions = await generateBattleQuestions(
-          courseId, apiKey, batchCount, [chapter], difficulty, generatedTexts
+          courseId, apiKey, batchCount, [chapter], POOL_DIFFICULTY, generatedTexts,
+          chunk.content ?? undefined, // null이면 undefined → generator가 직접 scope 로드
         );
-        const saved = await saveQuestions(questions, difficulty, `${b}`);
-        difficultyAdded += saved;
+        const saved = await saveQuestions(questions, chunk.subChapter, `${i}_${b}`);
+        chunkAdded += saved;
         totalAdded += saved;
       } catch (err) {
-        console.error(`[풀] ${courseId}/${difficulty}/ch${chapter} 배치${b} 실패:`, err);
+        console.error(`[풀] ${courseId}/ch${chapter}/${chunk.label} 배치${b} 실패:`, err);
       }
-
       if (b < batches - 1) {
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
+    console.log(`[풀] ${courseId}/ch${chapter}/${chunk.label}: ${chunkAdded}/${budget}문제`);
 
-    console.log(`[풀] ${courseId}/ch${chapter}/${difficulty}: ${difficultyAdded}문제 생성`);
-  }
-
-  // 보충 라운드
-  for (let round = 1; round <= MAX_SUPPLEMENT_ROUNDS; round++) {
-    const remaining = targetSize - totalAdded;
-    if (remaining <= 0) break;
-
-    console.log(`[보충] ${courseId}/ch${chapter}: 라운드 ${round} — 부족분 ${remaining}개`);
-    for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
-      const count = Math.min(BATCH_SIZE, Math.round(remaining * ratio));
-      if (count <= 0) continue;
-
-      try {
-        const questions = await generateBattleQuestions(
-          courseId, apiKey, count, [chapter], difficulty, generatedTexts
-        );
-        const saved = await saveQuestions(questions, difficulty, `s${round}`);
-        totalAdded += saved;
-      } catch (err) {
-        console.error(`[보충] ${courseId}/ch${chapter}/${difficulty}/r${round} 실패:`, err);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    // 청크 간 대기 (마지막 제외)
+    if (i < chunks.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
 
-  console.log(`[풀] ${courseId}/ch${chapter}: 총 ${totalAdded}문제 생성 (목표 ${targetSize})`);
+  console.log(`[풀] ${courseId}/ch${chapter}: 총 ${totalAdded}문제 생성 (목표 ${targetSize}, 청크 ${chunks.length}개)`);
   return { added: totalAdded };
 }
 

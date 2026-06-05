@@ -1064,7 +1064,9 @@ async function generateBoardAIReply(
   const isDetailed = isAcademicPublic && post.aiDetailedAnswer === true;
 
   // scope 최대 길이: 기본 8,000자, 상세 12,000자
-  const scopeMaxLength = isDetailed ? 12000 : 8000;
+  // scope 100% 전달: 추론된 챕터 scope가 잘리지 않도록 충분히 크게
+  // (가장 큰 단일 챕터 scope ~32000자 + 인접 챕터 여유)
+  const scopeMaxLength = isDetailed ? 60000 : 40000;
 
   // 과목명 확인
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
