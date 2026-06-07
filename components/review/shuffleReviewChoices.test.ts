@@ -247,3 +247,75 @@ describe('shuffleReviewChoices — 목록 적용', () => {
     expect(a.options).not.toEqual(b.options);
   });
 });
+
+// ============================================================
+// 결합형(combined) 하위문제 — 객관식 하위문제도 셔플, 메타데이터 보존
+// ============================================================
+
+describe('shuffleReviewChoices — 결합형 하위문제', () => {
+  // 결합형: 같은 combinedGroupId 의 하위문제들이 평탄한 items 배열에 들어있음
+  const buildCombined = (): ReviewItem[] => [
+    makeItem({
+      id: 'sub0',
+      type: 'multiple',
+      correctAnswer: '1',
+      options: ['하위A', '하위B', '하위C', '하위D'],
+      choiceExplanations: ['eA', 'eB', 'eC', 'eD'],
+      combinedGroupId: 'g1',
+      combinedIndex: 0,
+    }),
+    makeItem({
+      id: 'sub1',
+      type: 'multiple',
+      correctAnswer: '0,2',
+      options: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ'],
+      combinedGroupId: 'g1',
+      combinedIndex: 1,
+    }),
+    makeItem({
+      id: 'sub2',
+      type: 'ox',
+      correctAnswer: 'O',
+      options: ['O', 'X'],
+      combinedGroupId: 'g1',
+      combinedIndex: 2,
+    }),
+  ];
+
+  for (const seed of SEEDS) {
+    it(`seed=${seed}: 객관식 하위문제 단일정답 채점 불변`, () => {
+      const out = shuffleReviewChoices(buildCombined(), seed);
+      const sub = out[0];
+      // 정답 텍스트 '하위B'(원래 인덱스 1) 가 셔플 후에도 정답
+      const pick = sub.options!.indexOf('하위B');
+      expect(gradeAnswer('multiple', sub.correctAnswer, pick)).toBe(true);
+      // 해설도 선지를 따라감
+      sub.options!.forEach((t, i) => {
+        const origIdx = ['하위A', '하위B', '하위C', '하위D'].indexOf(t);
+        expect(sub.choiceExplanations![i]).toBe(['eA', 'eB', 'eC', 'eD'][origIdx]);
+      });
+    });
+
+    it(`seed=${seed}: 객관식 하위문제 복수정답 채점 불변`, () => {
+      const out = shuffleReviewChoices(buildCombined(), seed);
+      const sub = out[1];
+      // 원래 정답 = 'ㄱ','ㄷ'
+      const picks = ['ㄱ', 'ㄷ'].map((t) => sub.options!.indexOf(t));
+      expect(gradeAnswer('multiple', sub.correctAnswer, picks)).toBe(true);
+      // 오답 'ㄴ' 끼면 오답
+      expect(gradeAnswer('multiple', sub.correctAnswer, [...picks, sub.options!.indexOf('ㄴ')])).toBe(false);
+    });
+
+    it(`seed=${seed}: 결합형 메타데이터(combinedGroupId/Index)와 OX 하위문제는 보존`, () => {
+      const items = buildCombined();
+      const out = shuffleReviewChoices(items, seed);
+      // 객관식 하위문제도 결합형 메타 유지
+      expect(out[0].combinedGroupId).toBe('g1');
+      expect(out[0].combinedIndex).toBe(0);
+      expect(out[1].combinedGroupId).toBe('g1');
+      expect(out[1].combinedIndex).toBe(1);
+      // OX 하위문제는 손대지 않음 (동일 참조)
+      expect(out[2]).toBe(items[2]);
+    });
+  }
+});
