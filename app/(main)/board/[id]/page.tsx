@@ -252,26 +252,52 @@ export default function PostDetailPage({
       .filter((c) => !c.parentId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // 최신 먼저
   }, [allComments, post?.isPrivate]);
-  // 스레드 long-press 액션 시트 대상 (즐겨찾기 토글 / 삭제)
+  // 스레드 long-press 액션 시트 대상 (고정 토글 / 삭제)
   const [threadActionTarget, setThreadActionTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 스레드 즐겨찾기 (rootCommentId 목록, 기기별 localStorage 저장)
-  const favStorageKey = `kongi_thread_favs:${postId}`;
-  const [favThreadIds, setFavThreadIds] = useState<string[]>([]);
+  // 스레드 고정 (rootCommentId 목록, 기기별 localStorage 저장)
+  // 배열 앞쪽 = 가장 최근 고정. 최대 3개.
+  const MAX_PINNED_THREADS = 3;
+  const pinStorageKey = `kongi_thread_pins:${postId}`;
+  const [pinnedThreadIds, setPinnedThreadIds] = useState<string[]>([]);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(favStorageKey);
-      setFavThreadIds(raw ? JSON.parse(raw) : []);
-    } catch { setFavThreadIds([]); }
-  }, [favStorageKey]);
-  const toggleFavThread = useCallback((rootId: string) => {
-    setFavThreadIds((prev) => {
-      const next = prev.includes(rootId) ? prev.filter((id) => id !== rootId) : [...prev, rootId];
-      try { localStorage.setItem(favStorageKey, JSON.stringify(next)); } catch {}
+      const raw = localStorage.getItem(pinStorageKey);
+      setPinnedThreadIds(raw ? JSON.parse(raw) : []);
+    } catch { setPinnedThreadIds([]); }
+  }, [pinStorageKey]);
+  const togglePinThread = useCallback((rootId: string) => {
+    setPinnedThreadIds((prev) => {
+      let next: string[];
+      if (prev.includes(rootId)) {
+        next = prev.filter((id) => id !== rootId);
+      } else {
+        if (prev.length >= MAX_PINNED_THREADS) return prev; // 최대 3개 초과 시 무시
+        next = [rootId, ...prev]; // 최근 고정한 것을 맨 앞에
+      }
+      try { localStorage.setItem(pinStorageKey, JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [favStorageKey]);
+  }, [pinStorageKey]);
+
+  // 스레드 #번호: 생성순(오래된→최신 역순) 위치 — 고정 정렬과 무관하게 안정적으로 유지
+  const threadNumberMap = useMemo(() => {
+    const m = new Map<string, number>();
+    threadRoots.forEach((r, i) => m.set(r.id, i + 1));
+    return m;
+  }, [threadRoots]);
+
+  // 고정된 스레드를 맨 앞(최근 고정 먼저), 나머지는 최신순으로 — 칩 표시 순서
+  const orderedThreadRoots = useMemo(() => {
+    if (pinnedThreadIds.length === 0) return threadRoots;
+    const pinnedSet = new Set(pinnedThreadIds);
+    const pinned = pinnedThreadIds
+      .map((id) => threadRoots.find((r) => r.id === id))
+      .filter((r): r is typeof threadRoots[number] => !!r);
+    const rest = threadRoots.filter((r) => !pinnedSet.has(r.id));
+    return [...pinned, ...rest];
+  }, [threadRoots, pinnedThreadIds]);
 
   // 비공개 글(나만의 콩콩이): 화면에 펼칠 스레드 1개 선택 (전체를 한 번에 렌더하지 않음)
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -359,15 +385,15 @@ export default function PostDetailPage({
     } catch (err) {
       console.error('스레드 삭제 실패:', err);
     }
-    // 삭제된 스레드는 즐겨찾기에서도 제거
-    setFavThreadIds((prev) => {
+    // 삭제된 스레드는 고정 목록에서도 제거
+    setPinnedThreadIds((prev) => {
       if (!prev.includes(rootCommentId)) return prev;
       const next = prev.filter((id) => id !== rootCommentId);
-      try { localStorage.setItem(favStorageKey, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(pinStorageKey, JSON.stringify(next)); } catch {}
       return next;
     });
     setThreadActionTarget(null);
-  }, [postId, favStorageKey]);
+  }, [postId, pinStorageKey]);
 
   // 스크롤 초기화 버튼용 ref
   const headerRef = useRef<HTMLElement>(null);
@@ -565,13 +591,15 @@ export default function PostDetailPage({
 
   // 조회수 기록 (상세 페이지 진입 시마다).
   // 가로모드 redirect 대기 중에는 실제로 페이지가 보이지 않으므로 스킵 (조회수 허수 방지).
+  // 나만의 콩콩이(비공개 글)는 조회수 개념이 없으므로 기록하지 않음.
   useEffect(() => {
     if (!postId) return;
+    if (post?.isPrivate) return;
     if (isWide && !isPanelMode && !isLocked) return;
     postRepo.incrementPostView(postId).catch((err) => {
       console.error('조회수 업데이트 실패:', err);
     });
-  }, [postId, isWide, isPanelMode, isLocked]);
+  }, [postId, post?.isPrivate, isWide, isPanelMode, isLocked]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -805,10 +833,19 @@ export default function PostDetailPage({
               >
                 + 새 대화
               </button>
-              {threadRoots.map((root, idx) => {
+              {orderedThreadRoots.map((root) => {
                 const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
                 const isSelected = !newThreadMode && root.id === selectedThreadId;
-                const isFav = favThreadIds.includes(root.id);
+                const isPinned = pinnedThreadIds.includes(root.id);
+                const num = threadNumberMap.get(root.id) ?? 0;
+                // 고정된 스레드는 노란색(금색) 계열로 표시 — 색깔로만 고정 표시
+                const chipClass = isPinned
+                  ? (isSelected
+                      ? 'bg-[#B8860B] text-[#F5F0E8] border-[#B8860B]'
+                      : 'border-[#B8860B] text-[#8A6508]')
+                  : (isSelected
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'border-[#1A1A1A] text-[#1A1A1A]');
                 return (
                   <button
                     key={root.id}
@@ -825,14 +862,13 @@ export default function PostDetailPage({
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                    className={`px-3 py-1.5 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${
-                      isSelected
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'border-[#1A1A1A] text-[#1A1A1A]'
-                    }`}
+                    className={`px-3 py-1.5 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${chipClass}`}
                   >
-                    {isFav && <span className={`mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#B8860B]'}`}>★</span>}
-                    <span className={`font-bold mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}>#{idx + 1}</span>
+                    <span className={`font-bold mr-1 ${
+                      isPinned
+                        ? (isSelected ? 'text-[#F5F0E8]' : 'text-[#8A6508]')
+                        : (isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]')
+                    }`}>#{num}</span>
                     {preview}
                   </button>
                 );
@@ -840,58 +876,20 @@ export default function PostDetailPage({
             </div>
           )}
 
-          {/* 비공개 글: 스레드 즐겨찾기 줄 (long-press 로 추가/해제) */}
-          {post.isPrivate && (() => {
-            const favRoots = favThreadIds
-              .map((id) => {
-                const idx = threadRoots.findIndex((r) => r.id === id);
-                return idx >= 0 ? { root: threadRoots[idx], num: idx + 1 } : null;
-              })
-              .filter((x): x is { root: typeof threadRoots[number]; num: number } => !!x);
-            if (favRoots.length === 0) return null;
-            return (
-              <div className="-mt-1 mb-2 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
-                <span className="flex items-center text-[10px] font-bold text-[#B8860B] whitespace-nowrap flex-shrink-0 pr-0.5">즐겨찾기</span>
-                {favRoots.map(({ root, num }) => {
-                  const preview = root.content.replace(/\n/g, ' ').slice(0, 14) + (root.content.length > 14 ? '..' : '');
-                  const isSelected = !newThreadMode && root.id === selectedThreadId;
-                  return (
-                    <button
-                      key={root.id}
-                      onClick={() => selectThread(root.id)}
-                      onPointerDown={() => {
-                        longPressTimer.current = setTimeout(() => setThreadActionTarget(root.id), 600);
-                      }}
-                      onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      className={`px-2.5 py-1 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${
-                        isSelected
-                          ? 'bg-[#B8860B] text-[#F5F0E8] border-[#B8860B]'
-                          : 'border-[#B8860B] text-[#8A6508]'
-                      }`}
-                    >
-                      <span className="mr-1">★</span>
-                      <span className="font-bold mr-1">#{num}</span>
-                      {preview}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
           {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
           <div className="flex items-center justify-between py-2 mt-4">
             <div className="flex items-center gap-3">
               <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
-              <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                {post.viewCount}
-              </span>
+              {/* 나만의 콩콩이(비공개 글)는 조회수 숨김 */}
+              {!post.isPrivate && (
+                <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  {post.viewCount}
+                </span>
+              )}
               <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -919,18 +917,29 @@ export default function PostDetailPage({
         <div ref={bottomAnchorRef} aria-hidden className="h-px w-full" />
       </main>
 
-      {/* 스레드 액션 바텀시트 (즐겨찾기 토글 / 삭제) */}
+      {/* 스레드 액션 바텀시트 (고정 토글 / 삭제) */}
       <WideBottomSheet isOpen={!!threadActionTarget} onClose={() => setThreadActionTarget(null)} panel={isPanelMode ? '3' : '2'}>
         <div className="px-5 pb-6">
           <p className="text-sm font-bold text-[#1A1A1A] mb-3">스레드</p>
-          {/* 즐겨찾기 토글 */}
-          <button
-            onClick={() => { if (threadActionTarget) toggleFavThread(threadActionTarget); setThreadActionTarget(null); }}
-            className="w-full mb-2 py-2.5 text-xs font-bold border-2 border-[#B8860B] text-[#8A6508] flex items-center justify-center gap-1.5"
-          >
-            <span>{threadActionTarget && favThreadIds.includes(threadActionTarget) ? '★' : '☆'}</span>
-            {threadActionTarget && favThreadIds.includes(threadActionTarget) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-          </button>
+          {/* 고정 토글 — 최대 3개 */}
+          {(() => {
+            const isPinned = !!threadActionTarget && pinnedThreadIds.includes(threadActionTarget);
+            const atLimit = !isPinned && pinnedThreadIds.length >= MAX_PINNED_THREADS;
+            return (
+              <button
+                disabled={atLimit}
+                onClick={() => { if (threadActionTarget && !atLimit) togglePinThread(threadActionTarget); setThreadActionTarget(null); }}
+                className={`w-full mb-2 py-2.5 text-xs font-bold border-2 flex items-center justify-center gap-1.5 ${
+                  atLimit
+                    ? 'border-[#D4CFC4] text-[#A8A29A]'
+                    : 'border-[#B8860B] text-[#8A6508]'
+                }`}
+              >
+                <span>{isPinned ? '★' : '☆'}</span>
+                {isPinned ? '고정 해제' : atLimit ? '고정은 최대 3개까지' : '고정'}
+              </button>
+            );
+          })()}
           <p className="text-[11px] text-[#5C5C5C] mb-2 mt-3">삭제 시 이 스레드의 댓글과 콩콩이 답변이 모두 사라집니다.</p>
           <div className="flex gap-2">
             <button
