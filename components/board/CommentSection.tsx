@@ -362,6 +362,19 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
         : [])
     : organizedComments;
 
+  // 비공개 글: 한 스레드(루트+답글)가 아주 길어지면 폰 브라우저가 한 번에 다 그리다
+  // 끝(최신)을 잘라버림. → 최근 메시지부터 THREAD_PAGE개만 렌더하고, 위쪽 "이전 대화
+  // 더보기"로 더 펼친다. 보통 스레드는 이 수 안이라 사실상 전체가 보인다.
+  const THREAD_PAGE = 300;
+  const [threadLimit, setThreadLimit] = useState(THREAD_PAGE);
+  // 다른 스레드로 전환하면 한도 초기화
+  useEffect(() => { setThreadLimit(THREAD_PAGE); }, [threadFilterRootId]);
+  // 스레드 전체 메시지(루트 + 답글, 시간순) → 최근 threadLimit개만 노출
+  const threadRoot = isPrivatePost ? visibleComments[0] : undefined;
+  const threadMessages = threadRoot ? [threadRoot, ...(threadRoot.replies || [])] : [];
+  const shownThreadMessages = threadMessages.slice(Math.max(0, threadMessages.length - threadLimit));
+  const hiddenThreadCount = threadMessages.length - shownThreadMessages.length;
+
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
     if ((!content.trim() && pendingImages.length === 0 && linkedImageUrls.length === 0) || !user) return;
@@ -583,7 +596,51 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           </div>
         )}
 
-        {!loading && visibleComments.length > 0 && (
+        {!loading && visibleComments.length > 0 && isPrivatePost && (
+          <>
+            {/* 한 스레드가 매우 길 때: 위쪽에 이전 대화 더보기 (최신은 항상 아래에 보임) */}
+            {hiddenThreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setThreadLimit((l) => l + THREAD_PAGE)}
+                className="w-full py-2 mb-3 text-xs font-bold text-[#5C5C5C] border border-[#D4CFC4] rounded-lg active:scale-95 transition-transform"
+              >
+                이전 대화 {hiddenThreadCount}개 더보기
+              </button>
+            )}
+            {shownThreadMessages.map((c) => {
+              const isRoot = c.id === threadRoot!.id;
+              return (
+                <div key={c.id} id={`comment-${c.id}`}>
+                  <CommentItem
+                    comment={c}
+                    currentUserId={user?.uid}
+                    onDelete={handleDelete}
+                    onEdit={handleEdit}
+                    onReply={undefined}
+                    onLike={handleLike}
+                    onAccept={isRoot ? handleAccept : undefined}
+                    isLiked={checkIsLiked(c.id)}
+                    isDeleting={deletingId === c.id}
+                    isEditing={editingId === c.id}
+                    isReply={!isRoot}
+                    isPrivatePost
+                    canAccept={isRoot ? canAcceptComment(c) : false}
+                    isAccepting={accepting}
+                    isProfessor={isProfessor}
+                    authorNameMap={authorNameMap}
+                    authorNicknameMap={authorNicknameMap}
+                    authorRoleMap={authorRoleMap}
+                    postAuthorId={postAuthorId}
+                    onUploadImages={handleUploadEditImages}
+                  />
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {!loading && visibleComments.length > 0 && !isPrivatePost && (
           <AnimatePresence>
             {visibleComments.map((comment) => (
               <div key={comment.id} id={`comment-${comment.id}`}>
@@ -592,7 +649,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   currentUserId={user?.uid}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
-                  onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
+                  onReply={() => handleReply(comment.id, comment.authorNickname)}
                   onLike={handleLike}
                   onAccept={handleAccept}
                   isLiked={checkIsLiked(comment.id)}
@@ -618,7 +675,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       currentUserId={user?.uid}
                       onDelete={handleDelete}
                       onEdit={handleEdit}
-                      onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
+                      onReply={() => handleReply(comment.id, comment.authorNickname)}
                       onLike={handleLike}
                       isLiked={checkIsLiked(reply.id)}
                       isDeleting={deletingId === reply.id}
