@@ -24,6 +24,11 @@ export default function SplashScreen({ children }: SplashScreenProps) {
   useEffect(() => {
     setIsClient(true);
 
+    // 공유 링크 진입: 스플래시 건너뛰기 (본 기록도 남기지 않음)
+    if (window.location.pathname.startsWith('/share')) {
+      return;
+    }
+
     // PC 환경 식별: 큰 가로 화면(태블릿/데스크탑) 또는 마우스 hover가 가능한 환경
     const isLandscapeLarge = window.matchMedia('(orientation: landscape) and (min-width: 1024px)').matches;
     const isDesktopInput = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
