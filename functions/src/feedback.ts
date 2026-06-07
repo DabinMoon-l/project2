@@ -21,7 +21,7 @@ interface Feedback {
   userId: string;         // 작성자 ID
   quizId: string;         // 퀴즈 ID
   questionId: string;     // 문제 ID
-  type: "praise" | "wantmore" | "unclear" | "wrong" | "typo" | "other";  // 피드백 유형
+  type: "praise" | "wantmore" | "unclear" | "wrong" | "typo" | "other" | "too_easy" | "too_hard";  // 피드백 유형 (too_easy/too_hard = 난이도)
   content?: string;       // 피드백 내용 (선택)
   status: "pending" | "reviewed" | "resolved";  // 처리 상태
   rewarded?: boolean;     // 보상 지급 여부

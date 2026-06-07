@@ -123,6 +123,8 @@ function getLastWeekRange(): { start: Date; end: Date; label: string } {
 const FEEDBACK_SCORES: Record<string, number> = {
   praise: 2,
   wantmore: 1,
+  too_easy: 0, // 난이도 신호 — 품질 점수엔 중립
+  too_hard: 0, // 난이도 신호 — 품질 점수엔 중립
   other: 0,
   typo: -1,
   unclear: -1,

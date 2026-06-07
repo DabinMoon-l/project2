@@ -512,6 +512,8 @@ export default function PreviewQuestionCard({
                 const types = [
                   { key: 'praise', label: '문제가 좋아요!' },
                   { key: 'wantmore', label: '더 풀고 싶어요' },
+                  { key: 'too_easy', label: '문제가 너무 쉬워요' },
+                  { key: 'too_hard', label: '문제가 너무 어려워요' },
                   { key: 'unclear', label: '문제가 이해가 안 돼요' },
                   { key: 'wrong', label: '정답이 틀린 것 같아요' },
                   { key: 'typo', label: '오타가 있어요' },

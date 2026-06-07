@@ -13,7 +13,7 @@ const courseChapters = require("../shared/courseChapters.json");
 const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
 const AI_TYPES = new Set(["ai-generated"]);
 const FEEDBACK_SCORES: Record<string, number> = {
-  praise: 2, wantmore: 1, other: 0, typo: -1, unclear: -1, wrong: -2,
+  praise: 2, wantmore: 1, too_easy: 0, too_hard: 0, other: 0, typo: -1, unclear: -1, wrong: -2,
 };
 
 export async function collectLearning(ctx: CollectContext): Promise<LearningStats> {

@@ -697,10 +697,11 @@ export default function ProfessorStatsPage() {
                 <div className="p-3 border border-[#D4CFC4]">
                   <p className="text-xs font-bold text-[#1A1A1A] mb-2">타입별 분포</p>
                   <div className="space-y-1.5">
-                    {(['praise', 'wantmore', 'other', 'typo', 'unclear', 'wrong'] as const).map(type => {
+                    {(['praise', 'wantmore', 'too_easy', 'too_hard', 'other', 'typo', 'unclear', 'wrong'] as const).map(type => {
                       const count = extraData.feedbackData!.byType[type] || 0;
                       const pct = extraData.feedbackData!.total > 0 ? (count / extraData.feedbackData!.total) * 100 : 0;
                       const label = type === 'praise' ? '좋아요' : type === 'wantmore' ? '더 풀고 싶어요'
+                        : type === 'too_easy' ? '너무 쉬움' : type === 'too_hard' ? '너무 어려움'
                         : type === 'other' ? '기타' : type === 'typo' ? '오타'
                         : type === 'unclear' ? '이해 안 됨' : '정답 틀림';
                       const isPositive = FEEDBACK_SCORES[type] > 0;

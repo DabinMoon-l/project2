@@ -78,12 +78,16 @@ export interface QuizDetails {
 }
 
 /** 피드백 타입 */
-export type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
+export type FeedbackType =
+  | 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore'
+  | 'too_easy' | 'too_hard'; // 난이도 피드백 (품질 점수엔 중립 0)
 
 /** 피드백 유형 옵션 */
 export const FEEDBACK_TYPES: { type: FeedbackType; label: string; positive?: boolean }[] = [
   { type: 'praise', label: '문제가 좋아요!', positive: true },
   { type: 'wantmore', label: '더 풀고 싶어요', positive: true },
+  { type: 'too_easy', label: '문제가 너무 쉬워요' },
+  { type: 'too_hard', label: '문제가 너무 어려워요' },
   { type: 'unclear', label: '문제가 이해가 안 돼요' },
   { type: 'wrong', label: '정답이 틀린 것 같아요' },
   { type: 'typo', label: '오타가 있어요' },

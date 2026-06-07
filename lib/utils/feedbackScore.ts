@@ -6,6 +6,8 @@ import { type FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 export const FEEDBACK_SCORES: Record<FeedbackType, number> = {
   praise: 2,    // 문제가 좋아요!
   wantmore: 1,  // 더 풀고 싶어요
+  too_easy: 0,  // 너무 쉬움 — 난이도 신호(품질 아님), 점수 중립
+  too_hard: 0,  // 너무 어려움 — 난이도 신호(품질 아님), 점수 중립
   other: 0,     // 기타
   typo: -1,     // 오타
   unclear: -1,  // 이해 안 됨
