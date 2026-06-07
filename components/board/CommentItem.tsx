@@ -415,7 +415,8 @@ function CommentItem({
               </button>
             )}
             {/* 답글 버튼은 내용 하단으로 이동 */}
-            {onLike && (
+            {/* 나만의 콩콩이(비공개 글)는 댓글 찜 숨김 */}
+            {onLike && !isPrivatePost && (
               <button
                 type="button"
                 onClick={() => onLike(comment.id)}

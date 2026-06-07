@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
+import { stripMarkdown, urlsToShareFiles } from '@/lib/utils/shareContent';
 import ScrollToTopButton from '@/components/common/ScrollToTopButton';
 import WideBottomSheet from '@/components/common/WideBottomSheet';
 
@@ -624,11 +625,33 @@ export default function PostDetailPage({
     // onSnapshot이 자동 반영하므로 refresh() 불필요
   }, [toggleLike, postId]);
 
+  // 텍스트(+이미지 파일) 공유 — navigator.share 우선, 미지원/실패 시 클립보드 폴백
+  const shareTextWithImages = useCallback(async (text: string, imageUrls: string[]) => {
+    const files = imageUrls.length ? await urlsToShareFiles(imageUrls) : [];
+    const shareData: ShareData = { text };
+    if (files.length && navigator.canShare?.({ files })) {
+      shareData.files = files;
+    }
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        // 사용자가 취소(AbortError)했으면 폴백하지 않음
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        // 그 외(예: 이미지 첨부 실패)엔 텍스트만 재시도
+        try { await navigator.share({ text }); return; } catch { /* 폴백으로 진행 */ }
+      }
+    }
+    await navigator.clipboard.writeText(text);
+    alert('클립보드에 복사되었습니다.');
+  }, []);
+
   const handleShare = useCallback(async () => {
     if (!post) return;
 
     // 나만의 콩콩이(비공개 글): URL 공유는 의미 없음(남이 못 봄) →
-    // 현재 펼쳐져 있는 스레드의 대화 내용만 텍스트로 공유/복사
+    // 현재 펼쳐져 있는 스레드의 대화 내용만 텍스트(+이미지)로 공유/복사
     if (post.isPrivate) {
       const rootId = newThreadMode ? null : selectedThreadId;
       if (!rootId) {
@@ -640,29 +663,26 @@ export default function PostDetailPage({
       const replies = allComments
         .filter((c) => c.parentId === rootId)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      const imageUrls: string[] = [];
       const lines = [root, ...replies].map((c) => {
         const who = c.authorId === 'gemini-ai' || c.isAIReply ? '콩콩이' : '나';
-        const body = c.content?.trim() || (c.imageUrls?.length ? '[이미지]' : '');
+        if (c.imageUrls?.length) imageUrls.push(...c.imageUrls);
+        const body = stripMarkdown(c.content || '') || (c.imageUrls?.length ? '[이미지]' : '');
         return `${who}: ${body}`;
       });
-      const text = lines.join('\n\n');
-      if (navigator.share) {
-        try { await navigator.share({ text }); } catch { /* 취소 */ }
-      } else {
-        await navigator.clipboard.writeText(text);
-        alert('대화 내용이 클립보드에 복사되었습니다.');
-      }
+      await shareTextWithImages(lines.join('\n\n'), imageUrls);
       return;
     }
 
+    // 공개 글: 마크다운 제거한 본문 + 이미지 + 원본 링크
     const url = `${window.location.origin}/share/board/${postId}`;
-    if (navigator.share) {
-      try { await navigator.share({ url }); } catch { /* 취소 */ }
-    } else {
-      await navigator.clipboard.writeText(url);
-      alert('클립보드에 복사되었습니다.');
-    }
-  }, [post, postId, newThreadMode, selectedThreadId, allComments]);
+    const imageUrls = [
+      ...(post.imageUrls ?? []),
+      ...(post.imageUrl && !(post.imageUrls ?? []).includes(post.imageUrl) ? [post.imageUrl] : []),
+    ];
+    const bodyText = [post.title, stripMarkdown(post.content || '')].filter(Boolean).join('\n\n');
+    await shareTextWithImages(`${bodyText}\n\n${url}`, imageUrls);
+  }, [post, postId, newThreadMode, selectedThreadId, allComments, shareTextWithImages]);
 
   // 가로모드 직접 진입 redirect 대기 중 — 전체화면(세로모드처럼 보이는) UI가
   // 1프레임 번쩍이지 않도록 렌더 자체 생략. useEffect가 /board로 replace 예정.
