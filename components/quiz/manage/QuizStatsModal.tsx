@@ -19,10 +19,15 @@ import {
   doc,
   getDoc,
   getDocs,
+  updateDoc,
   db,
   userRepo,
 } from '@/lib/repositories';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { formatChapterLabel } from '@/lib/courseIndex';
+
+// 미확인 피드백 하트 킬스위치 — 문제 발생 시 false 로 바꿔 재배포하면 비활성화
+const ENABLE_FEEDBACK_REVIEW_HEART = true;
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
@@ -83,6 +88,13 @@ export default function QuizStatsModal({
   const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
   const [allFeedbacks, setAllFeedbacks] = useState<Record<string, any>[] | null>(null); // 전체 피드백 캐시
   const [feedbackQuestionNum, setFeedbackQuestionNum] = useState<number>(0); // 필터링할 문제 번호 (1-indexed, 0이면 전체)
+
+  // 미확인 피드백 하트 — 교수님이 문제별 피드백 목록을 열면 "확인"으로 기록.
+  // 저장 위치: 본인 user 문서의 feedbackReviews[quizId][문제번호] = 확인시각(ms).
+  // (규칙상 본인 비보호 필드 수정 가능 → 별도 보안규칙/배포 불필요, 기기간 동기화됨)
+  const { user: _authUser } = useAuth();
+  const reviewerUid = _authUser?.uid;
+  const [reviewedMap, setReviewedMap] = useState<Record<number, number>>({});
 
   // 서술형 답안 모달
   const [showEssayModal, setShowEssayModal] = useState(false);
@@ -765,6 +777,55 @@ export default function QuizStatsModal({
     return map;
   }, [classFilteredFeedbacks, getFeedbackQuestionNum]);
 
+  // 피드백 확인 기록 로드 (본인 user 문서) — 모달 열릴 때 1회
+  useEffect(() => {
+    if (!ENABLE_FEEDBACK_REVIEW_HEART || !isOpen || !isProfessor || !reviewerUid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', reviewerUid));
+        const data = snap.exists() ? snap.data() : null;
+        const reviews = (data?.feedbackReviews?.[quizId] ?? {}) as Record<string, number>;
+        if (cancelled) return;
+        const m: Record<number, number> = {};
+        Object.entries(reviews).forEach(([k, v]) => { m[Number(k)] = Number(v); });
+        setReviewedMap(m);
+      } catch { /* 읽기 실패 시 빈 상태(=모두 미확인) */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, isProfessor, reviewerUid, quizId]);
+
+  // 문제별 "미확인 피드백" 여부 — 확인시각 이후 생성된 피드백이 있으면 미확인
+  const unreviewedQuestions = useMemo(() => {
+    const set = new Set<number>();
+    if (!ENABLE_FEEDBACK_REVIEW_HEART || !isProfessor || !allFeedbacks) return set;
+    for (const fb of allFeedbacks) {
+      const num = getFeedbackQuestionNum(fb);
+      if (num <= 0) continue;
+      const created = fb.createdAt?.toMillis?.() || (fb.createdAt?.seconds ? fb.createdAt.seconds * 1000 : 0);
+      if (created > (reviewedMap[num] || 0)) set.add(num);
+    }
+    return set;
+  }, [allFeedbacks, reviewedMap, isProfessor, getFeedbackQuestionNum]);
+
+  // 피드백 확인 처리 — 해당 문제들을 "지금" 확인한 것으로 기록 (local + 본인 user 문서)
+  const markFeedbackReviewed = useCallback(async (questionNums: number[]) => {
+    if (!ENABLE_FEEDBACK_REVIEW_HEART || !isProfessor || !reviewerUid || questionNums.length === 0) return;
+    const now = Date.now();
+    setReviewedMap((prev) => {
+      const next = { ...prev };
+      questionNums.forEach((n) => { if (n > 0) next[n] = now; });
+      return next;
+    });
+    try {
+      const updates: Record<string, unknown> = {};
+      questionNums.forEach((n) => { if (n > 0) updates[`feedbackReviews.${quizId}.${n}`] = now; });
+      if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'users', reviewerUid), updates);
+    } catch (e) {
+      console.warn('피드백 확인 저장 실패:', e);
+    }
+  }, [isProfessor, reviewerUid, quizId]);
+
   // 혼합 보기 유효성 검사
   const hasValidMixedExamples = currentQuestion?.mixedExamples &&
     currentQuestion.mixedExamples.length > 0 &&
@@ -772,6 +833,12 @@ export default function QuizStatsModal({
 
   // 피드백 모달 열기 (questionNum: 1-indexed 문제 번호, 0이면 전체)
   const handleOpenFeedback = useCallback(async (questionNum: number, rect?: SourceRect) => {
+    // 확인 처리: 특정 문제면 그 문제, 전체(0)면 피드백 있는 모든 문제
+    if (questionNum > 0) {
+      markFeedbackReviewed([questionNum]);
+    } else {
+      markFeedbackReviewed(Array.from(feedbackCountByQuestion.keys()));
+    }
     if (rect) setFeedbackSourceRect(rect);
     setFeedbackQuestionNum(questionNum);
     setShowFeedbackModal(true);
@@ -810,7 +877,7 @@ export default function QuizStatsModal({
     } finally {
       setFeedbackLoading(false);
     }
-  }, [quizId, allFeedbacks]);
+  }, [quizId, allFeedbacks, markFeedbackReviewed, feedbackCountByQuestion]);
 
   // 현재 문제를 폴더에 저장
   const handleFolderSelect = async (folderId: string) => {
@@ -1028,6 +1095,27 @@ export default function QuizStatsModal({
                             {markers.map((item, idx) =>
                               renderMarker(item, idx % 2 === 0)
                             )}
+                            {/* 미확인 피드백 하트 — 슬라이더 바로 위, 해당 문제 위치에 작게 (정답률 탑3와 겹치지 않게 트랙 상단) */}
+                            {ENABLE_FEEDBACK_REVIEW_HEART && Array.from(unreviewedQuestions).map((qNum) => {
+                              const pos = ((qNum - 1) / (totalQ - 1)) * 100;
+                              return (
+                                <span
+                                  key={`fbheart-${qNum}`}
+                                  onClick={() => goToQuestion(qNum - 1)}
+                                  className="absolute text-[9px] leading-none cursor-pointer select-none z-20"
+                                  style={{
+                                    left: `${pos}%`,
+                                    transform: pos < 4 ? 'translateX(0)' : pos > 96 ? 'translateX(-100%)' : 'translateX(-50%)',
+                                    bottom: '100%',
+                                    marginBottom: '0px',
+                                    color: '#DC2626',
+                                  }}
+                                  title="확인하지 않은 피드백이 있어요"
+                                >
+                                  ♥
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       );
