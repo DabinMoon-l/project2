@@ -342,6 +342,8 @@ export default function PostDetailPage({
 
   // 스크롤 초기화 버튼용 ref
   const headerRef = useRef<HTMLElement>(null);
+  // 맨 아래로 버튼용 ref (댓글 영역 끝) — 이 앵커가 화면 밖이면 버튼 표시
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
 
   // ── 우→좌 스와이프 → 다음 게시글 (순환) ──
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
@@ -841,6 +843,8 @@ export default function PostDetailPage({
           <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">댓글</h3>
           <CommentSection postId={postId} postAuthorId={post.authorId} acceptedCommentId={post.acceptedCommentId} isPrivatePost={post.isPrivate} isPanelMode={isPanelMode} threadFilterRootId={post.isPrivate ? (newThreadMode ? null : selectedThreadId) : undefined} />
         </section>
+        {/* 맨 아래로 버튼 표시 판정용 앵커 (댓글 영역의 끝) */}
+        <div ref={bottomAnchorRef} aria-hidden className="h-px w-full" />
       </main>
 
       {/* 스레드 삭제 확인 바텀시트 */}
@@ -865,13 +869,23 @@ export default function PostDetailPage({
         </div>
       </WideBottomSheet>
 
-      {/* 비공개 글: 스크롤 초기화 버튼 — 입력창 위에 배치 */}
+      {/* 비공개 글: 스크롤 버튼 — 입력창 바로 위에 배치 (입력창 높이에 맞춰 동적으로 떠 겹치지 않음) */}
+      {/* 좌: 맨 위로 / 우: 맨 아래로 */}
       {post.isPrivate && (
-        <ScrollToTopButton
-          targetRef={headerRef}
-          bottomPx={140}
-          side={isPanelMode ? 'right' : 'right'}
-        />
+        <>
+          <ScrollToTopButton
+            targetRef={headerRef}
+            side="left"
+            direction="top"
+            bottomOverride="calc(var(--kb-offset, 0px) + var(--kongi-input-h, 72px) + 0.5rem)"
+          />
+          <ScrollToTopButton
+            targetRef={bottomAnchorRef}
+            side="right"
+            direction="bottom"
+            bottomOverride="calc(var(--kb-offset, 0px) + var(--kongi-input-h, 72px) + 0.5rem)"
+          />
+        </>
       )}
     </motion.div>
     </div>

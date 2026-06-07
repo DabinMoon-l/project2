@@ -15,6 +15,10 @@ interface ScrollToTopButtonProps {
   variant?: 'dark' | 'glass';
   /** 외부에서 강제 숨김 */
   hidden?: boolean;
+  /** 스크롤 방향: 'top' 맨 위로(기본), 'bottom' 맨 아래로 */
+  direction?: 'top' | 'bottom';
+  /** bottom 위치를 직접 지정 (예: 입력창 높이에 맞춰 띄울 때). 지정 시 bottomPx 무시 */
+  bottomOverride?: string;
 }
 
 export default function ScrollToTopButton({
@@ -23,6 +27,8 @@ export default function ScrollToTopButton({
   side = 'right' as const,
   variant = 'dark',
   hidden = false,
+  direction = 'top',
+  bottomOverride,
 }: ScrollToTopButtonProps) {
   const [show, setShow] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -54,23 +60,32 @@ export default function ScrollToTopButton({
     };
   }, [targetRef]);
 
-  const scrollToTop = useCallback(() => {
+  const doScroll = useCallback(() => {
     // 가로모드: <main> 등 개별 스크롤 컨테이너를 찾아 스크롤
     const el = targetRef.current;
     if (el) {
       let parent = el.parentElement;
       while (parent) {
         const style = getComputedStyle(parent);
-        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && parent.scrollTop > 0) {
-          parent.scrollTo({ top: 0, behavior: 'smooth' });
+        const isScrollEl = style.overflowY === 'auto' || style.overflowY === 'scroll';
+        // top: 위로 스크롤 여지(scrollTop>0) / bottom: 아래로 스크롤 여지
+        const canScroll = direction === 'bottom'
+          ? parent.scrollHeight > parent.clientHeight + 4
+            && parent.scrollTop + parent.clientHeight < parent.scrollHeight - 4
+          : parent.scrollTop > 0;
+        if (isScrollEl && canScroll) {
+          parent.scrollTo({ top: direction === 'bottom' ? parent.scrollHeight : 0, behavior: 'smooth' });
           return;
         }
         parent = parent.parentElement;
       }
     }
     // 폴백: window 스크롤
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [targetRef]);
+    window.scrollTo({
+      top: direction === 'bottom' ? document.documentElement.scrollHeight : 0,
+      behavior: 'smooth',
+    });
+  }, [targetRef, direction]);
 
   const variantClass =
     variant === 'glass'
@@ -87,10 +102,12 @@ export default function ScrollToTopButton({
           exit={{ opacity: 0, scale: 0.8 }}
           whileTap={{ scale: 0.95, opacity: 0.7 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          onClick={scrollToTop}
+          onClick={doScroll}
           className={`fixed z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
-            bottom: isWide
+            bottom: bottomOverride
+              ? bottomOverride
+              : isWide
               ? `${Math.max(16, bottomPx - 68)}px`
               : `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
             ...(side === 'left'
@@ -101,10 +118,15 @@ export default function ScrollToTopButton({
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}
-          aria-label="맨 위로"
+          aria-label={direction === 'bottom' ? '맨 아래로' : '맨 위로'}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d={direction === 'bottom' ? 'M19 14l-7 7m0 0l-7-7m7 7V3' : 'M5 10l7-7m0 0l7 7m-7-7v18'}
+            />
           </svg>
         </motion.button>
       )}

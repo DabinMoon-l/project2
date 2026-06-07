@@ -194,12 +194,19 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setInputBarHeight(entry.contentRect.height);
+        const h = entry.contentRect.height;
+        setInputBarHeight(h);
+        // 입력창 실제 높이를 CSS 변수로 노출 → 스크롤 버튼이 답글 배너 등으로
+        // 입력창이 커져도 그만큼 위로 올라가 겹치지 않도록 (board/[id] 비공개 글)
+        if (isPrivatePost) document.documentElement.style.setProperty('--kongi-input-h', `${h}px`);
       }
     });
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [user]);
+    return () => {
+      ro.disconnect();
+      if (isPrivatePost) document.documentElement.style.removeProperty('--kongi-input-h');
+    };
+  }, [user, isPrivatePost]);
 
   // textarea 높이 자동 조절
   useEffect(() => {
