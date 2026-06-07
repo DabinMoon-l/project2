@@ -252,52 +252,47 @@ export default function PostDetailPage({
       .filter((c) => !c.parentId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // 최신 먼저
   }, [allComments, post?.isPrivate]);
-  // 스레드 long-press 액션 시트 대상 (고정 토글 / 삭제)
+  // 스레드 long-press 액션 시트 대상 (삭제)
   const [threadActionTarget, setThreadActionTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 스레드 고정 (rootCommentId 목록, 기기별 localStorage 저장)
-  // 배열 앞쪽 = 가장 최근 고정. 최대 3개.
-  const MAX_PINNED_THREADS = 3;
-  const pinStorageKey = `kongi_thread_pins:${postId}`;
-  const [pinnedThreadIds, setPinnedThreadIds] = useState<string[]>([]);
+  // 스레드 "최근 읽은 순" (rootCommentId 목록, 기기별 localStorage 저장)
+  // 배열 앞쪽 = 가장 최근에 읽은 스레드 → #1.
+  const readOrderKey = `kongi_thread_read_order:${postId}`;
+  const [readOrder, setReadOrder] = useState<string[]>([]);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(pinStorageKey);
-      setPinnedThreadIds(raw ? JSON.parse(raw) : []);
-    } catch { setPinnedThreadIds([]); }
-  }, [pinStorageKey]);
-  const togglePinThread = useCallback((rootId: string) => {
-    setPinnedThreadIds((prev) => {
-      let next: string[];
-      if (prev.includes(rootId)) {
-        next = prev.filter((id) => id !== rootId);
-      } else {
-        if (prev.length >= MAX_PINNED_THREADS) return prev; // 최대 3개 초과 시 무시
-        next = [rootId, ...prev]; // 최근 고정한 것을 맨 앞에
-      }
-      try { localStorage.setItem(pinStorageKey, JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, [pinStorageKey]);
+      const raw = localStorage.getItem(readOrderKey);
+      setReadOrder(raw ? JSON.parse(raw) : []);
+    } catch { setReadOrder([]); }
+  }, [readOrderKey]);
+  // 항상 최신 readOrder 를 참조 (언마운트 시점 커밋용)
+  const readOrderRef = useRef<string[]>([]);
+  readOrderRef.current = readOrder;
+  // localStorage 에만 기록 (언마운트 등 setState 불가/불필요 시) — 새 순서 반환
+  const persistRead = useCallback((threadId: string) => {
+    if (!threadId) return null;
+    const next = [threadId, ...readOrderRef.current.filter((id) => id !== threadId)];
+    try { localStorage.setItem(readOrderKey, JSON.stringify(next)); } catch {}
+    return next;
+  }, [readOrderKey]);
+  // 읽은 스레드를 맨 앞으로 승격 (state + localStorage)
+  const commitRead = useCallback((threadId: string) => {
+    const next = persistRead(threadId);
+    if (next) setReadOrder(next);
+  }, [persistRead]);
 
-  // 스레드 #번호: 생성순(오래된→최신 역순) 위치 — 고정 정렬과 무관하게 안정적으로 유지
-  const threadNumberMap = useMemo(() => {
-    const m = new Map<string, number>();
-    threadRoots.forEach((r, i) => m.set(r.id, i + 1));
-    return m;
-  }, [threadRoots]);
-
-  // 고정된 스레드를 맨 앞(최근 고정 먼저), 나머지는 최신순으로 — 칩 표시 순서
+  // 최근 읽은 순으로 정렬 — 읽은 적 있는 스레드 먼저(최근일수록 앞), 나머지는 최신 생성순
   const orderedThreadRoots = useMemo(() => {
-    if (pinnedThreadIds.length === 0) return threadRoots;
-    const pinnedSet = new Set(pinnedThreadIds);
-    const pinned = pinnedThreadIds
-      .map((id) => threadRoots.find((r) => r.id === id))
-      .filter((r): r is typeof threadRoots[number] => !!r);
-    const rest = threadRoots.filter((r) => !pinnedSet.has(r.id));
-    return [...pinned, ...rest];
-  }, [threadRoots, pinnedThreadIds]);
+    if (readOrder.length === 0) return threadRoots;
+    const rank = new Map(readOrder.map((id, i) => [id, i]));
+    return [...threadRoots].sort((a, b) => {
+      const ra = rank.has(a.id) ? rank.get(a.id)! : Infinity;
+      const rb = rank.has(b.id) ? rank.get(b.id)! : Infinity;
+      if (ra !== rb) return ra - rb;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+  }, [threadRoots, readOrder]);
 
   // 비공개 글(나만의 콩콩이): 화면에 펼칠 스레드 1개 선택 (전체를 한 번에 렌더하지 않음)
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -324,22 +319,37 @@ export default function PostDetailPage({
     }
   }, [newThreadMode, threadRoots]);
 
+  // 언마운트(게시판 나감) 시점에 현재 읽던 스레드를 커밋하기 위한 ref
+  const selectedThreadRef = useRef<string | null>(null);
+  selectedThreadRef.current = newThreadMode ? null : selectedThreadId;
+  useEffect(() => {
+    return () => {
+      if (selectedThreadRef.current) persistRead(selectedThreadRef.current);
+    };
+  }, [persistRead]);
+
   // 스레드 선택 (캐러셀 버튼) → 댓글 영역 위로 스크롤
+  // 다른 스레드를 고르는 순간, 직전까지 읽던 스레드를 "최근 읽음"으로 승격 (#1)
   const selectThread = useCallback((rootId: string) => {
+    if (selectedThreadId && selectedThreadId !== rootId) {
+      commitRead(selectedThreadId);
+    }
     setNewThreadMode(false);
     setSelectedThreadId(rootId);
     const el = document.getElementById('kongi-comments');
     if (el) scrollToElement(el);
-  }, []);
+  }, [selectedThreadId, commitRead]);
 
   // 새 대화 시작
   const startNewThread = useCallback(() => {
+    // 읽던 스레드에서 벗어나는 것이므로 "최근 읽음"으로 승격 (#1)
+    if (selectedThreadId) commitRead(selectedThreadId);
     newThreadBaselineRef.current = threadRoots[0]?.id ?? null;
     setSelectedThreadId(null);
     setNewThreadMode(true);
     const el = document.getElementById('kongi-comments');
     if (el) scrollToElement(el);
-  }, [threadRoots]);
+  }, [threadRoots, selectedThreadId, commitRead]);
 
   // PC 마우스 드래그 스크롤 (branch 미리보기 carousel)
   const threadScrollRef = useRef<HTMLDivElement>(null);
@@ -385,15 +395,15 @@ export default function PostDetailPage({
     } catch (err) {
       console.error('스레드 삭제 실패:', err);
     }
-    // 삭제된 스레드는 고정 목록에서도 제거
-    setPinnedThreadIds((prev) => {
+    // 삭제된 스레드는 최근 읽은 순 목록에서도 제거
+    setReadOrder((prev) => {
       if (!prev.includes(rootCommentId)) return prev;
       const next = prev.filter((id) => id !== rootCommentId);
-      try { localStorage.setItem(pinStorageKey, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(readOrderKey, JSON.stringify(next)); } catch {}
       return next;
     });
     setThreadActionTarget(null);
-  }, [postId, pinStorageKey]);
+  }, [postId, readOrderKey]);
 
   // 스크롤 초기화 버튼용 ref
   const headerRef = useRef<HTMLElement>(null);
@@ -833,19 +843,11 @@ export default function PostDetailPage({
               >
                 + 새 대화
               </button>
-              {orderedThreadRoots.map((root) => {
+              {orderedThreadRoots.map((root, idx) => {
                 const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
                 const isSelected = !newThreadMode && root.id === selectedThreadId;
-                const isPinned = pinnedThreadIds.includes(root.id);
-                const num = threadNumberMap.get(root.id) ?? 0;
-                // 고정된 스레드는 노란색(금색) 계열로 표시 — 색깔로만 고정 표시
-                const chipClass = isPinned
-                  ? (isSelected
-                      ? 'bg-[#B8860B] text-[#F5F0E8] border-[#B8860B]'
-                      : 'border-[#B8860B] text-[#8A6508]')
-                  : (isSelected
-                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'border-[#1A1A1A] text-[#1A1A1A]');
+                // #번호 = 표시 순서(최근 읽은 순) — #1 이 가장 최근에 읽은 스레드
+                const num = idx + 1;
                 return (
                   <button
                     key={root.id}
@@ -862,13 +864,13 @@ export default function PostDetailPage({
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                    className={`px-3 py-1.5 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${chipClass}`}
+                    className={`px-3 py-1.5 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${
+                      isSelected
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'border-[#1A1A1A] text-[#1A1A1A]'
+                    }`}
                   >
-                    <span className={`font-bold mr-1 ${
-                      isPinned
-                        ? (isSelected ? 'text-[#F5F0E8]' : 'text-[#8A6508]')
-                        : (isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]')
-                    }`}>#{num}</span>
+                    <span className={`font-bold mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}>#{num}</span>
                     {preview}
                   </button>
                 );
@@ -917,30 +919,11 @@ export default function PostDetailPage({
         <div ref={bottomAnchorRef} aria-hidden className="h-px w-full" />
       </main>
 
-      {/* 스레드 액션 바텀시트 (고정 토글 / 삭제) */}
+      {/* 스레드 액션 바텀시트 (삭제) */}
       <WideBottomSheet isOpen={!!threadActionTarget} onClose={() => setThreadActionTarget(null)} panel={isPanelMode ? '3' : '2'}>
         <div className="px-5 pb-6">
           <p className="text-sm font-bold text-[#1A1A1A] mb-3">스레드</p>
-          {/* 고정 토글 — 최대 3개 */}
-          {(() => {
-            const isPinned = !!threadActionTarget && pinnedThreadIds.includes(threadActionTarget);
-            const atLimit = !isPinned && pinnedThreadIds.length >= MAX_PINNED_THREADS;
-            return (
-              <button
-                disabled={atLimit}
-                onClick={() => { if (threadActionTarget && !atLimit) togglePinThread(threadActionTarget); setThreadActionTarget(null); }}
-                className={`w-full mb-2 py-2.5 text-xs font-bold border-2 flex items-center justify-center gap-1.5 ${
-                  atLimit
-                    ? 'border-[#D4CFC4] text-[#A8A29A]'
-                    : 'border-[#B8860B] text-[#8A6508]'
-                }`}
-              >
-                <span>{isPinned ? '★' : '☆'}</span>
-                {isPinned ? '고정 해제' : atLimit ? '고정은 최대 3개까지' : '고정'}
-              </button>
-            );
-          })()}
-          <p className="text-[11px] text-[#5C5C5C] mb-2 mt-3">삭제 시 이 스레드의 댓글과 콩콩이 답변이 모두 사라집니다.</p>
+          <p className="text-[11px] text-[#5C5C5C] mb-2">삭제 시 이 스레드의 댓글과 콩콩이 답변이 모두 사라집니다.</p>
           <div className="flex gap-2">
             <button
               onClick={() => setThreadActionTarget(null)}
