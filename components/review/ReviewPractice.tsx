@@ -16,6 +16,7 @@ import { type FeedbackType } from '@/components/review/types';
 import type { ReviewPracticeProps, PracticeResult, AnswerType, Phase } from './reviewPracticeTypes';
 import { TYPE_LABELS } from './reviewPracticeTypes';
 import { checkSingleAnswer } from './reviewPracticeUtils';
+import { shuffleReviewChoices } from './shuffleReviewChoices';
 import ResultStage from './stages/ResultStage';
 import FeedbackStage from './stages/FeedbackStage';
 import PracticeStage from './stages/PracticeStage';
@@ -50,6 +51,19 @@ export default function ReviewPractice({
     return `rp:${Math.abs(h).toString(36)}`;
   }, [items]);
 
+  // 복습 풀이용 선지 셔플 시드 — 세션 단위로 고정(새로고침에도 동일 순서),
+  // 완료 시 clearSessionPrefix로 지워져 다음 복습엔 새로 섞임.
+  const [shuffleSeed] = useSessionState<number>(
+    `${sessionKey}:shuffleSeed`,
+    () => Math.floor(Math.random() * 0xffffffff),
+  );
+  // 객관식 선지만 섞은 복습 항목 (정답/선지해설 함께 재배치 → 채점 불변).
+  // 원본 items는 건드리지 않으므로 다른 화면/저장 로직에 영향 없음.
+  const shuffledItems = useMemo(
+    () => shuffleReviewChoices(items, shuffleSeed),
+    [items, shuffleSeed],
+  );
+
   // 현재 화면 단계 — cold reload에도 복원
   const [phase, setPhase] = useSessionState<Phase>(`${sessionKey}:phase`, 'practice');
   // 현재 문제 인덱스
@@ -83,7 +97,7 @@ export default function ReviewPractice({
   useEffect(() => {
     if (phase !== 'result') return;
     const defaultExpanded = new Set<string>();
-    items.forEach(item => {
+    shuffledItems.forEach(item => {
       if (item.type !== 'multiple' || !item.choiceExplanations?.some(e => e)) return;
       const correctStr = item.correctAnswer?.toString() || '';
       const correctIndices = correctStr.includes(',')
@@ -96,7 +110,7 @@ export default function ReviewPractice({
       });
     });
     if (defaultExpanded.size > 0) setExpandedChoiceExplanations(defaultExpanded);
-  }, [phase, items]);
+  }, [phase, shuffledItems]);
 
   // 피드백 화면 상태
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -149,8 +163,8 @@ export default function ReviewPractice({
     const combinedGroups = new Map<string, ReviewItem[]>();
     const processedGroupIds = new Set<string>();
 
-    // 먼저 결합형 문제 그룹 생성
-    items.forEach(item => {
+    // 먼저 결합형 문제 그룹 생성 (선지 셔플이 적용된 shuffledItems 기준)
+    shuffledItems.forEach(item => {
       if (item.combinedGroupId) {
         if (!combinedGroups.has(item.combinedGroupId)) {
           combinedGroups.set(item.combinedGroupId, []);
@@ -165,7 +179,7 @@ export default function ReviewPractice({
     });
 
     // 원래 순서를 유지하면서 그룹화
-    items.forEach(item => {
+    shuffledItems.forEach(item => {
       if (item.combinedGroupId) {
         if (!processedGroupIds.has(item.combinedGroupId)) {
           processedGroupIds.add(item.combinedGroupId);
@@ -184,7 +198,7 @@ export default function ReviewPractice({
     });
 
     return groups;
-  }, [items]);
+  }, [shuffledItems]);
 
   // 현재 그룹
   const currentGroup = groupedItems[currentIndex];
