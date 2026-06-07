@@ -941,11 +941,13 @@ export default function ProfessorLibraryTab({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedDetailQuiz(quiz);
+                      // Details 모달(닫기/Stats만 있어 중복)을 건너뛰고 바로 통계 열기
+                      if (isWide) { openStatsPanel(quiz.id, quiz.title); }
+                      else { setStatsQuizId({ id: quiz.id, title: quiz.title }); }
                     }}
                     className="flex-1 py-1.5 text-xs font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                   >
-                    Details
+                    Stats
                   </button>
                   <button
                     type="button"
