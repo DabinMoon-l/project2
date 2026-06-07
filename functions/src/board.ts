@@ -1910,3 +1910,78 @@ export const deleteThread = onCall(
     return { success: true, deletedCount };
   }
 );
+
+/**
+ * 비공개 글(나만의 콩콩이) 단건 댓글 삭제.
+ * "내 댓글 → 콩콩이 답변" 구조라, 내 댓글만 지우면 콩콩이 답변이 맥락 없이 남는다.
+ * 그래서 내 댓글 바로 다음(시간순)에 붙은 콩콩이 직후 답변도 함께 삭제한다.
+ * commentCount 감소 / Supabase 듀얼 삭제는 onCommentDeleted 트리거가 각각 처리.
+ * (콩콩이 댓글은 작성자가 gemini-ai라 클라이언트가 직접 못 지우므로 admin SDK 사용)
+ */
+export const deletePrivateComment = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { commentId, postId } = request.data as { commentId: string; postId: string };
+    if (!commentId || !postId) {
+      throw new HttpsError("invalid-argument", "commentId와 postId가 필요합니다.");
+    }
+
+    const db = getFirestore();
+
+    // 대상 댓글 확인
+    const commentRef = db.collection("comments").doc(commentId);
+    const commentSnap = await commentRef.get();
+    if (!commentSnap.exists) {
+      throw new HttpsError("not-found", "댓글을 찾을 수 없습니다.");
+    }
+    const commentData = commentSnap.data() as Comment;
+    const commentAuthorId = commentData.authorId || commentData.userId;
+
+    // 본인 댓글만 삭제 가능
+    if (commentAuthorId !== request.auth.uid) {
+      throw new HttpsError("permission-denied", "본인 댓글만 삭제할 수 있습니다.");
+    }
+
+    // 비공개 글에서만 동작
+    const postSnap = await db.collection("posts").doc(postId).get();
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "글을 찾을 수 없습니다.");
+    }
+    if (!postSnap.data()?.isPrivate) {
+      throw new HttpsError("permission-denied", "비공개 글에서만 사용할 수 있습니다.");
+    }
+
+    const tsOf = (c: Comment | undefined): number =>
+      c?.createdAt?.toMillis?.() ||
+      (c?.createdAt as unknown as { _seconds: number })?._seconds * 1000 ||
+      0;
+
+    // 같은 스레드(같은 parentId) 안에서 이 댓글 바로 다음 댓글이 콩콩이면 함께 삭제
+    const refsToDelete = [commentRef];
+    const parentId = commentData.parentId;
+    if (parentId) {
+      const siblingsSnap = await db.collection("comments")
+        .where("parentId", "==", parentId)
+        .get();
+      const sorted = siblingsSnap.docs
+        .map((d) => ({ id: d.id, ref: d.ref, data: d.data() as Comment }))
+        .sort((a, b) => tsOf(a.data) - tsOf(b.data));
+      const myIdx = sorted.findIndex((c) => c.id === commentId);
+      const next = myIdx >= 0 ? sorted[myIdx + 1] : undefined;
+      if (next && next.data.authorId === "gemini-ai") {
+        refsToDelete.push(next.ref);
+      }
+    }
+
+    const batch = db.batch();
+    refsToDelete.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+
+    console.log(`비공개 단건 댓글 삭제: commentId=${commentId}, 콩콩이 답변 동반삭제=${refsToDelete.length - 1}`);
+    return { success: true, deletedCount: refsToDelete.length };
+  }
+);

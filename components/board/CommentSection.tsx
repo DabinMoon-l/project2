@@ -413,16 +413,22 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
 
-    // 비공개 글(나만의 콩콩이) 의 루트 댓글: 대댓글(AI 답변) 포함 branch 전체 삭제
+    // 비공개 글(나만의 콩콩이)
     const target = comments.find((c) => c.id === commentId);
     const isRoot = !!target && !target.parentId;
-    if (isPrivatePost && isRoot) {
+    if (isPrivatePost) {
       try {
-        await callFunction('deleteThread', { rootCommentId: commentId, postId });
+        if (isRoot) {
+          // 루트(스레드 시작) 삭제 → 대댓글(콩콩이 답변 포함) branch 전체 삭제
+          await callFunction('deleteThread', { rootCommentId: commentId, postId });
+        } else {
+          // 단건 삭제 → 내 댓글 + 그에 대한 콩콩이 직후 답변 함께 삭제
+          await callFunction('deletePrivateComment', { commentId, postId });
+        }
         refresh();
       } catch (err) {
-        console.error('branch 삭제 실패:', err);
-        // fallback: 단일 댓글만이라도 삭제
+        console.error('비공개 댓글 삭제 실패:', err);
+        // fallback: 내 댓글만이라도 삭제 (콩콩이 답변은 남을 수 있음)
         const success = await deleteComment(commentId, postId);
         if (success) refresh();
       }
@@ -586,7 +592,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   currentUserId={user?.uid}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
-                  onReply={() => handleReply(comment.id, comment.authorNickname)}
+                  onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
                   onLike={handleLike}
                   onAccept={handleAccept}
                   isLiked={checkIsLiked(comment.id)}
@@ -612,7 +618,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       currentUserId={user?.uid}
                       onDelete={handleDelete}
                       onEdit={handleEdit}
-                      onReply={() => handleReply(comment.id, comment.authorNickname)}
+                      onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
                       onLike={handleLike}
                       isLiked={checkIsLiked(reply.id)}
                       isDeleting={deletingId === reply.id}
@@ -650,9 +656,9 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             bottom: 'var(--kb-offset, 0px)',
           }}
         >
-          {/* 답글 대상 표시 */}
+          {/* 답글 대상 표시 (비공개 글은 스레드 선택 방식이라 답글 모드 미사용) */}
           <AnimatePresence>
-            {replyingTo && (
+            {replyingTo && !isPrivatePost && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
@@ -799,7 +805,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   handleSubmit();
                 }
               }}
-              placeholder={replyingTo ? `${replyingTo.nickname}님에게 답글...` : '의견을 남겨주세요...'}
+              placeholder={replyingTo && !isPrivatePost ? `${replyingTo.nickname}님에게 답글...` : '의견을 남겨주세요...'}
               rows={1}
               maxLength={500}
               autoComplete="off"

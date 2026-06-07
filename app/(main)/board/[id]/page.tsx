@@ -245,7 +245,7 @@ export default function PostDetailPage({
   usePanelLock(isPanelMode && !!post?.isPrivate);
 
   // 비공개 글 스레드 바로가기용 댓글 데이터
-  const { comments: allComments } = useComments(postId);
+  const { comments: allComments, loading: commentsLoading } = useComments(postId);
   const threadRoots = useMemo(() => {
     if (!post?.isPrivate) return [];
     return allComments
@@ -261,12 +261,16 @@ export default function PostDetailPage({
   const [newThreadMode, setNewThreadMode] = useState(false);
   const newThreadBaselineRef = useRef<string | null>(null);
 
-  // 들어오면 기본으로 최신 스레드 펼치기 (threadRoots는 최신순 정렬)
+  // 들어오면 기본으로 "새 대화" 모드 (최신 스레드 자동 펼침 X).
+  // 댓글 로드가 끝난 뒤 한 번만 적용 — 기존 최신 스레드를 baseline 으로 잡아
+  // 아래 자동 전환 효과가 곧바로 튀지 않게 한다. (새 루트가 실제로 생길 때만 전환)
+  const threadInitRef = useRef(false);
   useEffect(() => {
-    if (post?.isPrivate && threadRoots.length > 0 && !selectedThreadId && !newThreadMode) {
-      setSelectedThreadId(threadRoots[0].id);
-    }
-  }, [post?.isPrivate, threadRoots, selectedThreadId, newThreadMode]);
+    if (!post?.isPrivate || commentsLoading || threadInitRef.current) return;
+    threadInitRef.current = true;
+    newThreadBaselineRef.current = threadRoots[0]?.id ?? null;
+    setNewThreadMode(true);
+  }, [post?.isPrivate, commentsLoading, threadRoots]);
 
   // 새 대화 모드에서 새 루트가 생성되면 자동으로 그 스레드로 전환
   useEffect(() => {

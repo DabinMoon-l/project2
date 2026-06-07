@@ -125,6 +125,7 @@ export {
   acceptComment,
   deletePost,
   deleteThread,
+  deletePrivateComment,
   onPostUpdate,
 } from "./board";
 
