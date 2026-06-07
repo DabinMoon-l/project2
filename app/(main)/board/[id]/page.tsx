@@ -252,8 +252,26 @@ export default function PostDetailPage({
       .filter((c) => !c.parentId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // 최신 먼저
   }, [allComments, post?.isPrivate]);
-  const [threadDeleteTarget, setThreadDeleteTarget] = useState<string | null>(null);
+  // 스레드 long-press 액션 시트 대상 (즐겨찾기 토글 / 삭제)
+  const [threadActionTarget, setThreadActionTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 스레드 즐겨찾기 (rootCommentId 목록, 기기별 localStorage 저장)
+  const favStorageKey = `kongi_thread_favs:${postId}`;
+  const [favThreadIds, setFavThreadIds] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(favStorageKey);
+      setFavThreadIds(raw ? JSON.parse(raw) : []);
+    } catch { setFavThreadIds([]); }
+  }, [favStorageKey]);
+  const toggleFavThread = useCallback((rootId: string) => {
+    setFavThreadIds((prev) => {
+      const next = prev.includes(rootId) ? prev.filter((id) => id !== rootId) : [...prev, rootId];
+      try { localStorage.setItem(favStorageKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [favStorageKey]);
 
   // 비공개 글(나만의 콩콩이): 화면에 펼칠 스레드 1개 선택 (전체를 한 번에 렌더하지 않음)
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -341,8 +359,15 @@ export default function PostDetailPage({
     } catch (err) {
       console.error('스레드 삭제 실패:', err);
     }
-    setThreadDeleteTarget(null);
-  }, [postId]);
+    // 삭제된 스레드는 즐겨찾기에서도 제거
+    setFavThreadIds((prev) => {
+      if (!prev.includes(rootCommentId)) return prev;
+      const next = prev.filter((id) => id !== rootCommentId);
+      try { localStorage.setItem(favStorageKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setThreadActionTarget(null);
+  }, [postId, favStorageKey]);
 
   // 스크롤 초기화 버튼용 ref
   const headerRef = useRef<HTMLElement>(null);
@@ -783,6 +808,7 @@ export default function PostDetailPage({
               {threadRoots.map((root, idx) => {
                 const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
                 const isSelected = !newThreadMode && root.id === selectedThreadId;
+                const isFav = favThreadIds.includes(root.id);
                 return (
                   <button
                     key={root.id}
@@ -794,7 +820,7 @@ export default function PostDetailPage({
                       selectThread(root.id);
                     }}
                     onPointerDown={() => {
-                      longPressTimer.current = setTimeout(() => setThreadDeleteTarget(root.id), 600);
+                      longPressTimer.current = setTimeout(() => setThreadActionTarget(root.id), 600);
                     }}
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
@@ -805,6 +831,7 @@ export default function PostDetailPage({
                         : 'border-[#1A1A1A] text-[#1A1A1A]'
                     }`}
                   >
+                    {isFav && <span className={`mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#B8860B]'}`}>★</span>}
                     <span className={`font-bold mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}>#{idx + 1}</span>
                     {preview}
                   </button>
@@ -812,6 +839,47 @@ export default function PostDetailPage({
               })}
             </div>
           )}
+
+          {/* 비공개 글: 스레드 즐겨찾기 줄 (long-press 로 추가/해제) */}
+          {post.isPrivate && (() => {
+            const favRoots = favThreadIds
+              .map((id) => {
+                const idx = threadRoots.findIndex((r) => r.id === id);
+                return idx >= 0 ? { root: threadRoots[idx], num: idx + 1 } : null;
+              })
+              .filter((x): x is { root: typeof threadRoots[number]; num: number } => !!x);
+            if (favRoots.length === 0) return null;
+            return (
+              <div className="-mt-1 mb-2 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
+                <span className="flex items-center text-[10px] font-bold text-[#B8860B] whitespace-nowrap flex-shrink-0 pr-0.5">즐겨찾기</span>
+                {favRoots.map(({ root, num }) => {
+                  const preview = root.content.replace(/\n/g, ' ').slice(0, 14) + (root.content.length > 14 ? '..' : '');
+                  const isSelected = !newThreadMode && root.id === selectedThreadId;
+                  return (
+                    <button
+                      key={root.id}
+                      onClick={() => selectThread(root.id)}
+                      onPointerDown={() => {
+                        longPressTimer.current = setTimeout(() => setThreadActionTarget(root.id), 600);
+                      }}
+                      onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                      onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                      onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                      className={`px-2.5 py-1 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${
+                        isSelected
+                          ? 'bg-[#B8860B] text-[#F5F0E8] border-[#B8860B]'
+                          : 'border-[#B8860B] text-[#8A6508]'
+                      }`}
+                    >
+                      <span className="mr-1">★</span>
+                      <span className="font-bold mr-1">#{num}</span>
+                      {preview}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
           <div className="flex items-center justify-between py-2 mt-4">
@@ -851,21 +919,29 @@ export default function PostDetailPage({
         <div ref={bottomAnchorRef} aria-hidden className="h-px w-full" />
       </main>
 
-      {/* 스레드 삭제 확인 바텀시트 */}
-      <WideBottomSheet isOpen={!!threadDeleteTarget} onClose={() => setThreadDeleteTarget(null)} panel={isPanelMode ? '3' : '2'}>
+      {/* 스레드 액션 바텀시트 (즐겨찾기 토글 / 삭제) */}
+      <WideBottomSheet isOpen={!!threadActionTarget} onClose={() => setThreadActionTarget(null)} panel={isPanelMode ? '3' : '2'}>
         <div className="px-5 pb-6">
-          <p className="text-sm font-bold text-[#1A1A1A] mb-1">스레드 삭제</p>
-          <p className="text-xs text-[#5C5C5C] mb-4">이 스레드의 댓글과 콩콩이 답변이 모두 삭제됩니다.</p>
+          <p className="text-sm font-bold text-[#1A1A1A] mb-3">스레드</p>
+          {/* 즐겨찾기 토글 */}
+          <button
+            onClick={() => { if (threadActionTarget) toggleFavThread(threadActionTarget); setThreadActionTarget(null); }}
+            className="w-full mb-2 py-2.5 text-xs font-bold border-2 border-[#B8860B] text-[#8A6508] flex items-center justify-center gap-1.5"
+          >
+            <span>{threadActionTarget && favThreadIds.includes(threadActionTarget) ? '★' : '☆'}</span>
+            {threadActionTarget && favThreadIds.includes(threadActionTarget) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          </button>
+          <p className="text-[11px] text-[#5C5C5C] mb-2 mt-3">삭제 시 이 스레드의 댓글과 콩콩이 답변이 모두 사라집니다.</p>
           <div className="flex gap-2">
             <button
-              onClick={() => setThreadDeleteTarget(null)}
+              onClick={() => setThreadActionTarget(null)}
               className="flex-1 py-2.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A]"
             >
               취소
             </button>
             <button
-              onClick={() => threadDeleteTarget && handleDeleteThread(threadDeleteTarget)}
-              className="flex-1 py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]"
+              onClick={() => threadActionTarget && handleDeleteThread(threadActionTarget)}
+              className="flex-1 py-2.5 text-xs font-bold bg-[#8B1A1A] text-[#F5F0E8]"
             >
               삭제
             </button>
