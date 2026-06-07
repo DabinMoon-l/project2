@@ -24,10 +24,13 @@ import {
   userRepo,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { callFunction } from '@/lib/api';
 import { formatChapterLabel } from '@/lib/courseIndex';
 
 // 미확인 피드백 하트 킬스위치 — 문제 발생 시 false 로 바꿔 재배포하면 비활성화
 const ENABLE_FEEDBACK_REVIEW_HEART = true;
+// 통계 모달 인라인 문제 수정 킬스위치 — 문제 발생 시 false 로 바꿔 재배포하면 비활성화
+const ENABLE_STATS_INLINE_EDIT = true;
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
@@ -96,6 +99,23 @@ export default function QuizStatsModal({
   const reviewerUid = _authUser?.uid;
   const [reviewedMap, setReviewedMap] = useState<Record<number, number>>({});
 
+  // 인라인 문제 수정 (교수 전용, 일반 문제만)
+  const [rawQuestions, setRawQuestions] = useState<Record<string, any>[]>([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // 수정 초안 — 현재 문제 진입 시 채움
+  const [editDraft, setEditDraft] = useState<{
+    text: string;
+    choices: string[];
+    choiceExplanations: string[];
+    explanation: string;
+    answerIndices: number[]; // 객관식 정답 인덱스
+    answerOX: 'O' | 'X';     // OX 정답
+    answerText: string;      // 단답형 정답 (|||로 복수)
+    bogiQuestionText: string;
+    bogiItems: { label: string; content: string }[];
+  } | null>(null);
+
   // 서술형 답안 모달
   const [showEssayModal, setShowEssayModal] = useState(false);
 
@@ -161,6 +181,7 @@ export default function QuizStatsModal({
         const quizData = quizDoc.data();
         const flatQuestions = flattenQuestions(quizData.questions || []);
         setQuestions(flatQuestions);
+        setRawQuestions((quizData.questions || []) as Record<string, any>[]);
         setCourseId(quizData.courseId);
 
         // 2. 퀴즈 결과 1회성 조회 (onSnapshot → getDocs: 읽기 전용 통계이므로 실시간 불필요)
@@ -747,6 +768,121 @@ export default function QuizStatsModal({
   // 현재 선택된 문제
   const currentQuestion = stats?.questionStats[selectedQuestionIndex];
 
+  // ── 인라인 문제 수정 ──
+  // 현재 문제의 원본(flatten) — 일반 문제(결합형 아님 + ox/multiple/단답)만 수정 허용
+  const currentFlatQuestion = questions[selectedQuestionIndex];
+  const isCurrentEditable = ENABLE_STATS_INLINE_EDIT && isProfessor && !!currentFlatQuestion &&
+    !currentFlatQuestion.combinedGroupId &&
+    ['ox', 'multiple', 'short_answer', 'short'].includes(currentFlatQuestion.type);
+
+  const enterEditMode = useCallback(() => {
+    const fq = questions[selectedQuestionIndex];
+    if (!fq) return;
+    const choices = fq.choices ? [...fq.choices] : [];
+    const ansStr = (fq.answer ?? '').toString();
+    setEditDraft({
+      text: fq.text || '',
+      choices,
+      choiceExplanations: choices.map((_, i) => fq.choiceExplanations?.[i] ?? ''),
+      explanation: fq.explanation || '',
+      answerIndices: fq.type === 'multiple'
+        ? ansStr.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+        : [],
+      answerOX: fq.type === 'ox' ? ((ansStr === '0' || ansStr.toUpperCase() === 'O') ? 'O' : 'X') : 'O',
+      answerText: (fq.type === 'short_answer' || fq.type === 'short') ? ansStr : '',
+      bogiQuestionText: fq.bogi?.questionText || '',
+      bogiItems: (fq.bogi?.items || []).map((it) => ({ label: it.label, content: it.content })),
+    });
+    setIsEditMode(true);
+  }, [questions, selectedQuestionIndex]);
+
+  const cancelEditMode = useCallback(() => {
+    setIsEditMode(false);
+    setEditDraft(null);
+  }, []);
+
+  const setDraftChoice = useCallback((i: number, v: string) => {
+    setEditDraft((prev) => prev ? { ...prev, choices: prev.choices.map((c, idx) => idx === i ? v : c) } : prev);
+  }, []);
+  const setDraftChoiceExpl = useCallback((i: number, v: string) => {
+    setEditDraft((prev) => prev ? { ...prev, choiceExplanations: prev.choiceExplanations.map((c, idx) => idx === i ? v : c) } : prev);
+  }, []);
+  const toggleDraftAnswerIndex = useCallback((i: number, multi: boolean) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      if (multi) {
+        const has = prev.answerIndices.includes(i);
+        return { ...prev, answerIndices: has ? prev.answerIndices.filter((x) => x !== i) : [...prev.answerIndices, i] };
+      }
+      return { ...prev, answerIndices: [i] };
+    });
+  }, []);
+
+  const saveEditMode = useCallback(async () => {
+    if (!editDraft || isSavingEdit) return;
+    const fq = questions[selectedQuestionIndex];
+    if (!fq) return;
+    // 객관식인데 정답이 비어있으면 막기
+    if (fq.type === 'multiple' && editDraft.answerIndices.length === 0) {
+      alert('정답 선지를 1개 이상 선택해주세요.');
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const newRaw = rawQuestions.map((rq, i) => {
+        const rid = rq.id || `q${i}`;
+        if (rid !== fq.id) return rq;
+        // 정답 — 원본 타입 보존
+        let answer: unknown = rq.answer;
+        if (fq.type === 'multiple') {
+          const idxs = [...editDraft.answerIndices].sort((a, b) => a - b);
+          answer = Array.isArray(rq.answer) ? idxs
+            : (typeof rq.answer === 'number' && idxs.length === 1) ? idxs[0]
+              : idxs.join(',');
+        } else if (fq.type === 'ox') {
+          answer = (typeof rq.answer === 'number') ? (editDraft.answerOX === 'O' ? 0 : 1) : editDraft.answerOX;
+        } else {
+          answer = editDraft.answerText;
+        }
+        const updated: Record<string, any> = {
+          ...rq,
+          text: editDraft.text,
+          answer,
+          explanation: editDraft.explanation,
+          questionUpdatedAt: Date.now(),
+        };
+        if (fq.type === 'multiple') {
+          updated.choices = editDraft.choices;
+          updated.choiceExplanations = editDraft.choiceExplanations;
+        }
+        if (rq.bogi) {
+          updated.bogi = { ...rq.bogi, questionText: editDraft.bogiQuestionText, items: editDraft.bogiItems };
+        }
+        return updated;
+      });
+      await updateDoc(doc(db, 'quizzes', quizId), { questions: newRaw });
+      try {
+        await callFunction('regradeQuestions', { quizId, questionIds: [fq.id] });
+      } catch (e) {
+        console.warn('재채점 실패(무시 가능):', e);
+      }
+      setRawQuestions(newRaw);
+      setQuestions(flattenQuestions(newRaw));
+      setIsEditMode(false);
+      setEditDraft(null);
+    } catch (e) {
+      alert('저장 실패: ' + (((e as Error)?.message) || ''));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [editDraft, isSavingEdit, questions, selectedQuestionIndex, rawQuestions, quizId]);
+
+  // 문제 전환/모달 닫힘 시 수정 모드 자동 해제 (저장 안 한 편집 폐기)
+  useEffect(() => {
+    setIsEditMode(false);
+    setEditDraft(null);
+  }, [selectedQuestionIndex, isOpen]);
+
   // 피드백에서 문제 번호 추출 헬퍼
   const getFeedbackQuestionNum = useCallback((fb: Record<string, any>): number => {
     if (fb.questionNumber && fb.questionNumber > 0 && fb.questionNumber < 1000) {
@@ -1161,15 +1297,15 @@ export default function QuizStatsModal({
                           </svg>
                         </button>
                       )}
-                      {/* 폴더 저장 아이콘 (우측 상단) — 교수님 전용 */}
-                      {isProfessor && (
+                      {/* 연필(문제 수정) 아이콘 (우측 상단) — 교수님 전용, 일반 문제만. 폴더 저장 대체 */}
+                      {isCurrentEditable && !isEditMode && (
                         <button
-                          onClick={() => setShowFolderModal(true)}
+                          onClick={enterEditMode}
                           className="absolute top-1 right-1 z-10 w-8 h-8 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
-                          title="폴더에 저장"
+                          title="문제 수정"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                       )}
@@ -1199,6 +1335,143 @@ export default function QuizStatsModal({
                           })()}
                         </div>
 
+                        {isEditMode && editDraft ? (
+                          /* ── 인라인 수정 폼 (일반 문제) ── */
+                          <div className="space-y-3 text-left">
+                            {/* 문제 */}
+                            <div>
+                              <label className="text-[10px] font-bold text-[#5C5C5C] mb-0.5 block">문제</label>
+                              <textarea
+                                value={editDraft.text}
+                                onChange={(e) => setEditDraft((p) => p ? { ...p, text: e.target.value } : p)}
+                                rows={3}
+                                className="w-full p-2 border border-[#1A1A1A] bg-white text-sm text-[#1A1A1A] rounded resize-y outline-none"
+                              />
+                            </div>
+
+                            {/* 보기 (있을 때만) */}
+                            {editDraft.bogiItems.length > 0 && (
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-[#5C5C5C] block">보기</label>
+                                <input
+                                  value={editDraft.bogiQuestionText}
+                                  onChange={(e) => setEditDraft((p) => p ? { ...p, bogiQuestionText: e.target.value } : p)}
+                                  placeholder="보기 발문 (선택)"
+                                  className="w-full p-1.5 border border-[#A0A0A0] bg-white text-xs rounded outline-none"
+                                />
+                                {editDraft.bogiItems.map((it, i) => (
+                                  <div key={`bogi-${i}`} className="flex gap-1.5 items-center">
+                                    <span className="text-xs font-bold w-5 text-center flex-shrink-0">{it.label}</span>
+                                    <input
+                                      value={it.content}
+                                      onChange={(e) => setEditDraft((p) => p ? { ...p, bogiItems: p.bogiItems.map((b, bi) => bi === i ? { ...b, content: e.target.value } : b) } : p)}
+                                      className="flex-1 p-1.5 border border-[#A0A0A0] bg-white text-xs rounded outline-none"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* 선지 + 정답 (객관식) */}
+                            {currentFlatQuestion?.type === 'multiple' && (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-[#5C5C5C] block">선지 (왼쪽 ✓ = 정답, 여러 개 선택 시 복수정답)</label>
+                                {editDraft.choices.map((c, i) => {
+                                  const correct = editDraft.answerIndices.includes(i);
+                                  return (
+                                    <div key={`ch-${i}`} className="space-y-1">
+                                      <div className="flex gap-1.5 items-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleDraftAnswerIndex(i, true)}
+                                          className={`w-5 h-5 rounded-full border flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${correct ? 'bg-[#16A34A] border-[#16A34A] text-white' : 'border-[#A0A0A0] text-transparent'}`}
+                                          title="정답 토글"
+                                        >
+                                          ✓
+                                        </button>
+                                        <input
+                                          value={c}
+                                          onChange={(e) => setDraftChoice(i, e.target.value)}
+                                          className="flex-1 p-1.5 border border-[#1A1A1A] bg-white text-sm rounded outline-none"
+                                        />
+                                      </div>
+                                      <input
+                                        value={editDraft.choiceExplanations[i] || ''}
+                                        onChange={(e) => setDraftChoiceExpl(i, e.target.value)}
+                                        placeholder={`${i + 1}번 선지 해설 (선택)`}
+                                        className="w-full p-1 border border-dashed border-[#C0C0C0] bg-[#FDFBF7] text-xs rounded outline-none"
+                                        style={{ marginLeft: '1.625rem', width: 'calc(100% - 1.625rem)' }}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* OX 정답 */}
+                            {currentFlatQuestion?.type === 'ox' && (
+                              <div>
+                                <label className="text-[10px] font-bold text-[#5C5C5C] block mb-0.5">정답</label>
+                                <div className="flex gap-2">
+                                  {(['O', 'X'] as const).map((v) => (
+                                    <button
+                                      key={v}
+                                      type="button"
+                                      onClick={() => setEditDraft((p) => p ? { ...p, answerOX: v } : p)}
+                                      className={`px-4 py-1.5 border rounded text-sm font-bold ${editDraft.answerOX === v ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]' : 'border-[#A0A0A0] text-[#1A1A1A]'}`}
+                                    >
+                                      {v}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 단답형 정답 */}
+                            {(currentFlatQuestion?.type === 'short_answer' || currentFlatQuestion?.type === 'short') && (
+                              <div>
+                                <label className="text-[10px] font-bold text-[#5C5C5C] block mb-0.5">정답 (복수 정답은 ||| 로 구분)</label>
+                                <input
+                                  value={editDraft.answerText}
+                                  onChange={(e) => setEditDraft((p) => p ? { ...p, answerText: e.target.value } : p)}
+                                  className="w-full p-1.5 border border-[#1A1A1A] bg-white text-sm rounded outline-none"
+                                />
+                              </div>
+                            )}
+
+                            {/* 해설 */}
+                            <div>
+                              <label className="text-[10px] font-bold text-[#5C5C5C] mb-0.5 block">해설</label>
+                              <textarea
+                                value={editDraft.explanation}
+                                onChange={(e) => setEditDraft((p) => p ? { ...p, explanation: e.target.value } : p)}
+                                rows={3}
+                                className="w-full p-2 border border-dashed border-[#A0A0A0] bg-[#FDFBF7] text-xs text-[#1A1A1A] rounded resize-y outline-none"
+                              />
+                            </div>
+
+                            {/* 저장 / 취소 — 해설 박스 바로 밑 */}
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={cancelEditMode}
+                                disabled={isSavingEdit}
+                                className="flex-1 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] rounded disabled:opacity-50"
+                              >
+                                취소
+                              </button>
+                              <button
+                                type="button"
+                                onClick={saveEditMode}
+                                disabled={isSavingEdit}
+                                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded disabled:opacity-50"
+                              >
+                                {isSavingEdit ? '저장 중...' : '저장'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                        <>
                         {/* 문제 텍스트 (박스 없이) */}
                         <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap mb-3">{currentQuestion.questionText || '(문제 텍스트 없음)'}</p>
 
@@ -1529,6 +1802,8 @@ export default function QuizStatsModal({
                               <p className="text-xs text-[#A0A0A0] italic">해설 없음</p>
                             )}
                           </div>
+                        )}
+                        </>
                         )}
 
                       </div>
