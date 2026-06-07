@@ -626,6 +626,35 @@ export default function PostDetailPage({
 
   const handleShare = useCallback(async () => {
     if (!post) return;
+
+    // 나만의 콩콩이(비공개 글): URL 공유는 의미 없음(남이 못 봄) →
+    // 현재 펼쳐져 있는 스레드의 대화 내용만 텍스트로 공유/복사
+    if (post.isPrivate) {
+      const rootId = newThreadMode ? null : selectedThreadId;
+      if (!rootId) {
+        alert('공유할 스레드를 먼저 선택해주세요.');
+        return;
+      }
+      const root = allComments.find((c) => c.id === rootId);
+      if (!root) return;
+      const replies = allComments
+        .filter((c) => c.parentId === rootId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      const lines = [root, ...replies].map((c) => {
+        const who = c.authorId === 'gemini-ai' || c.isAIReply ? '콩콩이' : '나';
+        const body = c.content?.trim() || (c.imageUrls?.length ? '[이미지]' : '');
+        return `${who}: ${body}`;
+      });
+      const text = lines.join('\n\n');
+      if (navigator.share) {
+        try { await navigator.share({ text }); } catch { /* 취소 */ }
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert('대화 내용이 클립보드에 복사되었습니다.');
+      }
+      return;
+    }
+
     const url = `${window.location.origin}/share/board/${postId}`;
     if (navigator.share) {
       try { await navigator.share({ url }); } catch { /* 취소 */ }
@@ -633,7 +662,7 @@ export default function PostDetailPage({
       await navigator.clipboard.writeText(url);
       alert('클립보드에 복사되었습니다.');
     }
-  }, [post, postId]);
+  }, [post, postId, newThreadMode, selectedThreadId, allComments]);
 
   // 가로모드 직접 진입 redirect 대기 중 — 전체화면(세로모드처럼 보이는) UI가
   // 1프레임 번쩍이지 않도록 렌더 자체 생략. useEffect가 /board로 replace 예정.
