@@ -45,11 +45,20 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
             {quiz.title}
           </h3>
         </div>
-        <div className="px-3 mt-0.5">
-          <p className="text-sm text-[#1A1A1A]">
+        <div className="px-3 mt-0.5 flex items-center justify-between gap-2">
+          <p className="text-sm text-[#1A1A1A] truncate">
             {quiz.questionCount}문제 · {quiz.participantCount}명 참여
             {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
           </p>
+          {/* 우측: 피드백 상태 (좋음 N건) */}
+          {(quiz.feedbackSummaryCount ?? 0) > 0 && (() => {
+            const fl = getFeedbackLabel(quiz.feedbackScore ?? 0);
+            return (
+              <span className="text-xs font-bold whitespace-nowrap flex-shrink-0" style={{ color: fl.color }}>
+                {fl.label} {quiz.feedbackSummaryCount}건
+              </span>
+            );
+          })()}
         </div>
         <div className="px-3 pb-3 pt-1.5 flex gap-2">
           <button
@@ -286,11 +295,20 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                   {filteredQuiz.title}
                 </h3>
               </div>
-              <div className="px-3 mt-0.5">
-                <p className="text-sm text-[#1A1A1A]">
+              <div className="px-3 mt-0.5 flex items-center justify-between gap-2">
+                <p className="text-sm text-[#1A1A1A] truncate">
                   {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
                   {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
                 </p>
+                {/* 우측: 피드백 상태 (좋음 N건) */}
+                {(filteredQuiz.feedbackSummaryCount ?? 0) > 0 && (() => {
+                  const fl = getFeedbackLabel(filteredQuiz.feedbackScore ?? 0);
+                  return (
+                    <span className="text-xs font-bold whitespace-nowrap flex-shrink-0" style={{ color: fl.color }}>
+                      {fl.label} {filteredQuiz.feedbackSummaryCount}건
+                    </span>
+                  );
+                })()}
               </div>
               <div className="px-3 pb-3 pt-1.5 flex gap-2">
                 <button
@@ -385,6 +403,7 @@ export function ProfessorNewsCarousel({
   selectedPastExam,
   pastExamOptions,
   onSelectPastExam,
+  feedbackMap,
 }: {
   midtermQuizzes: ProfessorQuiz[];
   finalQuizzes: ProfessorQuiz[];
@@ -397,7 +416,14 @@ export function ProfessorNewsCarousel({
   selectedPastExam: string;
   pastExamOptions: PastExamOption[];
   onSelectPastExam: (value: string) => void;
+  /** quizId → 피드백 요약 (카드 우측 '좋음 N건' 표시용) */
+  feedbackMap?: Record<string, { score: number; count: number }>;
 }) {
+  // 카드에 표시할 피드백 요약을 quiz 객체에 병합
+  const mergeFb = useCallback((q: ProfessorQuiz): ProfessorQuiz => {
+    const fb = feedbackMap?.[q.id];
+    return fb ? { ...q, feedbackScore: fb.score, feedbackSummaryCount: fb.count } : q;
+  }, [feedbackMap]);
   // 동적 캐러셀 카드 배열: 비어있지 않은 고정 카드 + 단독 퀴즈
   const carouselCards: CarouselCard[] = useMemo(() => {
     const cards: CarouselCard[] = [];
@@ -597,12 +623,12 @@ export function ProfessorNewsCarousel({
 
   // 카드별 퀴즈/로딩 헬퍼
   const getQuizzesForCard = useCallback((card: CarouselCard): ProfessorQuiz[] => {
-    if (card.type === 'midterm') return midtermQuizzes;
-    if (card.type === 'past') return pastQuizzes;
-    if (card.type === 'final') return finalQuizzes;
-    if (card.type === 'independent' && card.independentQuiz) return [card.independentQuiz];
+    if (card.type === 'midterm') return midtermQuizzes.map(mergeFb);
+    if (card.type === 'past') return pastQuizzes.map(mergeFb);
+    if (card.type === 'final') return finalQuizzes.map(mergeFb);
+    if (card.type === 'independent' && card.independentQuiz) return [mergeFb(card.independentQuiz)];
     return [];
-  }, [midtermQuizzes, pastQuizzes, finalQuizzes]);
+  }, [midtermQuizzes, pastQuizzes, finalQuizzes, mergeFb]);
 
   const getLoadingForCard = useCallback((card: CarouselCard): boolean => {
     if (card.type === 'midterm') return isLoading.midterm;
@@ -617,7 +643,7 @@ export function ProfessorNewsCarousel({
     if (card.type === 'past') {
       return (
         <ProfessorPastExamNewsCard
-          quizzes={pastQuizzes}
+          quizzes={pastQuizzes.map(mergeFb)}
           isLoading={isLoading.past}
           onDetails={onDetails}
           onStats={onStats}
@@ -631,7 +657,7 @@ export function ProfessorNewsCarousel({
     if (card.type === 'independent') {
       return (
         <ProfessorIndependentNewsCard
-          quiz={card.independentQuiz || null}
+          quiz={card.independentQuiz ? mergeFb(card.independentQuiz) : null}
           isLoading={isLoading.independent}
           onDetails={onDetails}
           onStats={onStats}
@@ -651,7 +677,7 @@ export function ProfessorNewsCarousel({
         onPublish={onPublish}
       />
     );
-  }, [pastQuizzes, isLoading, onDetails, onStats, onPublish, selectedPastExam, pastExamOptions, onSelectPastExam, getQuizzesForCard, getLoadingForCard]);
+  }, [pastQuizzes, isLoading, onDetails, onStats, onPublish, selectedPastExam, pastExamOptions, onSelectPastExam, getQuizzesForCard, getLoadingForCard, mergeFb]);
 
   const CARD_WIDTH_PERCENT = 82;
   const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;

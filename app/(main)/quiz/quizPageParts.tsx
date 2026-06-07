@@ -22,6 +22,9 @@ export interface QuizCardData {
   difficulty: string;
   participantCount: number;
   averageScore: number;
+  /** 카드 표시용 피드백 요약 (feedbackMap 병합 — 없으면 미표시) */
+  feedbackScore?: number;
+  feedbackSummaryCount?: number;
   isCompleted: boolean;
   myScore?: number;
   myFirstReviewScore?: number;

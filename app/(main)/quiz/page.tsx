@@ -80,6 +80,8 @@ function QuizListPageContent() {
   const [pastQuizzes, setPastQuizzes] = useState<QuizCardData[]>([]);
   const [independentQuizzes, setIndependentQuizzes] = useState<QuizCardData[]>([]);
   const [customQuizzes, setCustomQuizzes] = useState<QuizCardData[]>([]);
+  // 교수 캐러셀 카드 우측 '좋음 N건' 표시용 피드백 요약 (quizId → {score,count})
+  const [carouselFeedbackMap, setCarouselFeedbackMap] = useState<Record<string, { score: number; count: number }>>({});
 
   // quiz_completions 기반 완료 데이터 (useRef로 구독 재시작 방지)
   const completionMapRef = useRef<Map<string, number>>(new Map());
@@ -191,6 +193,52 @@ function QuizListPageContent() {
     customQuizzesWithUpdate: applyCompletionAndSort(customQuizzes),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
+
+  // 교수 캐러셀에 보이는 퀴즈들의 피드백 요약 1회 로드 (좋음 N건 표시용)
+  useEffect(() => {
+    const ids = [...new Set(
+      [...midtermQuizzes, ...finalQuizzes, ...pastQuizzes, ...independentQuizzes].map((q) => q.id)
+    )];
+    if (ids.length === 0) { setCarouselFeedbackMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      const byQuiz: Record<string, { type: FeedbackType }[]> = {};
+      for (let i = 0; i < ids.length; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        try {
+          const snap = await getDocs(query(collection(db, 'questionFeedbacks'), where('quizId', 'in', chunk)));
+          snap.forEach((d) => {
+            const data = d.data();
+            const qid = data.quizId as string;
+            const type = (data.type || data.feedbackType) as FeedbackType;
+            if (!qid || !type) return;
+            (byQuiz[qid] ||= []).push({ type });
+          });
+        } catch { /* 권한/네트워크 실패 무시 */ }
+      }
+      if (cancelled) return;
+      const map: Record<string, { score: number; count: number }> = {};
+      Object.entries(byQuiz).forEach(([qid, fbs]) => {
+        map[qid] = { score: calcFeedbackScore(fbs), count: fbs.length };
+      });
+      setCarouselFeedbackMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes]);
+
+  // 캐러셀 카드용 배열에 피드백 요약 병합
+  const { midtermForCarousel, finalForCarousel, pastForCarousel, independentForCarousel } = useMemo(() => {
+    const merge = (list: QuizCardData[]) => list.map((q) => {
+      const fb = carouselFeedbackMap[q.id];
+      return fb ? { ...q, feedbackScore: fb.score, feedbackSummaryCount: fb.count } : q;
+    });
+    return {
+      midtermForCarousel: merge(midtermQuizzesWithUpdate),
+      finalForCarousel: merge(finalQuizzesWithUpdate),
+      pastForCarousel: merge(pastQuizzesWithUpdate),
+      independentForCarousel: merge(independentQuizzesWithUpdate),
+    };
+  }, [midtermQuizzesWithUpdate, finalQuizzesWithUpdate, pastQuizzesWithUpdate, independentQuizzesWithUpdate, carouselFeedbackMap]);
 
   // 태그 + 반별 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
@@ -653,10 +701,10 @@ function QuizListPageContent() {
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
       <section data-no-tab-swipe className="mt-4" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-12px' }}>
         <NewsCarousel
-          midtermQuizzes={midtermQuizzesWithUpdate}
-          finalQuizzes={finalQuizzesWithUpdate}
-          pastQuizzes={pastQuizzesWithUpdate}
-          independentQuizzes={independentQuizzesWithUpdate}
+          midtermQuizzes={midtermForCarousel}
+          finalQuizzes={finalForCarousel}
+          pastQuizzes={pastForCarousel}
+          independentQuizzes={independentForCarousel}
           pastExamOptions={pastExamOptions}
           selectedPastExam={selectedPastExam}
           onSelectPastExam={setSelectedPastExam}

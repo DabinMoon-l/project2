@@ -63,6 +63,9 @@ export interface ProfessorQuiz {
   participantCount: number;
   averageScore: number;
   feedbackCount: number;
+  /** 카드 표시용 피드백 요약 (feedbackMap 병합 — 없으면 미표시) */
+  feedbackScore?: number;
+  feedbackSummaryCount?: number;
   tags?: string[];
   pastYear?: number;
   pastExamType?: string;

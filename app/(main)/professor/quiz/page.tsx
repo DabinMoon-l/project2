@@ -659,6 +659,7 @@ export default function ProfessorQuizListPage() {
             selectedPastExam={selectedPastExam}
             pastExamOptions={pastExamOptions}
             onSelectPastExam={setSelectedPastExam}
+            feedbackMap={feedbackMap}
           />
         )}
       </section>

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton } from '@/components/common';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT, formatQuestionTypes } from '@/lib/utils/quizHelpers';
+import { getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { saveScroll, loadScroll } from '@/lib/utils/scrollStorage';
 import {
@@ -81,11 +82,20 @@ const NewsArticle = memo(function NewsArticle({
             {quiz.title}
           </h3>
         </div>
-        <div className="px-3 mt-0.5">
-          <p className="text-sm text-[#1A1A1A]">
+        <div className="px-3 mt-0.5 flex items-center justify-between gap-2">
+          <p className="text-sm text-[#1A1A1A] truncate">
             {quiz.questionCount}문제 · {formatQuestionTypes(quiz.oxCount, quiz.multipleChoiceCount, quiz.subjectiveCount)}
             {quiz.participantCount > 0 && ` · ${quiz.participantCount}명 참여`}
           </p>
+          {/* 우측: 피드백 상태 (좋음 N건) */}
+          {(quiz.feedbackSummaryCount ?? 0) > 0 && (() => {
+            const fl = getFeedbackLabel(quiz.feedbackScore ?? 0);
+            return (
+              <span className="text-xs font-bold whitespace-nowrap flex-shrink-0" style={{ color: fl.color }}>
+                {fl.label} {quiz.feedbackSummaryCount}건
+              </span>
+            );
+          })()}
         </div>
         <div className="px-3 pb-3 pt-1.5 flex gap-2">
           <button
@@ -409,11 +419,20 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                   {filteredQuiz.title}
                 </h3>
               </div>
-              <div className="px-3 mt-0.5">
-                <p className="text-sm text-[#1A1A1A]">
+              <div className="px-3 mt-0.5 flex items-center justify-between gap-2">
+                <p className="text-sm text-[#1A1A1A] truncate">
                   {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
                   {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
                 </p>
+                {/* 우측: 피드백 상태 (좋음 N건) */}
+                {(filteredQuiz.feedbackSummaryCount ?? 0) > 0 && (() => {
+                  const fl = getFeedbackLabel(filteredQuiz.feedbackScore ?? 0);
+                  return (
+                    <span className="text-xs font-bold whitespace-nowrap flex-shrink-0" style={{ color: fl.color }}>
+                      {fl.label} {filteredQuiz.feedbackSummaryCount}건
+                    </span>
+                  );
+                })()}
               </div>
               <div className="px-3 pb-3 pt-1.5 flex gap-2">
                 <button
