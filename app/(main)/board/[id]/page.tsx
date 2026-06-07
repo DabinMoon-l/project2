@@ -878,10 +878,13 @@ export default function PostDetailPage({
             </div>
           )}
 
-          {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
+          {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 (비공개 글은 찜·조회 숨김) */}
           <div className="flex items-center justify-between py-2 mt-4">
             <div className="flex items-center gap-3">
-              <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
+              {/* 나만의 콩콩이(비공개 글)는 찜 숨김 */}
+              {!post.isPrivate && (
+                <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
+              )}
               {/* 나만의 콩콩이(비공개 글)는 조회수 숨김 */}
               {!post.isPrivate && (
                 <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
