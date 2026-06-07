@@ -34,12 +34,18 @@ interface CommentSectionProps {
   isPrivatePost?: boolean;
   /** 3쪽 패널 모드 여부 (입력바 sticky 전환) */
   isPanelMode?: boolean;
+  /**
+   * 비공개 글(나만의 콩콩이): 표시할 스레드 루트 ID.
+   * 지정되면 해당 스레드(루트+대댓글)만 렌더 → 댓글 1천 개+ 누적 시 전체 렌더로 막히던 문제 회피.
+   * null이면 "새 대화" 모드 (빈 화면 + 입력바, 다음 댓글이 새 루트 생성).
+   */
+  threadFilterRootId?: string | null;
 }
 
 /**
  * 댓글 섹션 컴포넌트 — 하단 고정 입력바 + 이미지 첨부
  */
-export default function CommentSection({ postId, postAuthorId, acceptedCommentId, isPrivatePost, isPanelMode }: CommentSectionProps) {
+export default function CommentSection({ postId, postAuthorId, acceptedCommentId, isPrivatePost, isPanelMode, threadFilterRootId }: CommentSectionProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile } = useUser();
@@ -210,6 +216,13 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     }
   }, [replyingTo]);
 
+  // 비공개 글: 스레드 전환 시 답글 대상 초기화
+  // → 새 댓글이 (특정 답글이 아닌) 현재 선택 스레드 루트에 이어지도록
+  useEffect(() => {
+    if (isPrivatePost) setReplyingTo(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadFilterRootId, isPrivatePost]);
+
   // 이미지 프리뷰 URL 정리
   useEffect(() => {
     return () => { imagePreviews.forEach(u => URL.revokeObjectURL(u)); };
@@ -333,6 +346,15 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
 
   const organizedComments = organizeComments(comments);
 
+  // 비공개 글(나만의 콩콩이): 선택된 스레드 1개(루트+대댓글)만 렌더.
+  // 댓글이 수천 개 쌓여도 한 스레드만 그리므로 전체 렌더 한계(약 1,000개)에 막히지 않음.
+  // threadFilterRootId가 null/미선택이면 빈 화면(새 대화 모드).
+  const visibleComments = isPrivatePost
+    ? (threadFilterRootId
+        ? organizedComments.filter((c) => c.id === threadFilterRootId)
+        : [])
+    : organizedComments;
+
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
     if ((!content.trim() && pendingImages.length === 0 && linkedImageUrls.length === 0) || !user) return;
@@ -346,11 +368,16 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     // 업로드 URL + 링크 URL 합치기
     const allImageUrls = [...uploadedUrls, ...linkedImageUrls];
 
+    // 비공개 글(나만의 콩콩이): 답글 대상이 없으면 현재 보고 있는 스레드 루트에 이어 붙임
+    // (threadFilterRootId가 null이면 parentId 없음 → 새 스레드 루트 생성)
+    const effectiveParentId = replyingTo?.id
+      || (isPrivatePost ? (threadFilterRootId || undefined) : undefined);
+
     const result = await createComment({
       postId,
       content: content.trim(),
       isAnonymous: false,
-      parentId: replyingTo?.id,
+      parentId: effectiveParentId,
       imageUrls: allImageUrls.length > 0 ? allImageUrls : undefined,
     });
 
@@ -374,7 +401,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       }
       refresh();
     }
-  }, [content, pendingImages, linkedImageUrls, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role, isPrivatePost]);
+  }, [content, pendingImages, linkedImageUrls, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role, isPrivatePost, threadFilterRootId]);
 
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
@@ -536,9 +563,16 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           </div>
         )}
 
-        {!loading && organizedComments.length > 0 && (
+        {/* 비공개 글: 스레드 미선택(새 대화 모드)일 때 안내 */}
+        {!loading && !commentsError && comments.length > 0 && isPrivatePost && !threadFilterRootId && (
+          <div className="py-6 text-center text-base italic text-[#3A3A3A]">
+            아래에 입력하면 새 대화가 시작돼요
+          </div>
+        )}
+
+        {!loading && visibleComments.length > 0 && (
           <AnimatePresence>
-            {organizedComments.map((comment) => (
+            {visibleComments.map((comment) => (
               <div key={comment.id} id={`comment-${comment.id}`}>
                 <CommentItem
                   comment={comment}

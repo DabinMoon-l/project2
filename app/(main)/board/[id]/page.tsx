@@ -255,6 +255,44 @@ export default function PostDetailPage({
   const [threadDeleteTarget, setThreadDeleteTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 비공개 글(나만의 콩콩이): 화면에 펼칠 스레드 1개 선택 (전체를 한 번에 렌더하지 않음)
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  // "새 대화" 모드: 스레드 미선택 상태로 입력 → 다음 댓글이 새 루트 생성
+  const [newThreadMode, setNewThreadMode] = useState(false);
+  const newThreadBaselineRef = useRef<string | null>(null);
+
+  // 들어오면 기본으로 최신 스레드 펼치기 (threadRoots는 최신순 정렬)
+  useEffect(() => {
+    if (post?.isPrivate && threadRoots.length > 0 && !selectedThreadId && !newThreadMode) {
+      setSelectedThreadId(threadRoots[0].id);
+    }
+  }, [post?.isPrivate, threadRoots, selectedThreadId, newThreadMode]);
+
+  // 새 대화 모드에서 새 루트가 생성되면 자동으로 그 스레드로 전환
+  useEffect(() => {
+    if (newThreadMode && threadRoots.length > 0 && threadRoots[0].id !== newThreadBaselineRef.current) {
+      setSelectedThreadId(threadRoots[0].id);
+      setNewThreadMode(false);
+    }
+  }, [newThreadMode, threadRoots]);
+
+  // 스레드 선택 (캐러셀 버튼) → 댓글 영역 위로 스크롤
+  const selectThread = useCallback((rootId: string) => {
+    setNewThreadMode(false);
+    setSelectedThreadId(rootId);
+    const el = document.getElementById('kongi-comments');
+    if (el) scrollToElement(el);
+  }, []);
+
+  // 새 대화 시작
+  const startNewThread = useCallback(() => {
+    newThreadBaselineRef.current = threadRoots[0]?.id ?? null;
+    setSelectedThreadId(null);
+    setNewThreadMode(true);
+    const el = document.getElementById('kongi-comments');
+    if (el) scrollToElement(el);
+  }, [threadRoots]);
+
   // PC 마우스 드래그 스크롤 (branch 미리보기 carousel)
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const dragStateRef = useRef({
@@ -725,8 +763,20 @@ export default function PostDetailPage({
               onMouseUp={endThreadDrag}
               onMouseLeave={endThreadDrag}
             >
+              {/* 새 대화 시작 칩 */}
+              <button
+                onClick={startNewThread}
+                className={`px-3 py-1.5 text-xs font-bold active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none border ${
+                  newThreadMode
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'border-[#1A1A1A] text-[#1A1A1A]'
+                }`}
+              >
+                + 새 대화
+              </button>
               {threadRoots.map((root, idx) => {
                 const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
+                const isSelected = !newThreadMode && root.id === selectedThreadId;
                 return (
                   <button
                     key={root.id}
@@ -735,8 +785,7 @@ export default function PostDetailPage({
                         dragStateRef.current.dragged = false;
                         return;
                       }
-                      const el = document.getElementById(`comment-${root.id}`);
-                      if (el) scrollToElement(el);
+                      selectThread(root.id);
                     }}
                     onPointerDown={() => {
                       longPressTimer.current = setTimeout(() => setThreadDeleteTarget(root.id), 600);
@@ -744,9 +793,13 @@ export default function PostDetailPage({
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerMove={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                    className="px-3 py-1.5 text-xs border border-[#1A1A1A] text-[#1A1A1A] active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
+                    className={`px-3 py-1.5 text-xs border active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none ${
+                      isSelected
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'border-[#1A1A1A] text-[#1A1A1A]'
+                    }`}
                   >
-                    <span className="font-bold text-[#1A1A1A] mr-1">#{idx + 1}</span>
+                    <span className={`font-bold mr-1 ${isSelected ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}>#{idx + 1}</span>
                     {preview}
                   </button>
                 );
@@ -784,9 +837,9 @@ export default function PostDetailPage({
         </motion.article>
 
         {/* 댓글 */}
-        <section className="pt-4 border-t-2 border-[#1A1A1A]">
+        <section id="kongi-comments" className="pt-4 border-t-2 border-[#1A1A1A]">
           <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">댓글</h3>
-          <CommentSection postId={postId} postAuthorId={post.authorId} acceptedCommentId={post.acceptedCommentId} isPrivatePost={post.isPrivate} isPanelMode={isPanelMode} />
+          <CommentSection postId={postId} postAuthorId={post.authorId} acceptedCommentId={post.acceptedCommentId} isPrivatePost={post.isPrivate} isPanelMode={isPanelMode} threadFilterRootId={post.isPrivate ? (newThreadMode ? null : selectedThreadId) : undefined} />
         </section>
       </main>
 

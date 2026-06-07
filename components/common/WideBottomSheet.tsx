@@ -33,12 +33,40 @@ export default function WideBottomSheet({
 
   if (typeof window === 'undefined') return null;
 
-  // 모바일: 기존 모달 그대로
+  // 모바일: 화면 하단 고정 바텀시트 (백드롭 + 입력바/네비 위로 떠야 버튼이 눌림)
   if (!isWide) {
-    return (
+    return createPortal(
       <AnimatePresence>
-        {isOpen && children}
-      </AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              key="wbs-overlay-m"
+              className="fixed inset-0 bg-black/30"
+              style={{ zIndex }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
+            <motion.div
+              key="wbs-sheet-m"
+              className="fixed inset-x-0 bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden border-t-2 border-x-2 border-[#1A1A1A]"
+              style={{ zIndex: zIndex + 1, bottom: 'var(--kb-offset, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
+              </div>
+              {children}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>,
+      document.body
     );
   }
 
