@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { useSessionState } from '@/lib/hooks/useSessionState';
 import { motion, AnimatePresence } from 'framer-motion';
 import { userRepo } from '@/lib/repositories';
@@ -362,6 +362,21 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
         : [])
     : organizedComments;
 
+  // 나만의 콩콩이(비공개 글): 한 스레드에 댓글이 아주 많아도 화면 밖 댓글은
+  // 브라우저가 그리지 않게 해 렌더 과부하(약 1000개에서 잘리던 현상)를 방지.
+  // content-visibility:auto → 보이는 것만 렌더, 스크롤하면 이어서 렌더.
+  // contain-intrinsic-size 의 auto 는 한 번 그린 높이를 기억해 스크롤 튐 최소화.
+  const CV_STYLE: CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: 'auto 200px' };
+  // 비공개 글에서만 각 댓글을 content-visibility 래퍼로 감싼다 (공개 글은 영향 없음).
+  const cvWrap = (node: ReactNode, key?: string): ReactNode =>
+    isPrivatePost ? (
+      <div key={key} style={CV_STYLE}>
+        {node}
+      </div>
+    ) : (
+      node
+    );
+
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
     if ((!content.trim() && pendingImages.length === 0 && linkedImageUrls.length === 0) || !user) return;
@@ -587,51 +602,57 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           <AnimatePresence>
             {visibleComments.map((comment) => (
               <div key={comment.id} id={`comment-${comment.id}`}>
-                <CommentItem
-                  comment={comment}
-                  currentUserId={user?.uid}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
-                  onLike={handleLike}
-                  onAccept={handleAccept}
-                  isLiked={checkIsLiked(comment.id)}
-                  isDeleting={deletingId === comment.id}
-                  isEditing={editingId === comment.id}
-                  isPrivatePost={isPrivatePost}
-                  canAccept={canAcceptComment(comment)}
-                  isAccepting={accepting}
-                  isProfessor={isProfessor}
-                  authorNameMap={authorNameMap}
-                  authorNicknameMap={authorNicknameMap}
-                      authorRoleMap={authorRoleMap}
-                  postAuthorId={postAuthorId}
-                  onUploadImages={handleUploadEditImages}
-                />
+                {cvWrap(
+                  <CommentItem
+                    comment={comment}
+                    currentUserId={user?.uid}
+                    onDelete={handleDelete}
+                    onEdit={handleEdit}
+                    onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
+                    onLike={handleLike}
+                    onAccept={handleAccept}
+                    isLiked={checkIsLiked(comment.id)}
+                    isDeleting={deletingId === comment.id}
+                    isEditing={editingId === comment.id}
+                    isPrivatePost={isPrivatePost}
+                    canAccept={canAcceptComment(comment)}
+                    isAccepting={accepting}
+                    isProfessor={isProfessor}
+                    authorNameMap={authorNameMap}
+                    authorNicknameMap={authorNicknameMap}
+                    authorRoleMap={authorRoleMap}
+                    postAuthorId={postAuthorId}
+                    onUploadImages={handleUploadEditImages}
+                  />,
+                  `root-${comment.id}`,
+                )}
 
                 {/* 대댓글 목록 */}
                 {comment.replies && comment.replies.length > 0 &&
                   comment.replies.map((reply) => (
-                    <CommentItem
-                      key={reply.id}
-                      comment={reply}
-                      currentUserId={user?.uid}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
-                      onLike={handleLike}
-                      isLiked={checkIsLiked(reply.id)}
-                      isDeleting={deletingId === reply.id}
-                      isEditing={editingId === reply.id}
-                      isReply
-                      isPrivatePost={isPrivatePost}
-                      isProfessor={isProfessor}
-                      authorNameMap={authorNameMap}
-                      authorNicknameMap={authorNicknameMap}
-                      authorRoleMap={authorRoleMap}
-                      postAuthorId={postAuthorId}
-                      onUploadImages={handleUploadEditImages}
-                    />
+                    cvWrap(
+                      <CommentItem
+                        key={reply.id}
+                        comment={reply}
+                        currentUserId={user?.uid}
+                        onDelete={handleDelete}
+                        onEdit={handleEdit}
+                        onReply={isPrivatePost ? undefined : () => handleReply(comment.id, comment.authorNickname)}
+                        onLike={handleLike}
+                        isLiked={checkIsLiked(reply.id)}
+                        isDeleting={deletingId === reply.id}
+                        isEditing={editingId === reply.id}
+                        isReply
+                        isPrivatePost={isPrivatePost}
+                        isProfessor={isProfessor}
+                        authorNameMap={authorNameMap}
+                        authorNicknameMap={authorNicknameMap}
+                        authorRoleMap={authorRoleMap}
+                        postAuthorId={postAuthorId}
+                        onUploadImages={handleUploadEditImages}
+                      />,
+                      reply.id,
+                    )
                   ))
                 }
               </div>
