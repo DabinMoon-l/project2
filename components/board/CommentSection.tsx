@@ -326,8 +326,12 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     rootComments.forEach(comment => {
       if (comment.replies && comment.replies.length > 0) {
         comment.replies.sort((a, b) => {
-          const likeDiff = (b.likes || 0) - (a.likes || 0);
-          if (likeDiff !== 0) return likeDiff;
+          // 비공개 콩콩이는 '대화'라 무조건 시간순(오래된→최신). 좋아요로 끼어들면 흐름이 깨짐.
+          // 공개 글만 좋아요순 > 시간순.
+          if (!isPrivatePost) {
+            const likeDiff = (b.likes || 0) - (a.likes || 0);
+            if (likeDiff !== 0) return likeDiff;
+          }
           return a.createdAt.getTime() - b.createdAt.getTime();
         });
       }
@@ -383,10 +387,16 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const hiddenMiddleCount = collapseMiddle ? threadMessages.length - THREAD_HEAD - THREAD_TAIL : 0;
 
   // 스레드 메시지 1개 렌더 (head/tail 양쪽에서 공용)
+  // content-visibility:auto → 화면 밖 댓글은 브라우저가 페인트 생략 (WebKit 잘림 방지).
+  // contain-intrinsic-size로 placeholder 높이 부여 → 스크롤바/앵커 안정. 'auto'는 실제 높이 기억.
   const renderThreadMsg = (c: (typeof threadMessages)[number]) => {
     const isRoot = c.id === threadRoot!.id;
     return (
-      <div key={c.id} id={`comment-${c.id}`}>
+      <div
+        key={c.id}
+        id={`comment-${c.id}`}
+        style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 320px' }}
+      >
         <CommentItem
           comment={c}
           currentUserId={user?.uid}
