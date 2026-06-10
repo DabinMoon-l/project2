@@ -754,17 +754,30 @@ export function subscribeComments(
       }
       postIdMap.set(postUuid, postId);
 
-      const { data, error } = await supabase
-        .from('comments')
-        .select('*')
-        .eq('post_id', postUuid)
-        .order('created_at', { ascending: true });
-      if (error) {
-        if (!cancelled && onError) onError(error as unknown as Error);
-        return;
+      // PostgREST 기본 응답 한도(1000행) 회피: range로 1000개씩 끊어 전부 로드.
+      // 댓글이 1000개를 넘는 글(예: 나만의 콩콩이 장기 누적 1000+)에서 최신 댓글이
+      // 통째로 안 와서 "특정 지점부터 안 보이는" 현상 방지. created_at 오름차순 유지.
+      const PAGE_SIZE = 1000;
+      const allRows: CommentRow[] = [];
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('*')
+          .eq('post_id', postUuid)
+          .order('created_at', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) {
+          if (!cancelled && onError) onError(error as unknown as Error);
+          return;
+        }
+        if (cancelled) return;
+        const batch = (data as CommentRow[] | null) || [];
+        allRows.push(...batch);
+        if (batch.length < PAGE_SIZE) break; // 마지막 페이지
+        from += PAGE_SIZE;
       }
-      if (cancelled) return;
-      cache = (data as CommentRow[] | null) || [];
+      cache = allRows;
       void emit();
 
       channel = supabase
