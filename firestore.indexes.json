@@ -29,6 +29,15 @@
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "tag", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "isNotice", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
