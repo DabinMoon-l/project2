@@ -363,17 +363,55 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     : organizedComments;
 
   // 비공개 글: 한 스레드(루트+답글)가 아주 길어지면 폰 브라우저가 한 번에 다 그리다
-  // 끝(최신)을 잘라버림. → 최근 메시지부터 THREAD_PAGE개만 렌더하고, 위쪽 "이전 대화
-  // 더보기"로 더 펼친다. 보통 스레드는 이 수 안이라 사실상 전체가 보인다.
-  const THREAD_PAGE = 300;
-  const [threadLimit, setThreadLimit] = useState(THREAD_PAGE);
-  // 다른 스레드로 전환하면 한도 초기화
-  useEffect(() => { setThreadLimit(THREAD_PAGE); }, [threadFilterRootId]);
-  // 스레드 전체 메시지(루트 + 답글, 시간순) → 최근 threadLimit개만 노출
+  // 끝(최신)을 잘라버림(WebKit 페인트 한계 ~1,000 DOM).
+  // → 대화 시작부분(HEAD) + 최신부분(TAIL)은 항상 보이고, 중간만 접어서 클릭 시 펼친다.
+  //   (맨위/맨아래 스크롤 버튼이 있어 시작·최신 이동이 쉬우므로 중간만 숨기는 게 자연스러움)
+  const THREAD_HEAD = 8;    // 대화 시작 부분 (맥락 유지)
+  const THREAD_TAIL = 80;   // 최신 대화 (주로 보는 곳)
+  const [middleExpanded, setMiddleExpanded] = useState(false);
+  // 다른 스레드로 전환하면 중간 접기 초기화
+  useEffect(() => { setMiddleExpanded(false); }, [threadFilterRootId]);
+  // 스레드 전체 메시지(루트 + 답글, 시간순)
   const threadRoot = isPrivatePost ? visibleComments[0] : undefined;
   const threadMessages = threadRoot ? [threadRoot, ...(threadRoot.replies || [])] : [];
-  const shownThreadMessages = threadMessages.slice(Math.max(0, threadMessages.length - threadLimit));
-  const hiddenThreadCount = threadMessages.length - shownThreadMessages.length;
+  // 중간에 숨길 가치가 있을 만큼(>=12개) 길 때만 접기 — 몇 개만 숨기는 어색함 방지
+  const MIDDLE_MIN = 12;
+  const collapseMiddle =
+    threadMessages.length > THREAD_HEAD + THREAD_TAIL + MIDDLE_MIN && !middleExpanded;
+  const headMessages = collapseMiddle ? threadMessages.slice(0, THREAD_HEAD) : threadMessages;
+  const tailMessages = collapseMiddle ? threadMessages.slice(threadMessages.length - THREAD_TAIL) : [];
+  const hiddenMiddleCount = collapseMiddle ? threadMessages.length - THREAD_HEAD - THREAD_TAIL : 0;
+
+  // 스레드 메시지 1개 렌더 (head/tail 양쪽에서 공용)
+  const renderThreadMsg = (c: (typeof threadMessages)[number]) => {
+    const isRoot = c.id === threadRoot!.id;
+    return (
+      <div key={c.id} id={`comment-${c.id}`}>
+        <CommentItem
+          comment={c}
+          currentUserId={user?.uid}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          onReply={undefined}
+          onLike={handleLike}
+          onAccept={isRoot ? handleAccept : undefined}
+          isLiked={checkIsLiked(c.id)}
+          isDeleting={deletingId === c.id}
+          isEditing={editingId === c.id}
+          isReply={!isRoot}
+          isPrivatePost
+          canAccept={isRoot ? canAcceptComment(c) : false}
+          isAccepting={accepting}
+          isProfessor={isProfessor}
+          authorNameMap={authorNameMap}
+          authorNicknameMap={authorNicknameMap}
+          authorRoleMap={authorRoleMap}
+          postAuthorId={postAuthorId}
+          onUploadImages={handleUploadEditImages}
+        />
+      </div>
+    );
+  };
 
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
@@ -598,45 +636,22 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
 
         {!loading && visibleComments.length > 0 && isPrivatePost && (
           <>
-            {/* 한 스레드가 매우 길 때: 위쪽에 이전 대화 더보기 (최신은 항상 아래에 보임) */}
-            {hiddenThreadCount > 0 && (
+            {/* 대화 시작 부분 (항상 표시) */}
+            {headMessages.map(renderThreadMsg)}
+
+            {/* 중간 대화 접기: 클릭하면 펼쳐짐 (시작·최신 사이의 본문) */}
+            {collapseMiddle && (
               <button
                 type="button"
-                onClick={() => setThreadLimit((l) => l + THREAD_PAGE)}
-                className="w-full py-2 mb-3 text-xs font-bold text-[#5C5C5C] border border-[#D4CFC4] rounded-lg active:scale-95 transition-transform"
+                onClick={() => setMiddleExpanded(true)}
+                className="w-full py-2.5 my-3 text-xs font-bold text-[#5C5C5C] bg-[#FDFBF7] border border-dashed border-[#D4CFC4] rounded-lg active:scale-95 transition-transform"
               >
-                이전 대화 {hiddenThreadCount}개 더보기
+                ··· 중간 대화 {hiddenMiddleCount}개 펼치기 ···
               </button>
             )}
-            {shownThreadMessages.map((c) => {
-              const isRoot = c.id === threadRoot!.id;
-              return (
-                <div key={c.id} id={`comment-${c.id}`}>
-                  <CommentItem
-                    comment={c}
-                    currentUserId={user?.uid}
-                    onDelete={handleDelete}
-                    onEdit={handleEdit}
-                    onReply={undefined}
-                    onLike={handleLike}
-                    onAccept={isRoot ? handleAccept : undefined}
-                    isLiked={checkIsLiked(c.id)}
-                    isDeleting={deletingId === c.id}
-                    isEditing={editingId === c.id}
-                    isReply={!isRoot}
-                    isPrivatePost
-                    canAccept={isRoot ? canAcceptComment(c) : false}
-                    isAccepting={accepting}
-                    isProfessor={isProfessor}
-                    authorNameMap={authorNameMap}
-                    authorNicknameMap={authorNicknameMap}
-                    authorRoleMap={authorRoleMap}
-                    postAuthorId={postAuthorId}
-                    onUploadImages={handleUploadEditImages}
-                  />
-                </div>
-              );
-            })}
+
+            {/* 최신 대화 (중간 접힘일 때만 별도로 렌더) */}
+            {tailMessages.map(renderThreadMsg)}
           </>
         )}
 
